@@ -45,7 +45,7 @@ export default {
     const message = clean(body.message, 5000);
 
     if (!name || !isEmail(email) || !subject || !message) {
-      return json({ error: '請填寫完整且有效的聯絡資料。' }, 400);
+      return json({ error: 'Please provide valid contact details.' }, 400);
     }
 
     if (!env.BREVO_API_KEY) {
