@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OptiLiteDB - SQLite Browser & Runtime API for Unity</title>
+  <meta name="description" content="OptiLiteDB is a zero-DLL SQLite browser and runtime API package for Unity developers. Browse, edit, import, export, and query local SQLite data inside Unity.">
+  <meta property="og:title" content="OptiLiteDB - SQLite Browser & Runtime API for Unity">
+  <meta property="og:description" content="A zero-DLL SQLite workflow for Unity with an in-editor DB browser, visual table designer, CSV import/export, and transaction-safe runtime API.">
+  <meta property="og:image" content="/assets/optilitedb/optilitedb_pomo_banner.png">
+  <meta property="og:type" content="website">
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-KVHVV4RY7C"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-KVHVV4RY7C');
+  </script>
+  <style>
+    :root {
+      --bg: #07101d;
+      --panel: #0d1725;
+      --panel-2: #101c2e;
+      --line: rgba(116, 196, 255, 0.22);
+      --text: #eef7ff;
+      --muted: #a8bbcf;
+      --blue: #12b8ff;
+      --cyan: #23f0ff;
+      --green: #5effad;
+      --gold: #d8b978;
+      --shadow: rgba(0, 0, 0, 0.38);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(18, 184, 255, 0.22), transparent 34%),
+        radial-gradient(circle at 85% 18%, rgba(94, 255, 173, 0.12), transparent 28%),
+        linear-gradient(180deg, #050912 0%, var(--bg) 38%, #050912 100%);
+      color: var(--text);
+      font-family: Inter, "Noto Sans TC", "Segoe UI", Arial, sans-serif;
+      line-height: 1.6;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    img { display: block; max-width: 100%; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+      padding: 16px clamp(20px, 5vw, 72px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(5, 9, 18, 0.82);
+      backdrop-filter: blur(16px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: linear-gradient(135deg, rgba(18,184,255,.85), rgba(35,240,255,.18));
+      box-shadow: 0 0 24px rgba(18, 184, 255, 0.32);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      color: var(--muted);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .nav a:hover { color: var(--text); }
+
+    .lang {
+      display: flex;
+      gap: 6px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.04);
+    }
+
+    .lang button {
+      border: 0;
+      color: var(--muted);
+      background: transparent;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    body[data-lang="en"] .lang button[data-lang="en"],
+    body[data-lang="zh"] .lang button[data-lang="zh"] {
+      color: #03111d;
+      background: var(--cyan);
+      font-weight: 800;
+    }
+
+    .hero {
+      padding: clamp(28px, 4vw, 56px) clamp(20px, 5vw, 72px) 0;
+    }
+
+    .hero-media {
+      border: 1px solid rgba(18, 184, 255, 0.34);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #050912;
+      box-shadow: 0 32px 80px var(--shadow), 0 0 60px rgba(18, 184, 255, 0.16);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      gap: clamp(28px, 5vw, 64px);
+      align-items: start;
+      padding: clamp(42px, 6vw, 82px) clamp(20px, 5vw, 72px);
+      max-width: 1500px;
+      margin: 0 auto;
+    }
+
+    .eyebrow {
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    h1 {
+      margin: 12px 0 18px;
+      font-size: clamp(42px, 7vw, 88px);
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(30px, 4.5vw, 58px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 21px;
+      line-height: 1.2;
+    }
+
+    .lead {
+      color: #d9e8f6;
+      font-size: clamp(18px, 2.2vw, 25px);
+      line-height: 1.45;
+      max-width: 820px;
+      margin: 0;
+    }
+
+    .copy {
+      color: var(--muted);
+      font-size: 16px;
+      margin: 18px 0 0;
+    }
+
+    .actions {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-top: 30px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      border-radius: 6px;
+      padding: 12px 18px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+    }
+
+    .button.primary {
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: #03111d;
+    }
+
+    .meta-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(16, 28, 46, .92), rgba(7, 16, 29, .92));
+      padding: 22px;
+      box-shadow: 0 24px 60px var(--shadow);
+    }
+
+    .meta-row {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 14px;
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+
+    .meta-row:last-child { border-bottom: 0; }
+    .meta-row span:first-child { color: var(--muted); }
+    .meta-row span:last-child { font-weight: 750; }
+
+    section {
+      padding: clamp(56px, 7vw, 96px) clamp(20px, 5vw, 72px);
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+
+    .section-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 28px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    .section-head p {
+      color: var(--muted);
+      max-width: 560px;
+      margin: 0;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .feature {
+      min-height: 210px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      background: rgba(13, 23, 37, 0.78);
+    }
+
+    .feature .icon {
+      font-size: 26px;
+      margin-bottom: 14px;
+    }
+
+    .feature p {
+      color: var(--muted);
+      margin: 12px 0 0;
+    }
+
+    .gallery {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 16px;
+    }
+
+    .shot {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0a0d12;
+      box-shadow: 0 20px 48px var(--shadow);
+    }
+
+    .shot.large { grid-row: span 2; }
+    .shot figcaption {
+      padding: 12px 14px;
+      color: var(--muted);
+      border-top: 1px solid rgba(255,255,255,.08);
+      font-size: 14px;
+    }
+
+    .genres {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .genre {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      background: rgba(255,255,255,.035);
+    }
+
+    .genre p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .code-band {
+      background: #060b13;
+    }
+
+    pre {
+      margin: 0;
+      overflow-x: auto;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #02060d;
+      color: #d8faff;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .cta {
+      background:
+        linear-gradient(135deg, rgba(18,184,255,.22), rgba(94,255,173,.12)),
+        #07101d;
+    }
+
+    .cta-box {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 28px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: clamp(26px, 5vw, 48px);
+      background: rgba(5, 9, 18, 0.7);
+    }
+
+    footer {
+      padding: 30px clamp(20px, 5vw, 72px);
+      color: var(--muted);
+      border-top: 1px solid rgba(255,255,255,.08);
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    body[data-lang="en"] [data-zh],
+    body[data-lang="zh"] [data-en] { display: none !important; }
+
+    @media (max-width: 980px) {
+      .hero-grid,
+      .gallery,
+      .cta-box {
+        grid-template-columns: 1fr;
+      }
+
+      .feature-grid,
+      .genres {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .section-head {
+        align-items: start;
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .nav {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+
+      .feature-grid,
+      .genres {
+        grid-template-columns: 1fr;
+      }
+
+      .meta-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body data-lang="en">
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>OptiMind</span>
+    </a>
+    <nav class="nav" aria-label="Product navigation">
+      <a href="#features" data-en>Features</a>
+      <a href="#features" data-zh>功能</a>
+      <a href="#screenshots" data-en>Screenshots</a>
+      <a href="#screenshots" data-zh>截圖</a>
+      <a href="#use-cases" data-en>Use Cases</a>
+      <a href="#use-cases" data-zh>適用場景</a>
+      <a href="/contact.html" data-en>Contact</a>
+      <a href="/contact.html" data-zh>聯絡</a>
+      <span class="lang" aria-label="Language">
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="zh">中</button>
+      </span>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-media">
+        <img src="assets/optilitedb/optilitedb_pomo_banner.png" alt="OptiLiteDB promotional banner showing the Unity SQLite database browser interface">
+      </div>
+    </section>
+
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow">SQLite Browser & Runtime API for Unity</div>
+        <h1 id="hero-title">OptiLiteDB</h1>
+        <p class="lead" data-en>Unlock the ultimate SQLite workflow inside Unity. Zero DLLs, native performance, and editor-first database tooling.</p>
+        <p class="lead" data-zh>在 Unity 中解放終極 SQLite 工作流。零 DLL 封裝、原生效能，並提供以編輯器為核心的資料庫工具。</p>
+        <p class="copy" data-en><strong>OptiLiteDB</strong> combines a feature-rich in-editor DB browser with a transaction-safe C# Runtime API. It binds directly to OS-native SQLite libraries, avoiding cross-platform binary friction while keeping builds lean.</p>
+        <p class="copy" data-zh><strong>OptiLiteDB</strong> 將完整的編輯器視覺化 DB Browser 與交易安全的 C# Runtime API 融合，直接連結系統內建 SQLite 原生庫，降低跨平台二進位配置摩擦，也讓發布包保持輕量。</p>
+        <div class="actions">
+          <a class="button primary" href="/contact.html" data-en>Ask about OptiLiteDB</a>
+          <a class="button primary" href="/contact.html" data-zh>詢問 OptiLiteDB</a>
+          <a class="button" href="#screenshots" data-en>View screenshots</a>
+          <a class="button" href="#screenshots" data-zh>查看實際截圖</a>
+        </div>
+      </div>
+
+      <aside class="meta-panel" aria-label="Product summary">
+        <div class="meta-row"><span>Engine</span><span>Unity 2022.3 to Unity 6</span></div>
+        <div class="meta-row"><span>Editor UI</span><span>Unity UI Toolkit</span></div>
+        <div class="meta-row"><span>Runtime</span><span>C# API, transactions, parameter binding</span></div>
+        <div class="meta-row"><span>Native libs</span><span>winsqlite3 / system libsqlite3</span></div>
+        <div class="meta-row"><span>Package</span><span>Zero external DLL dependencies</span></div>
+      </aside>
+    </div>
+
+    <section id="features">
+      <div class="section-inner">
+        <div class="section-head">
+          <h2 data-en>Key Product Highlights</h2>
+          <h2 data-zh>核心產品亮點</h2>
+          <p data-en>Everything needed to browse, design, import, export, query, and automate local SQLite data without leaving Unity.</p>
+          <p data-zh>從瀏覽、設計、匯入匯出、查詢到自動化，完整處理 Unity 專案中的本機 SQLite 資料。</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature">
+            <div class="icon">01</div>
+            <h3 data-en>Zero-DLL Architecture</h3>
+            <h3 data-zh>零 DLL 輕量架構</h3>
+            <p data-en>Ships no native binaries. OptiLiteDB dynamically links to OS-native SQLite engines to avoid build conflicts and keep final players small.</p>
+            <p data-zh>免隨包打包任何原生庫，直接連結系統 SQLite 引擎，降低跨平台編譯衝突並縮小發布包體。</p>
+          </article>
+          <article class="feature">
+            <div class="icon">02</div>
+            <h3 data-en>In-Editor DB Browser</h3>
+            <h3 data-zh>內嵌資料庫瀏覽器</h3>
+            <p data-en>Open database files under Assets, browse with pagination, edit cells directly, sort headers, and set NULL through context actions.</p>
+            <p data-zh>支援 Assets 內資料庫雙擊開啟、分頁瀏覽、直接編輯 Cell、表頭排序與右鍵設為 NULL。</p>
+          </article>
+          <article class="feature">
+            <div class="icon">03</div>
+            <h3 data-en>Visual Table Designer</h3>
+            <h3 data-zh>視覺化表結構設計</h3>
+            <p data-en>Reorder, rename, add, or drop columns. Schema changes run through transaction-backed rebuilds that restore indexes and triggers.</p>
+            <p data-zh>可自由調整欄位、型別、主鍵與排序，並以交易保護重建資料表，自動還原既有索引與觸發器。</p>
+          </article>
+          <article class="feature">
+            <div class="icon">04</div>
+            <h3 data-en>Transaction-Safe CSV</h3>
+            <h3 data-zh>交易保護 CSV 匯入匯出</h3>
+            <p data-en>Map CSV columns visually, choose delimiters, and use clear-before-import safely. Failed imports roll back without damaging existing data.</p>
+            <p data-zh>可視覺化對應 CSV 欄位並自訂分隔符，清空匯入模式也在單一交易中執行，失敗時安全 rollback。</p>
+          </article>
+          <article class="feature">
+            <div class="icon">05</div>
+            <h3 data-en>AI Agent Ready</h3>
+            <h3 data-zh>AI 智慧代理接口</h3>
+            <p data-en>OptiLiteEditorAPI lets AI assistants and editor tooling query or write tables through simple C# one-liners and refresh the UI instantly.</p>
+            <p data-zh>內建 OptiLiteEditorAPI，讓 AI 助理或編輯器工具用簡短 C# 指令讀寫資料表並即時刷新 UI。</p>
+          </article>
+          <article class="feature">
+            <div class="icon">06</div>
+            <h3 data-en>Production Runtime API</h3>
+            <h3 data-zh>專業級 Runtime API</h3>
+            <p data-en>Parameterized bindings guard against SQL injection, while BEGIN/COMMIT/ROLLBACK blocks handle high-speed save workloads.</p>
+            <p data-zh>支援參數化綁定以防止 SQL 注入，也支援交易區塊處理高速存檔與大量資料寫入。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="screenshots">
+      <div class="section-inner">
+        <div class="section-head">
+          <h2 data-en>Actual Product Screenshots</h2>
+          <h2 data-zh>實際產品畫面</h2>
+          <p data-en>OptiLiteDB is built around real editor workflows: browse rows, edit schemas, execute SQL, and inspect generated table definitions.</p>
+          <p data-zh>OptiLiteDB 圍繞真實 Unity 編輯器工作流打造：瀏覽資料、修改表結構、執行 SQL、查看 Schema。</p>
+        </div>
+        <div class="gallery">
+          <figure class="shot large">
+            <img src="assets/optilitedb/screenshot_browser.png" alt="OptiLiteDB DB Browser showing table data for enemies">
+            <figcaption data-en>Browse Data: tables, views, pagination, direct editing, CSV import/export.</figcaption>
+            <figcaption data-zh>Browse Data：資料表、View、分頁、直接編輯與 CSV 匯入匯出。</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="assets/optilitedb/screenshot_table_designer.png" alt="OptiLiteDB visual table designer editing columns">
+            <figcaption data-en>Visual table designer with SQL preview and transaction-backed apply flow.</figcaption>
+            <figcaption data-zh>視覺化表結構設計器，包含 SQL 預覽與交易保護套用流程。</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="assets/optilitedb/screenshot_sql.png" alt="OptiLiteDB Execute SQL tab with query results">
+            <figcaption data-en>Execute SQL directly inside Unity and inspect query results.</figcaption>
+            <figcaption data-zh>在 Unity 內直接執行 SQL 並檢視查詢結果。</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="assets/optilitedb/screenshot_schema.png" alt="OptiLiteDB Schema tab showing CREATE TABLE statement">
+            <figcaption data-en>Schema view for fast inspection of table definitions.</figcaption>
+            <figcaption data-zh>Schema 檢視可快速確認資料表定義。</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="use-cases">
+      <div class="section-inner">
+        <div class="section-head">
+          <h2 data-en>Perfect for Every Genre</h2>
+          <h2 data-zh>適合所有遊戲類型</h2>
+          <p data-en>Use SQLite where it shines: structured content, local saves, rules, tables, and relational gameplay data.</p>
+          <p data-zh>把 SQLite 用在最適合的地方：結構化內容、本機存檔、規則表、數值表與關聯式遊戲資料。</p>
+        </div>
+        <div class="genres">
+          <article class="genre">
+            <h3 data-en>RPGs & Roguelikes</h3>
+            <h3 data-zh>角色扮演與 Roguelike</h3>
+            <p data-en>Balance items, equipment attributes, quest states, and dialogue trees on the fly.</p>
+            <p data-zh>即時微調道具、裝備屬性、任務進度與對話樹數值。</p>
+          </article>
+          <article class="genre">
+            <h3 data-en>Card Games</h3>
+            <h3 data-zh>卡牌與牌組構築</h3>
+            <p data-en>Query card pools, deck definitions, active match rules, and draw logic efficiently.</p>
+            <p data-zh>高效管理卡牌池、牌組資料、對局規則與抽牌邏輯。</p>
+          </article>
+          <article class="genre">
+            <h3 data-en>Simulation & Tycoons</h3>
+            <h3 data-zh>模擬經營與策略</h3>
+            <p data-en>Handle parent-child structures such as cities, buildings, production chains, and tech trees.</p>
+            <p data-zh>處理城市、建築、生產鏈與科技樹等多層關聯資料。</p>
+          </article>
+          <article class="genre">
+            <h3 data-en>Offline Mobile Games</h3>
+            <h3 data-zh>行動端與單機存檔</h3>
+            <p data-en>Transaction-backed saves reduce corruption risk during unexpected closes or interruptions.</p>
+            <p data-zh>交易保護存檔可降低斷電、閃退或中斷時的資料損毀風險。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="code-band">
+      <div class="section-inner">
+        <div class="section-head">
+          <h2 data-en>Runtime API Ready</h2>
+          <h2 data-zh>Runtime API 可直接上線</h2>
+          <p data-en>Use parametric bindings and explicit transaction blocks for safe, fast data writes.</p>
+          <p data-zh>使用參數化綁定與明確交易區塊，安全且高速地寫入資料。</p>
+        </div>
+        <pre><code>using (var db = new OptiLiteDatabase("game.db"))
+{
+    db.BeginTransaction();
+    db.Execute("INSERT INTO saves(slot, payload) VALUES (?, ?)", slotId, json);
+    db.Commit();
+}</code></pre>
+      </div>
+    </section>
+
+    <section class="cta">
+      <div class="section-inner">
+        <div class="cta-box">
+          <div>
+            <h2 data-en>Build Unity data workflows without the SQLite setup tax.</h2>
+            <h2 data-zh>不用再被 SQLite 設定成本拖慢 Unity 開發。</h2>
+            <p class="copy" data-en>OptiLiteDB keeps database work inside the editor, while the runtime API stays lean enough for production builds.</p>
+            <p class="copy" data-zh>OptiLiteDB 讓資料庫工作留在 Unity 編輯器內完成，同時保有適合正式發布的輕量 Runtime API。</p>
+          </div>
+          <a class="button primary" href="/contact.html" data-en>Contact OptiMind</a>
+          <a class="button primary" href="/contact.html" data-zh>聯絡 OptiMind</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>© 2026 OptiMind</span>
+    <span data-en>OptiLiteDB - SQLite Browser & Runtime API for Unity</span>
+    <span data-zh>OptiLiteDB - Unity SQLite 瀏覽器與 Runtime API</span>
+  </footer>
+
+  <script>
+    const buttons = document.querySelectorAll('.lang button');
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const lang = button.getAttribute('data-lang');
+        document.body.setAttribute('data-lang', lang);
+        document.documentElement.setAttribute('lang', lang === 'zh' ? 'zh-Hant' : 'en');
+      });
+    });
+  </script>
+</body>
+</html>
