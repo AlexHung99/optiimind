@@ -620,12 +620,25 @@
   </footer>
 
   <script>
+    const requestedLang = new URLSearchParams(window.location.search).get('lang');
+    if (requestedLang === 'zh' || requestedLang === 'en') {
+      document.body.setAttribute('data-lang', requestedLang);
+      document.documentElement.setAttribute('lang', requestedLang === 'zh' ? 'zh-Hant' : 'en');
+    }
+
     const buttons = document.querySelectorAll('.lang button');
+    buttons.forEach((button) => {
+      button.classList.toggle('active', button.getAttribute('data-lang') === document.body.getAttribute('data-lang'));
+    });
+
     buttons.forEach((button) => {
       button.addEventListener('click', () => {
         const lang = button.getAttribute('data-lang');
         document.body.setAttribute('data-lang', lang);
         document.documentElement.setAttribute('lang', lang === 'zh' ? 'zh-Hant' : 'en');
+        buttons.forEach((item) => {
+          item.classList.toggle('active', item.getAttribute('data-lang') === lang);
+        });
       });
     });
   </script>
