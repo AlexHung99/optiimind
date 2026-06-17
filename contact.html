@@ -167,6 +167,34 @@
 
     .status.error { color: var(--danger); }
     .status.success { color: var(--accent); }
+    body[data-lang="zh"] [data-en],
+    body[data-lang="en"] [data-zh] { display: none !important; }
+
+    .lang {
+      display: inline-flex;
+      gap: 6px;
+      margin-top: 26px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .lang button {
+      width: auto;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      padding: 8px 11px;
+      font-size: 14px;
+    }
+
+    body[data-lang="zh"] .lang button[data-lang="zh"],
+    body[data-lang="en"] .lang button[data-lang="en"] {
+      background: var(--accent);
+      color: #06110f;
+    }
 
     @media (max-width: 820px) {
       main {
@@ -180,26 +208,37 @@
     }
   </style>
 </head>
-<body>
+<body data-lang="zh">
   <main>
     <section>
       <a class="brand" href="/">
         <span class="mark">O</span>
         <span>Optiimind</span>
       </a>
-      <h1>聯絡我</h1>
-      <p class="lead">
+      <div class="lang" aria-label="Language">
+        <button type="button" data-lang="zh">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <h1 data-zh>聯絡我</h1>
+      <h1 data-en>Contact Me</h1>
+      <p class="lead" data-zh>
         有合作、產品、顧問或任何想法，都可以從這裡發訊息。我會主要在 max 信箱收信，表單會寄到 hello 並自動 cc 給 max。
       </p>
+      <p class="lead" data-en>
+        For partnerships, products, consulting, or any idea you want to discuss, send a message here. The form sends to hello and automatically CCs max, while max is the main inbox I monitor.
+      </p>
       <div class="mail-list">
-        <span>主要信箱：<a href="mailto:max@optiimind.com">max@optiimind.com</a></span>
-        <span>聯絡入口：<a href="mailto:hello@optiimind.com">hello@optiimind.com</a></span>
+        <span data-zh>主要信箱：<a href="mailto:max@optiimind.com">max@optiimind.com</a></span>
+        <span data-en>Main inbox: <a href="mailto:max@optiimind.com">max@optiimind.com</a></span>
+        <span data-zh>聯絡入口：<a href="mailto:hello@optiimind.com">hello@optiimind.com</a></span>
+        <span data-en>Contact inbox: <a href="mailto:hello@optiimind.com">hello@optiimind.com</a></span>
       </div>
     </section>
 
     <form id="contact-form">
       <div class="field">
-        <label for="name">姓名</label>
+        <label for="name" data-zh>姓名</label>
+        <label for="name" data-en>Name</label>
         <input id="name" name="name" autocomplete="name" required>
       </div>
       <div class="field">
@@ -207,15 +246,17 @@
         <input id="email" name="email" type="email" autocomplete="email" required>
       </div>
       <div class="field">
-        <label for="subject">主旨</label>
+        <label for="subject" data-zh>主旨</label>
+        <label for="subject" data-en>Subject</label>
         <input id="subject" name="subject" required>
       </div>
       <div class="field">
-        <label for="message">訊息</label>
+        <label for="message" data-zh>訊息</label>
+        <label for="message" data-en>Message</label>
         <textarea id="message" name="message" required></textarea>
       </div>
       <input class="hp" name="company" tabindex="-1" autocomplete="off">
-      <button type="submit">送出訊息</button>
+      <button type="submit"><span data-zh>送出訊息</span><span data-en>Send Message</span></button>
       <div id="status" class="status" role="status" aria-live="polite"></div>
     </form>
   </main>
@@ -224,11 +265,47 @@
     const form = document.getElementById('contact-form');
     const statusEl = document.getElementById('status');
     const button = form.querySelector('button');
+    const langButtons = document.querySelectorAll('.lang button');
+    const messages = {
+      zh: {
+        sending: '正在送出...',
+        failed: '訊息送出失敗',
+        success: '已送出，我會盡快回覆你。',
+        fallback: '訊息送出失敗，請稍後再試。'
+      },
+      en: {
+        sending: 'Sending...',
+        failed: 'Message could not be sent',
+        success: 'Sent. I will get back to you soon.',
+        fallback: 'Message could not be sent. Please try again later.'
+      }
+    };
+
+    function currentLang() {
+      return document.body.getAttribute('data-lang') === 'en' ? 'en' : 'zh';
+    }
+
+    function setLang(lang) {
+      const nextLang = lang === 'en' ? 'en' : 'zh';
+      document.body.setAttribute('data-lang', nextLang);
+      document.documentElement.setAttribute('lang', nextLang === 'en' ? 'en' : 'zh-Hant');
+      langButtons.forEach((item) => {
+        item.classList.toggle('active', item.getAttribute('data-lang') === nextLang);
+      });
+    }
+
+    const requestedLang = new URLSearchParams(window.location.search).get('lang');
+    setLang(requestedLang === 'en' ? 'en' : 'zh');
+
+    langButtons.forEach((item) => {
+      item.addEventListener('click', () => setLang(item.getAttribute('data-lang')));
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
+      const lang = currentLang();
       statusEl.className = 'status';
-      statusEl.textContent = '正在送出...';
+      statusEl.textContent = messages[lang].sending;
       button.disabled = true;
 
       const payload = Object.fromEntries(new FormData(form).entries());
@@ -241,14 +318,14 @@
         });
 
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || '訊息送出失敗');
+        if (!response.ok) throw new Error(result.error || messages[lang].failed);
 
         form.reset();
         statusEl.className = 'status success';
-        statusEl.textContent = '已送出，我會盡快回覆你。';
+        statusEl.textContent = messages[lang].success;
       } catch (error) {
         statusEl.className = 'status error';
-        statusEl.textContent = error.message || '訊息送出失敗，請稍後再試。';
+        statusEl.textContent = error.message || messages[lang].fallback;
       } finally {
         button.disabled = false;
       }
