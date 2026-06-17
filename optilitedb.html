@@ -74,35 +74,11 @@
       color: #f3f4f1;
     }
 
-    .brand-mark {
-      position: relative;
-      width: 41px;
+    .brand-logo {
+      display: block;
+      width: auto;
       height: 24px;
       flex: 0 0 auto;
-    }
-
-    .brand-mark::before,
-    .brand-mark::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      width: 24px;
-      height: 24px;
-      border-radius: 6px;
-      box-sizing: border-box;
-    }
-
-    .brand-mark::before {
-      left: 0;
-      background: linear-gradient(135deg, rgba(10, 186, 181, 0.95), rgba(10, 186, 181, 0.24));
-      border: 1px solid rgba(10, 186, 181, 0.46);
-    }
-
-    .brand-mark::after {
-      right: 0;
-      border: 1px solid rgba(35, 240, 255, 0.72);
-      background: rgba(35, 240, 255, 0.04);
-      box-shadow: 0 0 0 1px rgba(5, 9, 18, 0.68) inset;
     }
 
     .nav {
@@ -485,7 +461,7 @@
 <body data-lang="en">
   <header class="topbar">
     <a class="brand" href="/#top2" aria-label="OptiMind home">
-      <span class="brand-mark" aria-hidden="true"></span>
+      <img class="brand-logo" src="assets/optimind-logo-obsidian.png" alt="">
       <span>OptiMind</span>
     </a>
     <nav class="nav" aria-label="Product navigation">
