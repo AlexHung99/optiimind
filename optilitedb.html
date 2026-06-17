@@ -29,6 +29,8 @@
       --green: #5effad;
       --gold: #d8b978;
       --shadow: rgba(0, 0, 0, 0.38);
+      --topbar-height: 75px;
+      --product-tabs-height: 60px;
     }
 
     * { box-sizing: border-box; }
@@ -64,18 +66,43 @@
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 11px;
       font-family: Sora, "Noto Sans TC", sans-serif;
-      font-weight: 800;
+      font-size: 21px;
+      font-weight: 600;
       letter-spacing: 0;
+      color: #f3f4f1;
     }
 
     .brand-mark {
+      position: relative;
+      width: 41px;
+      height: 24px;
+      flex: 0 0 auto;
+    }
+
+    .brand-mark::before,
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      top: 0;
       width: 24px;
       height: 24px;
-      border: 1px solid rgba(10, 186, 181, 0.55);
-      border-radius: 4px;
-      background: rgba(10, 186, 181, 0.16);
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+
+    .brand-mark::before {
+      left: 0;
+      background: linear-gradient(135deg, rgba(10, 186, 181, 0.95), rgba(10, 186, 181, 0.24));
+      border: 1px solid rgba(10, 186, 181, 0.46);
+    }
+
+    .brand-mark::after {
+      right: 0;
+      border: 1px solid rgba(35, 240, 255, 0.72);
+      background: rgba(35, 240, 255, 0.04);
+      box-shadow: 0 0 0 1px rgba(5, 9, 18, 0.68) inset;
     }
 
     .nav {
@@ -137,7 +164,7 @@
 
     .page-tabs {
       position: sticky;
-      top: 57px;
+      top: var(--topbar-height);
       z-index: 15;
       display: flex;
       gap: 8px;
@@ -169,7 +196,7 @@
 
     .hero {
       padding: clamp(28px, 4vw, 56px) clamp(20px, 5vw, 72px) 0;
-      scroll-margin-top: 122px;
+      scroll-margin-top: calc(var(--topbar-height) + var(--product-tabs-height) + 10px);
     }
 
     .hero-media {
@@ -281,7 +308,7 @@
     section {
       padding: clamp(56px, 7vw, 96px) clamp(20px, 5vw, 72px);
       border-top: 1px solid rgba(255,255,255,.08);
-      scroll-margin-top: 122px;
+      scroll-margin-top: calc(var(--topbar-height) + var(--product-tabs-height) + 10px);
     }
 
     .section-inner {
@@ -442,10 +469,6 @@
         width: 100%;
         overflow-x: auto;
         padding-bottom: 4px;
-      }
-
-      .page-tabs {
-        top: 113px;
       }
 
       .feature-grid,
@@ -697,15 +720,27 @@
 
     const buttons = document.querySelectorAll('.lang button');
     const sectionLinks = document.querySelectorAll('[data-nav]');
+    const topbar = document.querySelector('.topbar');
+    const pageTabs = document.querySelector('.page-tabs');
     const sections = ['overview', 'features', 'screenshots', 'runtime', 'contact-cta']
       .map((id) => document.getElementById(id))
       .filter(Boolean);
+
+    function updateStickyOffsets() {
+      const topbarHeight = topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 75;
+      const tabsHeight = pageTabs ? Math.ceil(pageTabs.getBoundingClientRect().height) : 60;
+      document.documentElement.style.setProperty('--topbar-height', topbarHeight + 'px');
+      document.documentElement.style.setProperty('--product-tabs-height', tabsHeight + 'px');
+    }
 
     function setActiveSection(id) {
       sectionLinks.forEach((link) => {
         link.classList.toggle('active', link.getAttribute('data-nav') === id);
       });
     }
+
+    updateStickyOffsets();
+    window.addEventListener('resize', updateStickyOffsets);
 
     setActiveSection('overview');
 
