@@ -40,7 +40,7 @@
         radial-gradient(circle at 85% 18%, rgba(94, 255, 173, 0.12), transparent 28%),
         linear-gradient(180deg, #050912 0%, var(--bg) 38%, #050912 100%);
       color: var(--text);
-      font-family: Inter, "Noto Sans TC", "Segoe UI", Arial, sans-serif;
+      font-family: "Hanken Grotesk", "Noto Sans TC", "Segoe UI", Arial, sans-serif;
       line-height: 1.6;
     }
 
@@ -50,14 +50,14 @@
     .topbar {
       position: sticky;
       top: 0;
-      z-index: 10;
+      z-index: 20;
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 24px;
-      padding: 16px clamp(20px, 5vw, 72px);
+      padding: 14px clamp(20px, 5vw, 72px);
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(5, 9, 18, 0.82);
+      background: rgba(5, 9, 18, 0.9);
       backdrop-filter: blur(16px);
     }
 
@@ -65,29 +65,49 @@
       display: flex;
       align-items: center;
       gap: 10px;
+      font-family: Sora, "Noto Sans TC", sans-serif;
       font-weight: 800;
       letter-spacing: 0;
     }
 
     .brand-mark {
-      width: 28px;
-      height: 28px;
-      border: 1px solid var(--line);
-      border-radius: 7px;
-      background: linear-gradient(135deg, rgba(18,184,255,.85), rgba(35,240,255,.18));
-      box-shadow: 0 0 24px rgba(18, 184, 255, 0.32);
+      width: 24px;
+      height: 24px;
+      border: 1px solid rgba(10, 186, 181, 0.55);
+      border-radius: 4px;
+      background: rgba(10, 186, 181, 0.16);
     }
 
     .nav {
       display: flex;
       align-items: center;
-      gap: 18px;
+      gap: 14px;
       color: var(--muted);
       font-size: 14px;
       white-space: nowrap;
     }
 
-    .nav a:hover { color: var(--text); }
+    .nav a {
+      border-bottom: 1px solid transparent;
+      padding: 6px 0;
+    }
+
+    .nav a:hover,
+    .nav a.active {
+      color: var(--text);
+      border-bottom-color: rgba(35, 240, 255, 0.55);
+    }
+
+    .site-link {
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .site-link::before {
+      content: "<";
+      margin-right: 7px;
+      color: var(--cyan);
+    }
 
     .lang {
       display: flex;
@@ -115,8 +135,41 @@
       font-weight: 800;
     }
 
+    .page-tabs {
+      position: sticky;
+      top: 57px;
+      z-index: 15;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 10px clamp(20px, 5vw, 72px);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      background: rgba(7, 16, 29, 0.78);
+      backdrop-filter: blur(14px);
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .page-tabs a {
+      border: 1px solid rgba(255,255,255,.11);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 750;
+      padding: 8px 12px;
+      transition: color .2s ease, border-color .2s ease, background .2s ease;
+    }
+
+    .page-tabs a:hover,
+    .page-tabs a.active {
+      color: #03111d;
+      border-color: transparent;
+      background: var(--cyan);
+    }
+
     .hero {
       padding: clamp(28px, 4vw, 56px) clamp(20px, 5vw, 72px) 0;
+      scroll-margin-top: 122px;
     }
 
     .hero-media {
@@ -228,6 +281,7 @@
     section {
       padding: clamp(56px, 7vw, 96px) clamp(20px, 5vw, 72px);
       border-top: 1px solid rgba(255,255,255,.08);
+      scroll-margin-top: 122px;
     }
 
     .section-inner {
@@ -390,6 +444,10 @@
         padding-bottom: 4px;
       }
 
+      .page-tabs {
+        top: 113px;
+      }
+
       .feature-grid,
       .genres {
         grid-template-columns: 1fr;
@@ -403,17 +461,15 @@
 </head>
 <body data-lang="en">
   <header class="topbar">
-    <a class="brand" href="/">
+    <a class="brand" href="/#top2" aria-label="OptiMind home">
       <span class="brand-mark" aria-hidden="true"></span>
       <span>OptiMind</span>
     </a>
     <nav class="nav" aria-label="Product navigation">
-      <a href="#features" data-en>Features</a>
-      <a href="#features" data-zh>功能</a>
-      <a href="#screenshots" data-en>Screenshots</a>
-      <a href="#screenshots" data-zh>截圖</a>
-      <a href="#use-cases" data-en>Use Cases</a>
-      <a href="#use-cases" data-zh>適用場景</a>
+      <a class="site-link" href="/#products" data-en>Products</a>
+      <a class="site-link" href="/#products" data-zh>產品清單</a>
+      <a href="/#top2" data-en>Home</a>
+      <a href="/#top2" data-zh>首頁</a>
       <a href="/contact.html?lang=en" data-en>Contact</a>
       <a href="/contact.html?lang=zh" data-zh>聯絡</a>
       <span class="lang" aria-label="Language">
@@ -423,8 +479,21 @@
     </nav>
   </header>
 
+  <nav class="page-tabs" aria-label="OptiLiteDB sections">
+    <a href="#overview" data-nav="overview" data-en>Overview</a>
+    <a href="#overview" data-nav="overview" data-zh>總覽</a>
+    <a href="#features" data-nav="features" data-en>Features</a>
+    <a href="#features" data-nav="features" data-zh>功能</a>
+    <a href="#screenshots" data-nav="screenshots" data-en>Screenshots</a>
+    <a href="#screenshots" data-nav="screenshots" data-zh>截圖</a>
+    <a href="#runtime" data-nav="runtime" data-en>Runtime API</a>
+    <a href="#runtime" data-nav="runtime" data-zh>Runtime API</a>
+    <a href="#contact-cta" data-nav="contact-cta" data-en>Contact</a>
+    <a href="#contact-cta" data-nav="contact-cta" data-zh>聯絡</a>
+  </nav>
+
   <main>
-    <section class="hero" aria-labelledby="hero-title">
+    <section id="overview" class="hero" aria-labelledby="hero-title">
       <div class="hero-media">
         <img src="assets/optilitedb/optilitedb_pomo_banner.png" alt="OptiLiteDB promotional banner showing the Unity SQLite database browser interface">
       </div>
@@ -580,7 +649,7 @@
       </div>
     </section>
 
-    <section class="code-band">
+    <section id="runtime" class="code-band">
       <div class="section-inner">
         <div class="section-head">
           <h2 data-en>Runtime API Ready</h2>
@@ -597,7 +666,7 @@
       </div>
     </section>
 
-    <section class="cta">
+    <section id="contact-cta" class="cta">
       <div class="section-inner">
         <div class="cta-box">
           <div>
@@ -627,6 +696,19 @@
     }
 
     const buttons = document.querySelectorAll('.lang button');
+    const sectionLinks = document.querySelectorAll('[data-nav]');
+    const sections = ['overview', 'features', 'screenshots', 'runtime', 'contact-cta']
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+
+    function setActiveSection(id) {
+      sectionLinks.forEach((link) => {
+        link.classList.toggle('active', link.getAttribute('data-nav') === id);
+      });
+    }
+
+    setActiveSection('overview');
+
     buttons.forEach((button) => {
       button.classList.toggle('active', button.getAttribute('data-lang') === document.body.getAttribute('data-lang'));
     });
@@ -641,6 +723,26 @@
         });
       });
     });
+
+    sectionLinks.forEach((link) => {
+      link.addEventListener('click', () => {
+        setActiveSection(link.getAttribute('data-nav'));
+      });
+    });
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible && visible.target.id) setActiveSection(visible.target.id);
+      }, {
+        rootMargin: '-24% 0px -58% 0px',
+        threshold: [0.1, 0.25, 0.45]
+      });
+
+      sections.forEach((section) => observer.observe(section));
+    }
   </script>
 </body>
 </html>
