@@ -371,6 +371,50 @@
       font-size: 15px;
     }
 
+    .manual-layout {
+      display: grid;
+      grid-template-columns: 0.95fr 1.05fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .manual-stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    .manual-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(13, 23, 37, 0.72);
+      padding: 20px;
+    }
+
+    .manual-card h3 {
+      color: var(--cyan);
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+
+    .manual-card p,
+    .manual-card li {
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .manual-card ul,
+    .manual-card ol {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+
+    .manual-card code {
+      color: #d8faff;
+      background: rgba(255,255,255,.08);
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+
     .code-band {
       background: #060b13;
     }
@@ -420,6 +464,7 @@
     @media (max-width: 980px) {
       .hero-grid,
       .gallery,
+      .manual-layout,
       .cta-box {
         grid-template-columns: 1fr;
       }
@@ -485,6 +530,8 @@
     <a href="#features" data-nav="features" data-zh>功能</a>
     <a href="#screenshots" data-nav="screenshots" data-en>Screenshots</a>
     <a href="#screenshots" data-nav="screenshots" data-zh>截圖</a>
+    <a href="#manual" data-nav="manual" data-en>Manual</a>
+    <a href="#manual" data-nav="manual" data-zh>操作說明</a>
     <a href="#runtime" data-nav="runtime" data-en>Runtime API</a>
     <a href="#runtime" data-nav="runtime" data-zh>Runtime API</a>
     <a href="#contact-cta" data-nav="contact-cta" data-en>Contact</a>
@@ -611,6 +658,165 @@
       </div>
     </section>
 
+    <section id="manual">
+      <div class="section-inner">
+        <div class="section-head">
+          <h2 data-en>Operation Manual</h2>
+          <h2 data-zh>操作說明</h2>
+          <p data-en>Follow the main workflow from opening a database to editing tables, importing CSV data, using the runtime API, and automating editor tasks.</p>
+          <p data-zh>依照主要流程操作：開啟資料庫、編輯資料表、匯入 CSV、串接 Runtime API，並使用編輯器自動化接口。</p>
+        </div>
+
+        <div class="manual-layout">
+          <div class="manual-stack" data-en>
+            <article class="manual-card">
+              <h3>1. Package Introduction & Core Advantages</h3>
+              <p><strong>OptiLiteDB</strong> is a complete SQLite utility package for Unity 2022.3 through Unity 6, combining an in-editor database browser with a lightweight C# runtime API.</p>
+              <ul>
+                <li>Zero-DLL dynamic linking: uses <code>winsqlite3</code> on Windows and system <code>libsqlite3</code> on macOS, iOS, and Linux.</li>
+                <li>No native binaries to manage, fewer cross-platform build conflicts, and a smaller final package footprint.</li>
+                <li>Built for RPG data, card pools, local saves, simulation structures, and editor-side data workflows.</li>
+              </ul>
+            </article>
+
+            <article class="manual-card">
+              <h3>2. In-Editor Visual DB Browser Guide</h3>
+              <ol>
+                <li>Open Unity and choose the OptiLiteDB DB Browser window from the editor menu.</li>
+                <li>Select a database file under <code>Assets/</code>, or double-click a supported database asset to open it directly.</li>
+                <li>Use <strong>Browse Data</strong> to switch tables and views, page through rows, edit cells, sort columns, add rows, delete selected rows, or set values to <code>NULL</code>.</li>
+                <li>Use <strong>Execute SQL</strong> for ad-hoc queries and <strong>Schema</strong> to inspect generated table definitions.</li>
+              </ol>
+            </article>
+
+            <article class="manual-card">
+              <h3>3. Advanced CSV Import & Export</h3>
+              <p>Use <strong>Export CSV</strong> from the active table to create a portable data file. Use <strong>Import CSV</strong> to map CSV columns visually, choose a delimiter, and control how records are inserted.</p>
+              <ul>
+                <li><strong>Clear Table Before Import</strong> runs inside a transaction, so a failed import rolls back the clear operation and preserves the original data.</li>
+                <li>Column names can be matched automatically, then adjusted manually before import.</li>
+              </ul>
+            </article>
+          </div>
+
+          <div class="manual-stack" data-en>
+            <article class="manual-card">
+              <h3>4. Schema & Table Designer</h3>
+              <p>Use the visual table designer to create or alter tables without writing SQL by hand.</p>
+              <ul>
+                <li>Add, rename, remove, or reorder columns.</li>
+                <li>Configure column type, primary key, auto-increment, not-null, unique, and default values.</li>
+                <li>Apply changes through a transaction-backed rebuild that copies matching data and recreates user indexes and triggers.</li>
+              </ul>
+            </article>
+
+            <article class="manual-card">
+              <h3>5. Runtime C# API Development Guide</h3>
+              <p>Use parameter binding for safe SQL execution, and wrap bulk writes in explicit transactions for speed and consistency.</p>
+              <pre><code>using (var db = OptiLite.Open(path, readOnly: false, create: true))
+{
+    db.Execute("CREATE TABLE IF NOT EXISTS player (id INTEGER PRIMARY KEY, name TEXT, hp INTEGER);");
+    db.Execute("INSERT INTO player (name, hp) VALUES (?, ?);", "Hero_Alex", 100);
+
+    OptiLiteResult rows = db.Query("SELECT name, hp FROM player ORDER BY id DESC LIMIT 1;");
+}</code></pre>
+            </article>
+
+            <article class="manual-card">
+              <h3>6. AI Agent & Automation API</h3>
+              <p><code>OptiLiteEditorAPI</code> lets editor tools and AI assistants query or write database tables with simple C# calls, then refresh the editor UI.</p>
+              <pre><code>using OptiLiteDB.Editor;
+
+OptiLiteEditorAPI.Execute(
+    "Assets/game_data.db",
+    "INSERT INTO items (name, price) VALUES (?, ?);",
+    "Master Sword",
+    9999.0
+);
+
+OptiLiteResult rows = OptiLiteEditorAPI.Query(
+    "Assets/game_data.db",
+    "SELECT * FROM items;"
+);</code></pre>
+            </article>
+          </div>
+
+          <div class="manual-stack" data-zh>
+            <article class="manual-card">
+              <h3>1. 套件簡介與核心優勢</h3>
+              <p><strong>OptiLiteDB</strong> 是支援 Unity 2022.3 到 Unity 6 的 SQLite 整合套件，結合編輯器內的資料庫瀏覽器與輕量 C# Runtime API。</p>
+              <ul>
+                <li>零 DLL 動態連結：Windows 使用 <code>winsqlite3</code>，macOS、iOS、Linux 使用系統內建 <code>libsqlite3</code>。</li>
+                <li>不需要管理原生二進位檔，降低跨平台打包衝突，並縮小最終包體。</li>
+                <li>適合 RPG 數值表、卡池、單機存檔、模擬經營資料結構與編輯器資料流程。</li>
+              </ul>
+            </article>
+
+            <article class="manual-card">
+              <h3>2. 編輯器視覺化工具操作</h3>
+              <ol>
+                <li>在 Unity 中開啟 OptiLiteDB 的 DB Browser 視窗。</li>
+                <li>選擇 <code>Assets/</code> 底下的資料庫檔案，或直接雙擊支援的資料庫資產開啟。</li>
+                <li>在 <strong>Browse Data</strong> 中切換資料表與 View、分頁瀏覽、直接編輯 Cell、表頭排序、新增資料列、刪除選取列，或將值設為 <code>NULL</code>。</li>
+                <li>使用 <strong>Execute SQL</strong> 執行臨時查詢，使用 <strong>Schema</strong> 檢視產生出的資料表定義。</li>
+              </ol>
+            </article>
+
+            <article class="manual-card">
+              <h3>3. 進階 CSV 匯出與匯入</h3>
+              <p>在目前資料表使用 <strong>Export CSV</strong> 產生可攜式資料檔；使用 <strong>Import CSV</strong> 進行視覺化欄位對應、選擇分隔符，並控制匯入寫入方式。</p>
+              <ul>
+                <li><strong>Clear Table Before Import</strong> 會在交易中執行；若匯入失敗，清空動作會一起 rollback，保留原始資料。</li>
+                <li>欄位名稱可自動對應，也能在匯入前手動調整。</li>
+              </ul>
+            </article>
+          </div>
+
+          <div class="manual-stack" data-zh>
+            <article class="manual-card">
+              <h3>4. 視覺化建表與結構修改</h3>
+              <p>使用視覺化 Table Designer 建立或修改資料表，不必手寫 SQL。</p>
+              <ul>
+                <li>新增、重新命名、刪除或調整欄位順序。</li>
+                <li>設定欄位型別、主鍵、自動遞增、不可為空、唯一值與預設值。</li>
+                <li>套用變更時會透過交易重建資料表，複製可對應的既有資料，並重建使用者索引與 Trigger。</li>
+              </ul>
+            </article>
+
+            <article class="manual-card">
+              <h3>5. Runtime C# API 開發指南</h3>
+              <p>使用參數化綁定安全執行 SQL；大量寫入時搭配交易區塊，兼顧速度與資料一致性。</p>
+              <pre><code>using (var db = OptiLite.Open(path, readOnly: false, create: true))
+{
+    db.Execute("CREATE TABLE IF NOT EXISTS player (id INTEGER PRIMARY KEY, name TEXT, hp INTEGER);");
+    db.Execute("INSERT INTO player (name, hp) VALUES (?, ?);", "Hero_Alex", 100);
+
+    OptiLiteResult rows = db.Query("SELECT name, hp FROM player ORDER BY id DESC LIMIT 1;");
+}</code></pre>
+            </article>
+
+            <article class="manual-card">
+              <h3>6. AI Agent 與自動化 API</h3>
+              <p><code>OptiLiteEditorAPI</code> 可讓編輯器工具與 AI 助理用簡單 C# 呼叫查詢或寫入資料表，並刷新編輯器 UI。</p>
+              <pre><code>using OptiLiteDB.Editor;
+
+OptiLiteEditorAPI.Execute(
+    "Assets/game_data.db",
+    "INSERT INTO items (name, price) VALUES (?, ?);",
+    "Master Sword",
+    9999.0
+);
+
+OptiLiteResult rows = OptiLiteEditorAPI.Query(
+    "Assets/game_data.db",
+    "SELECT * FROM items;"
+);</code></pre>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="use-cases">
       <div class="section-inner">
         <div class="section-head">
@@ -698,7 +904,7 @@
     const sectionLinks = document.querySelectorAll('[data-nav]');
     const topbar = document.querySelector('.topbar');
     const pageTabs = document.querySelector('.page-tabs');
-    const sections = ['overview', 'features', 'screenshots', 'runtime', 'contact-cta']
+    const sections = ['overview', 'features', 'screenshots', 'manual', 'runtime', 'contact-cta']
       .map((id) => document.getElementById(id))
       .filter(Boolean);
 
@@ -718,7 +924,14 @@
     updateStickyOffsets();
     window.addEventListener('resize', updateStickyOffsets);
 
-    setActiveSection('overview');
+    function syncActiveFromHash() {
+      const hashId = window.location.hash.replace('#', '');
+      const target = sections.find((section) => section.id === hashId);
+      setActiveSection(target ? target.id : 'overview');
+    }
+
+    syncActiveFromHash();
+    window.addEventListener('hashchange', syncActiveFromHash);
 
     buttons.forEach((button) => {
       button.classList.toggle('active', button.getAttribute('data-lang') === document.body.getAttribute('data-lang'));
