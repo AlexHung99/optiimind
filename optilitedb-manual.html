@@ -152,6 +152,10 @@
       transition: color .2s ease, border-color .2s ease, background .2s ease;
     }
 
+    .page-tabs a[data-manual-link] {
+      margin-left: auto;
+    }
+
     .page-tabs a:hover,
     .page-tabs a.active {
       color: #03111d;
@@ -408,8 +412,8 @@
     body[data-lang="zh"] [data-en] { display: none !important; }
 
     .page-tabs a.manual-current {
-      background: var(--accent);
-      color: #031012;
+      background: var(--cyan);
+      color: #03111d;
       border-color: transparent;
     }
 
@@ -649,12 +653,12 @@
     <a href="/optilitedb.html?lang=zh#features" data-zh data-product-tab="features">功能</a>
     <a href="/optilitedb.html?lang=en#screenshots" data-en data-product-tab="screenshots">Screenshots</a>
     <a href="/optilitedb.html?lang=zh#screenshots" data-zh data-product-tab="screenshots">截圖</a>
-    <a class="manual-current" href="/optilitedb-manual.html?lang=en" data-en data-manual-link>Manual</a>
-    <a class="manual-current" href="/optilitedb-manual.html?lang=zh" data-zh data-manual-link>操作說明</a>
     <a href="/optilitedb.html?lang=en#runtime" data-en data-product-tab="runtime">Runtime API</a>
     <a href="/optilitedb.html?lang=zh#runtime" data-zh data-product-tab="runtime">Runtime API</a>
     <a href="/optilitedb.html?lang=en#contact-cta" data-en data-product-tab="contact-cta">Contact</a>
     <a href="/optilitedb.html?lang=zh#contact-cta" data-zh data-product-tab="contact-cta">聯絡</a>
+    <a class="manual-current" href="/optilitedb-manual.html?lang=en" data-en data-manual-link>Manual</a>
+    <a class="manual-current" href="/optilitedb-manual.html?lang=zh" data-zh data-manual-link>操作說明</a>
   </nav>
 
   <div class="container">
