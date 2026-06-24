@@ -603,12 +603,9 @@
       <span>OptiMind</span>
     </a>
     <nav class="nav" aria-label="Product navigation">
-      <a class="site-link" href="/?lang=en#products" data-en data-products-link>Products</a>
-      <a class="site-link" href="/?lang=zh#products" data-zh data-products-link>產品清單</a>
-      <a href="/?lang=en#top2" data-en data-home-nav>Home</a>
-      <a href="/?lang=zh#top2" data-zh data-home-nav>首頁</a>
-      <a href="/contact.html?lang=en" data-en data-contact-link>Contact</a>
-      <a href="/contact.html?lang=zh" data-zh data-contact-link>聯絡</a>
+      <a class="site-link" href="/?lang=en#products" data-products-link data-label-en="Products" data-label-zh="產品清單">Products</a>
+      <a href="/?lang=en#top2" data-home-nav data-label-en="Home" data-label-zh="首頁">Home</a>
+      <a href="/contact.html?lang=en" data-contact-link data-label-en="Contact" data-label-zh="聯絡">Contact</a>
       <span class="lang" aria-label="Language">
         <button type="button" data-lang="en">EN</button>
         <button type="button" data-lang="zh">中</button>
@@ -617,18 +614,12 @@
   </header>
 
   <nav class="page-tabs" aria-label="OptiLiteDB sections">
-    <a href="/optilitedb.html?lang=en#overview" data-en data-product-tab="overview">Overview</a>
-    <a href="/optilitedb.html?lang=zh#overview" data-zh data-product-tab="overview">總覽</a>
-    <a href="/optilitedb.html?lang=en#features" data-en data-product-tab="features">Features</a>
-    <a href="/optilitedb.html?lang=zh#features" data-zh data-product-tab="features">功能</a>
-    <a href="/optilitedb.html?lang=en#screenshots" data-en data-product-tab="screenshots">Screenshots</a>
-    <a href="/optilitedb.html?lang=zh#screenshots" data-zh data-product-tab="screenshots">截圖</a>
-    <a href="/optilitedb.html?lang=en#runtime" data-en data-product-tab="runtime">Runtime API</a>
-    <a href="/optilitedb.html?lang=zh#runtime" data-zh data-product-tab="runtime">Runtime API</a>
-    <a href="/optilitedb.html?lang=en#contact-cta" data-en data-product-tab="contact-cta">Contact</a>
-    <a href="/optilitedb.html?lang=zh#contact-cta" data-zh data-product-tab="contact-cta">聯絡</a>
-    <a class="manual-current" href="/optilitedb-manual.html?lang=en" data-en data-manual-link>Manual</a>
-    <a class="manual-current" href="/optilitedb-manual.html?lang=zh" data-zh data-manual-link>操作說明</a>
+    <a href="/optilitedb.html?lang=en#overview" data-product-tab="overview" data-label-en="Overview" data-label-zh="總覽">Overview</a>
+    <a href="/optilitedb.html?lang=en#features" data-product-tab="features" data-label-en="Features" data-label-zh="功能">Features</a>
+    <a href="/optilitedb.html?lang=en#screenshots" data-product-tab="screenshots" data-label-en="Screenshots" data-label-zh="截圖">Screenshots</a>
+    <a href="/optilitedb.html?lang=en#runtime" data-product-tab="runtime" data-label-en="Runtime API" data-label-zh="Runtime API">Runtime API</a>
+    <a href="/optilitedb.html?lang=en#contact-cta" data-product-tab="contact-cta" data-label-en="Contact" data-label-zh="聯絡">Contact</a>
+    <a class="manual-current" href="/optilitedb-manual.html?lang=en" data-manual-link data-label-en="Manual" data-label-zh="操作說明">Manual</a>
   </nav>
 
   <div class="container">
@@ -867,6 +858,12 @@ OptiLiteResult res = OptiLiteEditorAPI.Query("Assets/game_data.db", "SELECT * FR
       document.querySelectorAll('[data-manual-link]').forEach((link) => link.href = '/optilitedb-manual.html?lang=' + nextLang);
       document.querySelectorAll('[data-product-tab]').forEach((link) => { link.href = '/optilitedb.html?lang=' + nextLang + '#' + link.getAttribute('data-product-tab'); });
     }
+    function updateLocalizedLabels(lang) {
+      const key = normalizeLang(lang) === 'zh' ? 'labelZh' : 'labelEn';
+      document.querySelectorAll('[data-label-en][data-label-zh]').forEach((item) => {
+        item.textContent = item.dataset[key];
+      });
+    }
     function writeLang(lang) {
       const nextLang = normalizeLang(lang);
       document.body.setAttribute('data-lang', nextLang);
@@ -877,6 +874,7 @@ OptiLiteResult res = OptiLiteEditorAPI.Query("Assets/game_data.db", "SELECT * FR
         button.classList.toggle('active', normalizeLang(buttonLang) === nextLang);
       });
       updateLanguageLinks(nextLang);
+      updateLocalizedLabels(nextLang);
       const url = new URL(window.location.href);
       url.searchParams.set('lang', nextLang);
       history.replaceState(null, '', url.pathname + url.search + url.hash);

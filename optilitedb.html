@@ -558,17 +558,14 @@
 </head>
 <body data-lang="en">
   <header class="topbar">
-    <a class="brand" href="/#top2" aria-label="OptiMind home">
+    <a class="brand" href="/#top2" aria-label="OptiMind home" data-home-link>
       <img class="brand-logo" src="assets/optimind-logo-obsidian.png" alt="">
       <span>OptiMind</span>
     </a>
     <nav class="nav" aria-label="Product navigation">
-      <a class="site-link" href="/#products" data-en>Products</a>
-      <a class="site-link" href="/#products" data-zh>產品清單</a>
-      <a href="/#top2" data-en>Home</a>
-      <a href="/#top2" data-zh>首頁</a>
-      <a href="/contact.html?lang=en" data-en>Contact</a>
-      <a href="/contact.html?lang=zh" data-zh>聯絡</a>
+      <a class="site-link" href="/?lang=en#products" data-products-link data-label-en="Products" data-label-zh="產品清單">Products</a>
+      <a href="/?lang=en#top2" data-home-nav data-label-en="Home" data-label-zh="首頁">Home</a>
+      <a href="/contact.html?lang=en" data-contact-link data-label-en="Contact" data-label-zh="聯絡">Contact</a>
       <span class="lang" aria-label="Language">
         <button type="button" data-lang="en">EN</button>
         <button type="button" data-lang="zh">中</button>
@@ -577,18 +574,12 @@
   </header>
 
   <nav class="page-tabs" aria-label="OptiLiteDB sections">
-    <a href="#overview" data-nav="overview" data-en>Overview</a>
-    <a href="#overview" data-nav="overview" data-zh>總覽</a>
-    <a href="#features" data-nav="features" data-en>Features</a>
-    <a href="#features" data-nav="features" data-zh>功能</a>
-    <a href="#screenshots" data-nav="screenshots" data-en>Screenshots</a>
-    <a href="#screenshots" data-nav="screenshots" data-zh>截圖</a>
-    <a href="#runtime" data-nav="runtime" data-en>Runtime API</a>
-    <a href="#runtime" data-nav="runtime" data-zh>Runtime API</a>
-    <a href="#contact-cta" data-nav="contact-cta" data-en>Contact</a>
-    <a href="#contact-cta" data-nav="contact-cta" data-zh>聯絡</a>
-    <a href="/optilitedb-manual.html?lang=en" data-manual-link data-en>Manual</a>
-    <a href="/optilitedb-manual.html?lang=zh" data-manual-link data-zh>操作說明</a>
+    <a href="#overview" data-nav="overview" data-label-en="Overview" data-label-zh="總覽">Overview</a>
+    <a href="#features" data-nav="features" data-label-en="Features" data-label-zh="功能">Features</a>
+    <a href="#screenshots" data-nav="screenshots" data-label-en="Screenshots" data-label-zh="截圖">Screenshots</a>
+    <a href="#runtime" data-nav="runtime" data-label-en="Runtime API" data-label-zh="Runtime API">Runtime API</a>
+    <a href="#contact-cta" data-nav="contact-cta" data-label-en="Contact" data-label-zh="聯絡">Contact</a>
+    <a href="/optilitedb-manual.html?lang=en" data-manual-link data-label-en="Manual" data-label-zh="操作說明">Manual</a>
   </nav>
 
   <main>
@@ -851,10 +842,17 @@
 
     function updateLanguageLinks(lang) {
       const nextLang = lang === 'zh' ? 'zh' : 'en';
-      document.querySelectorAll('.brand').forEach((link) => { link.href = '/?lang=' + nextLang + '#top2'; });
-      document.querySelectorAll('a[href^="/#products"], a[href^="/?lang="][href$="#products"]').forEach((link) => { link.href = '/?lang=' + nextLang + '#products'; });
-      document.querySelectorAll('a[href^="/#top2"], a[href^="/?lang="][href$="#top2"]').forEach((link) => { link.href = '/?lang=' + nextLang + '#top2'; });
+      document.querySelectorAll('[data-home-link], [data-home-nav]').forEach((link) => { link.href = '/?lang=' + nextLang + '#top2'; });
+      document.querySelectorAll('[data-products-link]').forEach((link) => { link.href = '/?lang=' + nextLang + '#products'; });
+      document.querySelectorAll('[data-contact-link]').forEach((link) => { link.href = '/contact.html?lang=' + nextLang; });
       document.querySelectorAll('[data-manual-link]').forEach((link) => { link.href = '/optilitedb-manual.html?lang=' + nextLang; });
+    }
+
+    function updateLocalizedLabels(lang) {
+      const key = lang === 'zh' ? 'labelZh' : 'labelEn';
+      document.querySelectorAll('[data-label-en][data-label-zh]').forEach((item) => {
+        item.textContent = item.dataset[key];
+      });
     }
 
     const carousel = document.querySelector('[data-carousel]');
@@ -901,6 +899,7 @@
       button.classList.toggle('active', button.getAttribute('data-lang') === currentLang());
     });
     updateLanguageLinks(currentLang());
+    updateLocalizedLabels(currentLang());
 
     buttons.forEach((button) => {
       button.addEventListener('click', () => {
@@ -909,6 +908,7 @@
         document.documentElement.setAttribute('lang', lang === 'zh' ? 'zh-Hant' : 'en');
         try { localStorage.setItem('optimind-lang', lang); } catch (error) {}
         updateLanguageLinks(lang);
+        updateLocalizedLabels(lang);
         buttons.forEach((item) => {
           item.classList.toggle('active', item.getAttribute('data-lang') === lang);
         });
