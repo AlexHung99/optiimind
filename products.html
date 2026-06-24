@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Products - OptiMind</title>
+  <meta name="description" content="Browse OptiMind products, tools, and technical packages.">
+  <style>
+    :root {
+      --bg: #07101d;
+      --panel: #0d1725;
+      --line: rgba(116, 196, 255, 0.22);
+      --text: #eef7ff;
+      --muted: #a8bbcf;
+      --blue: #12b8ff;
+      --cyan: #23f0ff;
+      --green: #5effad;
+      --shadow: rgba(0, 0, 0, 0.38);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 16% 0%, rgba(18, 184, 255, 0.2), transparent 34%),
+        radial-gradient(circle at 86% 18%, rgba(94, 255, 173, 0.12), transparent 28%),
+        linear-gradient(180deg, #050912 0%, var(--bg) 42%, #050912 100%);
+      color: var(--text);
+      font-family: "Hanken Grotesk", "Noto Sans TC", "Segoe UI", Arial, sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    img { display: block; max-width: 100%; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+      padding: 14px clamp(20px, 5vw, 72px);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      background: rgba(5, 9, 18, .9);
+      backdrop-filter: blur(16px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-family: Sora, "Noto Sans TC", sans-serif;
+      font-size: 21px;
+      font-weight: 600;
+      color: #f3f4f1;
+    }
+
+    .brand-logo {
+      width: auto;
+      height: 24px;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .nav a {
+      border-bottom: 1px solid transparent;
+      padding: 6px 0;
+    }
+
+    .nav a:hover,
+    .nav a.active {
+      color: var(--text);
+      border-bottom-color: rgba(35, 240, 255, .55);
+    }
+
+    .lang {
+      display: flex;
+      gap: 6px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.04);
+    }
+
+    .lang button {
+      border: 0;
+      color: var(--muted);
+      background: transparent;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    body[data-lang="en"] .lang button[data-lang="en"],
+    body[data-lang="zh"] .lang button[data-lang="zh"] {
+      color: #03111d;
+      background: var(--cyan);
+      font-weight: 800;
+    }
+
+    main {
+      padding: clamp(42px, 7vw, 86px) clamp(20px, 5vw, 72px) 70px;
+    }
+
+    .hero {
+      max-width: 1160px;
+      margin: 0 auto 38px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
+      gap: 34px;
+      align-items: end;
+    }
+
+    .eyebrow {
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: .16em;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    h1 {
+      margin: 10px 0 16px;
+      font-size: clamp(42px, 7vw, 82px);
+      line-height: .98;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 760px;
+      margin: 0;
+      color: #d9e8f6;
+      font-size: clamp(18px, 2.1vw, 23px);
+      line-height: 1.45;
+    }
+
+    .summary-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      background: rgba(13, 23, 37, .72);
+    }
+
+    .summary-box strong {
+      display: block;
+      color: var(--text);
+      font-size: 28px;
+      line-height: 1;
+    }
+
+    .summary-box span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .catalog {
+      max-width: 1160px;
+      margin: 0 auto;
+    }
+
+    .filters {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 22px;
+    }
+
+    .filter {
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255,255,255,.035);
+      padding: 8px 13px;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .filter.active {
+      color: #03111d;
+      background: var(--cyan);
+      border-color: transparent;
+    }
+
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 20px;
+    }
+
+    .product-card {
+      display: grid;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(13, 23, 37, .78);
+      box-shadow: 0 20px 48px var(--shadow);
+      transition: transform .2s ease, border-color .2s ease, background .2s ease;
+    }
+
+    .product-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(35, 240, 255, .6);
+      background: rgba(16, 28, 46, .9);
+    }
+
+    .product-media {
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      background: #050912;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+
+    .product-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .product-body {
+      padding: 22px;
+    }
+
+    .product-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .tag {
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      color: #d8faff;
+      background: rgba(255,255,255,.045);
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .product-card h2 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.15;
+    }
+
+    .product-card p {
+      margin: 12px 0 18px;
+      color: var(--muted);
+    }
+
+    .product-action {
+      color: var(--cyan);
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    .empty-card {
+      border: 1px dashed rgba(116, 196, 255, .3);
+      border-radius: 8px;
+      padding: 26px;
+      color: var(--muted);
+      background: rgba(255,255,255,.025);
+    }
+
+    footer {
+      padding: 30px clamp(20px, 5vw, 72px);
+      color: var(--muted);
+      border-top: 1px solid rgba(255,255,255,.08);
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    body[data-lang="en"] [data-zh],
+    body[data-lang="zh"] [data-en] { display: none !important; }
+
+    @media (max-width: 780px) {
+      .topbar,
+      .hero {
+        align-items: flex-start;
+        grid-template-columns: 1fr;
+      }
+
+      .topbar {
+        flex-direction: column;
+      }
+
+      .nav {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+    }
+  </style>
+</head>
+<body data-lang="en">
+  <header class="topbar">
+    <a class="brand" href="/?lang=en#top2" aria-label="OptiMind home" data-home-link>
+      <img class="brand-logo" src="assets/optimind-logo-obsidian.png" alt="">
+      <span>OptiMind</span>
+    </a>
+    <nav class="nav" aria-label="Product catalog navigation">
+      <a class="active" href="/products.html?lang=en" data-products-link data-label-en="Products" data-label-zh="產品">Products</a>
+      <a href="/?lang=en#top2" data-home-nav data-label-en="Home" data-label-zh="首頁">Home</a>
+      <a href="/contact.html?lang=en" data-contact-link data-label-en="Contact" data-label-zh="聯絡">Contact</a>
+      <span class="lang" aria-label="Language">
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="zh">中</button>
+      </span>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <div class="eyebrow" data-en>Product Catalog</div>
+        <div class="eyebrow" data-zh>產品目錄</div>
+        <h1 data-en>Products</h1>
+        <h1 data-zh>產品</h1>
+        <p class="lead" data-en>Browse OptiMind tools and packages. This catalog is designed to grow as new products, Unity assets, APIs, and workflow kits are released.</p>
+        <p class="lead" data-zh>瀏覽 OptiMind 的產品、工具與技術套件。這個目錄會隨著未來推出更多 Unity Asset、API 與工作流工具持續擴充。</p>
+      </div>
+      <div class="summary-box">
+        <strong>01</strong>
+        <span data-en>available product now, with room for the next releases.</span>
+        <span data-zh>個產品已上架，並預留後續擴充空間。</span>
+      </div>
+    </section>
+
+    <section class="catalog" aria-label="Product list">
+      <div class="filters">
+        <span class="filter active" data-en>All</span>
+        <span class="filter active" data-zh>全部</span>
+        <span class="filter">Unity</span>
+        <span class="filter">SQLite</span>
+        <span class="filter">Runtime API</span>
+      </div>
+
+      <div class="product-grid">
+        <a class="product-card" href="/optilitedb.html?lang=en" data-product-card>
+          <div class="product-media">
+            <img src="assets/optilitedb/optilitedb_pomo_banner.png" alt="OptiLiteDB interface preview">
+          </div>
+          <div class="product-body">
+            <div class="product-meta">
+              <span class="tag">Unity</span>
+              <span class="tag">SQLite</span>
+              <span class="tag">Zero DLL</span>
+            </div>
+            <h2>OptiLiteDB</h2>
+            <p data-en>SQLite Browser and Runtime API for Unity. Browse, edit, import, export, query, and ship local SQLite data with a lean native-linking architecture.</p>
+            <p data-zh>Unity 專用 SQLite Browser 與 Runtime API。支援瀏覽、編輯、匯入匯出、查詢，並以輕量原生動態連結架構發布。</p>
+            <span class="product-action" data-en>View product</span>
+            <span class="product-action" data-zh>查看產品</span>
+          </div>
+        </a>
+
+        <div class="empty-card">
+          <h2 data-en>More products coming</h2>
+          <h2 data-zh>更多產品準備中</h2>
+          <p data-en>Future releases can be added here as independent cards, categories, and detail pages.</p>
+          <p data-zh>後續產品可以在這裡以獨立卡片、分類與詳情頁持續擴充。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>© 2026 OptiMind</span>
+    <span data-en>Product catalog for OptiMind tools and packages</span>
+    <span data-zh>OptiMind 工具與產品目錄</span>
+  </footer>
+
+  <script>
+    const requestedLang = new URLSearchParams(window.location.search).get('lang');
+    let storedLang = null;
+    try { storedLang = localStorage.getItem('optimind-lang'); } catch (error) {}
+    const initialLang = requestedLang === 'zh' || requestedLang === 'en' ? requestedLang : storedLang || 'en';
+    const buttons = document.querySelectorAll('.lang button');
+
+    function normalizeLang(lang) {
+      return lang === 'zh' ? 'zh' : 'en';
+    }
+
+    function updateLanguage(lang) {
+      const nextLang = normalizeLang(lang);
+      document.body.setAttribute('data-lang', nextLang);
+      document.documentElement.setAttribute('lang', nextLang === 'zh' ? 'zh-Hant' : 'en');
+      try { localStorage.setItem('optimind-lang', nextLang); } catch (error) {}
+      document.querySelectorAll('[data-home-link], [data-home-nav]').forEach((link) => { link.href = '/?lang=' + nextLang + '#top2'; });
+      document.querySelectorAll('[data-products-link]').forEach((link) => { link.href = '/products.html?lang=' + nextLang; });
+      document.querySelectorAll('[data-contact-link]').forEach((link) => { link.href = '/contact.html?lang=' + nextLang; });
+      document.querySelectorAll('[data-product-card]').forEach((link) => { link.href = '/optilitedb.html?lang=' + nextLang; });
+      document.querySelectorAll('[data-label-en][data-label-zh]').forEach((item) => {
+        item.textContent = nextLang === 'zh' ? item.dataset.labelZh : item.dataset.labelEn;
+      });
+      buttons.forEach((button) => {
+        button.classList.toggle('active', button.getAttribute('data-lang') === nextLang);
+      });
+      const url = new URL(window.location.href);
+      url.searchParams.set('lang', nextLang);
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+
+    updateLanguage(initialLang);
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => updateLanguage(button.getAttribute('data-lang')));
+    });
+  </script>
+</body>
+</html>

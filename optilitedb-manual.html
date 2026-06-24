@@ -603,7 +603,7 @@
       <span>OptiMind</span>
     </a>
     <nav class="nav" aria-label="Product navigation">
-      <a class="site-link" href="/?lang=en#products" data-products-link data-label-en="Products" data-label-zh="產品清單">Products</a>
+      <a class="site-link" href="/products.html?lang=en" data-products-link data-label-en="Products" data-label-zh="產品清單">Products</a>
       <a href="/?lang=en#top2" data-home-nav data-label-en="Home" data-label-zh="首頁">Home</a>
       <a href="/contact.html?lang=en" data-contact-link data-label-en="Contact" data-label-zh="聯絡">Contact</a>
       <span class="lang" aria-label="Language">
@@ -853,7 +853,7 @@ OptiLiteResult res = OptiLiteEditorAPI.Query("Assets/game_data.db", "SELECT * FR
     function updateLanguageLinks(lang) {
       const nextLang = normalizeLang(lang);
       document.querySelectorAll('[data-home-link], [data-home-nav]').forEach((link) => link.href = '/?lang=' + nextLang + '#top2');
-      document.querySelectorAll('[data-products-link]').forEach((link) => link.href = '/?lang=' + nextLang + '#products');
+      document.querySelectorAll('[data-products-link]').forEach((link) => link.href = '/products.html?lang=' + nextLang);
       document.querySelectorAll('[data-contact-link]').forEach((link) => link.href = '/contact.html?lang=' + nextLang);
       document.querySelectorAll('[data-manual-link]').forEach((link) => link.href = '/optilitedb-manual.html?lang=' + nextLang);
       document.querySelectorAll('[data-product-tab]').forEach((link) => { link.href = '/optilitedb.html?lang=' + nextLang + '#' + link.getAttribute('data-product-tab'); });
