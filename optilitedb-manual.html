@@ -489,36 +489,6 @@
             padding: 0 20px;
         }
 
-        .section-selector {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 30px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 15px;
-        }
-
-        .lang-btn {
-            background-color: var(--accent-color);
-            color: var(--text-color);
-            border: 1px solid var(--border-color);
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 15px;
-            font-weight: bold;
-            transition: all 0.2s;
-        }
-
-        .lang-btn:hover {
-            background-color: var(--border-color);
-        }
-
-        .lang-btn.active {
-            background-color: var(--primary-color);
-            color: #000000;
-            border-color: var(--primary-color);
-        }
-
         .manual-section {
             display: none;
         }
@@ -662,12 +632,6 @@
   </nav>
 
   <div class="container">
-        <!-- Language Switcher -->
-        <div class="section-selector">
-            <button id="btn-zh" class="lang-btn active" onclick="switchLanguage('zh')">繁體中文說明 (Traditional Chinese)</button>
-            <button id="btn-en" class="lang-btn" onclick="switchLanguage('en')">English Guide (English)</button>
-        </div>
-
         <!-- ========================================== TRADITIONAL CHINESE MANUAL ========================================== -->
         <div id="manual-zh" class="manual-section active">
             <h2>1. 套件簡介與核心優勢</h2>
@@ -893,7 +857,7 @@ OptiLiteResult res = OptiLiteEditorAPI.Query("Assets/game_data.db", "SELECT * FR
     </div>
 
   <script>
-    const langButtons = document.querySelectorAll('.lang button, .lang-btn');
+    const langButtons = document.querySelectorAll('.lang button');
     function normalizeLang(lang) { return lang === 'zh' ? 'zh' : 'en'; }
     function updateLanguageLinks(lang) {
       const nextLang = normalizeLang(lang);
@@ -909,7 +873,7 @@ OptiLiteResult res = OptiLiteEditorAPI.Query("Assets/game_data.db", "SELECT * FR
       document.documentElement.setAttribute('lang', nextLang === 'zh' ? 'zh-Hant' : 'en');
       try { localStorage.setItem('optimind-lang', nextLang); } catch (error) {}
       langButtons.forEach((button) => {
-        const buttonLang = button.id === 'btn-zh' ? 'zh' : button.id === 'btn-en' ? 'en' : button.getAttribute('data-lang');
+        const buttonLang = button.getAttribute('data-lang');
         button.classList.toggle('active', normalizeLang(buttonLang) === nextLang);
       });
       updateLanguageLinks(nextLang);
@@ -917,7 +881,6 @@ OptiLiteResult res = OptiLiteEditorAPI.Query("Assets/game_data.db", "SELECT * FR
       url.searchParams.set('lang', nextLang);
       history.replaceState(null, '', url.pathname + url.search + url.hash);
     }
-    function switchLanguage(lang) { writeLang(lang); }
     const requestedLang = new URLSearchParams(window.location.search).get('lang');
     let storedLang = null;
     try { storedLang = localStorage.getItem('optimind-lang'); } catch (error) {}
