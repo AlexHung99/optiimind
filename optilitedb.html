@@ -334,13 +334,7 @@
       margin: 12px 0 0;
     }
 
-    .gallery {
-      display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
-      gap: 16px;
-    }
-
-    .shot {
+    .screenshot-carousel {
       border: 1px solid var(--line);
       border-radius: 8px;
       overflow: hidden;
@@ -348,12 +342,100 @@
       box-shadow: 0 20px 48px var(--shadow);
     }
 
-    .shot.large { grid-row: span 2; }
-    .shot figcaption {
-      padding: 12px 14px;
+    .carousel-stage {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: stretch;
+      background: #050912;
+    }
+
+    .carousel-track {
+      display: grid;
+      min-width: 0;
+    }
+
+    .carousel-slide {
+      display: none;
+      grid-area: 1 / 1;
+    }
+
+    .carousel-slide.active {
+      display: block;
+    }
+
+    .carousel-slide img {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: contain;
+      background: #050912;
+    }
+
+    .carousel-slide figcaption {
+      padding: 14px 16px;
       color: var(--muted);
       border-top: 1px solid rgba(255,255,255,.08);
       font-size: 14px;
+    }
+
+    .carousel-control {
+      width: clamp(42px, 5vw, 58px);
+      border: 0;
+      color: var(--text);
+      background: rgba(255,255,255,.045);
+      font: inherit;
+      font-size: 28px;
+      cursor: pointer;
+      transition: background .2s ease, color .2s ease;
+    }
+
+    .carousel-control:hover,
+    .carousel-control:focus-visible {
+      color: #03111d;
+      background: var(--cyan);
+      outline: none;
+    }
+
+    .carousel-thumbs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      padding: 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.035);
+    }
+
+    .carousel-thumb {
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 8px;
+      padding: 0;
+      overflow: hidden;
+      background: #050912;
+      color: var(--muted);
+      cursor: pointer;
+      text-align: left;
+      transition: border-color .2s ease, transform .2s ease, color .2s ease;
+    }
+
+    .carousel-thumb:hover,
+    .carousel-thumb.active {
+      color: var(--text);
+      border-color: var(--cyan);
+      transform: translateY(-1px);
+    }
+
+    .carousel-thumb img {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      background: #050912;
+    }
+
+    .carousel-thumb span {
+      display: block;
+      padding: 8px 9px 9px;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1.25;
     }
 
     .genres {
@@ -424,7 +506,6 @@
 
     @media (max-width: 980px) {
       .hero-grid,
-      .gallery,
       .cta-box {
         grid-template-columns: 1fr;
       }
@@ -455,6 +536,18 @@
       .feature-grid,
       .genres {
         grid-template-columns: 1fr;
+      }
+
+      .carousel-stage {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .carousel-control {
+        display: none;
+      }
+
+      .carousel-thumbs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       .meta-row {
@@ -593,27 +686,55 @@
           <p data-en>OptiLiteDB is built around real editor workflows: browse rows, edit schemas, execute SQL, and inspect generated table definitions.</p>
           <p data-zh>OptiLiteDB 圍繞真實 Unity 編輯器工作流打造：瀏覽資料、修改表結構、執行 SQL、查看 Schema。</p>
         </div>
-        <div class="gallery">
-          <figure class="shot large">
-            <img src="assets/optilitedb/screenshot_browser.png" alt="OptiLiteDB DB Browser showing table data for enemies">
-            <figcaption data-en>Browse Data: tables, views, pagination, direct editing, CSV import/export.</figcaption>
-            <figcaption data-zh>Browse Data：資料表、View、分頁、直接編輯與 CSV 匯入匯出。</figcaption>
-          </figure>
-          <figure class="shot">
-            <img src="assets/optilitedb/screenshot_table_designer.png" alt="OptiLiteDB visual table designer editing columns">
-            <figcaption data-en>Visual table designer with SQL preview and transaction-backed apply flow.</figcaption>
-            <figcaption data-zh>視覺化表結構設計器，包含 SQL 預覽與交易保護套用流程。</figcaption>
-          </figure>
-          <figure class="shot">
-            <img src="assets/optilitedb/screenshot_sql.png" alt="OptiLiteDB Execute SQL tab with query results">
-            <figcaption data-en>Execute SQL directly inside Unity and inspect query results.</figcaption>
-            <figcaption data-zh>在 Unity 內直接執行 SQL 並檢視查詢結果。</figcaption>
-          </figure>
-          <figure class="shot">
-            <img src="assets/optilitedb/screenshot_schema.png" alt="OptiLiteDB Schema tab showing CREATE TABLE statement">
-            <figcaption data-en>Schema view for fast inspection of table definitions.</figcaption>
-            <figcaption data-zh>Schema 檢視可快速確認資料表定義。</figcaption>
-          </figure>
+        <div class="screenshot-carousel" data-carousel>
+          <div class="carousel-stage">
+            <button class="carousel-control" type="button" data-carousel-prev aria-label="Previous screenshot">&lt;</button>
+            <div class="carousel-track">
+              <figure class="carousel-slide active" data-slide="0">
+                <img src="assets/optilitedb/screenshot_browser.png" alt="OptiLiteDB DB Browser showing table data for enemies">
+                <figcaption data-en>Browse Data: tables, views, pagination, direct editing, CSV import/export.</figcaption>
+                <figcaption data-zh>Browse Data：資料表、View、分頁、直接編輯與 CSV 匯入匯出。</figcaption>
+              </figure>
+              <figure class="carousel-slide" data-slide="1">
+                <img src="assets/optilitedb/screenshot_table_designer.png" alt="OptiLiteDB visual table designer editing columns">
+                <figcaption data-en>Visual table designer with SQL preview and transaction-backed apply flow.</figcaption>
+                <figcaption data-zh>視覺化表結構設計器，包含 SQL 預覽與交易保護套用流程。</figcaption>
+              </figure>
+              <figure class="carousel-slide" data-slide="2">
+                <img src="assets/optilitedb/screenshot_sql.png" alt="OptiLiteDB Execute SQL tab with query results">
+                <figcaption data-en>Execute SQL directly inside Unity and inspect query results.</figcaption>
+                <figcaption data-zh>在 Unity 內直接執行 SQL 並檢視查詢結果。</figcaption>
+              </figure>
+              <figure class="carousel-slide" data-slide="3">
+                <img src="assets/optilitedb/screenshot_schema.png" alt="OptiLiteDB Schema tab showing CREATE TABLE statement">
+                <figcaption data-en>Schema view for fast inspection of table definitions.</figcaption>
+                <figcaption data-zh>Schema 檢視可快速確認資料表定義。</figcaption>
+              </figure>
+            </div>
+            <button class="carousel-control" type="button" data-carousel-next aria-label="Next screenshot">&gt;</button>
+          </div>
+          <div class="carousel-thumbs" aria-label="Choose screenshot">
+            <button class="carousel-thumb active" type="button" data-carousel-thumb="0">
+              <img src="assets/optilitedb/screenshot_browser.png" alt="">
+              <span data-en>Browse Data</span>
+              <span data-zh>瀏覽資料</span>
+            </button>
+            <button class="carousel-thumb" type="button" data-carousel-thumb="1">
+              <img src="assets/optilitedb/screenshot_table_designer.png" alt="">
+              <span data-en>Table Designer</span>
+              <span data-zh>表結構設計</span>
+            </button>
+            <button class="carousel-thumb" type="button" data-carousel-thumb="2">
+              <img src="assets/optilitedb/screenshot_sql.png" alt="">
+              <span data-en>Execute SQL</span>
+              <span data-zh>執行 SQL</span>
+            </button>
+            <button class="carousel-thumb" type="button" data-carousel-thumb="3">
+              <img src="assets/optilitedb/screenshot_schema.png" alt="">
+              <span data-en>Schema View</span>
+              <span data-zh>Schema 檢視</span>
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -734,6 +855,34 @@
       document.querySelectorAll('a[href^="/#products"], a[href^="/?lang="][href$="#products"]').forEach((link) => { link.href = '/?lang=' + nextLang + '#products'; });
       document.querySelectorAll('a[href^="/#top2"], a[href^="/?lang="][href$="#top2"]').forEach((link) => { link.href = '/?lang=' + nextLang + '#top2'; });
       document.querySelectorAll('[data-manual-link]').forEach((link) => { link.href = '/optilitedb-manual.html?lang=' + nextLang; });
+    }
+
+    const carousel = document.querySelector('[data-carousel]');
+    if (carousel) {
+      const slides = Array.from(carousel.querySelectorAll('[data-slide]'));
+      const thumbs = Array.from(carousel.querySelectorAll('[data-carousel-thumb]'));
+      const prev = carousel.querySelector('[data-carousel-prev]');
+      const next = carousel.querySelector('[data-carousel-next]');
+      let activeSlide = 0;
+
+      function showSlide(index) {
+        activeSlide = (index + slides.length) % slides.length;
+        slides.forEach((slide, slideIndex) => {
+          slide.classList.toggle('active', slideIndex === activeSlide);
+        });
+        thumbs.forEach((thumb, thumbIndex) => {
+          const isActive = thumbIndex === activeSlide;
+          thumb.classList.toggle('active', isActive);
+          thumb.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+      }
+
+      prev.addEventListener('click', () => showSlide(activeSlide - 1));
+      next.addEventListener('click', () => showSlide(activeSlide + 1));
+      thumbs.forEach((thumb, index) => {
+        thumb.addEventListener('click', () => showSlide(index));
+      });
+      showSlide(activeSlide);
     }
 
     updateStickyOffsets();
