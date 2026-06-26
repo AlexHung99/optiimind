@@ -333,8 +333,8 @@
         <p class="lead" data-zh>瀏覽 Optiimind 的產品、工具與技術套件。這個目錄會隨著未來推出更多 Unity Asset、API 與工作流工具持續擴充。</p>
       </div>
       <div class="summary-box">
-        <strong>01</strong>
-        <span data-en>available product now, with room for the next releases.</span>
+        <strong>02</strong>
+        <span data-en>available products now, with room for the next releases.</span>
         <span data-zh>個產品已上架，並預留後續擴充空間。</span>
       </div>
     </section>
@@ -346,10 +346,12 @@
         <span class="filter">Unity</span>
         <span class="filter">SQLite</span>
         <span class="filter">Runtime API</span>
+        <span class="filter">Authentication</span>
+        <span class="filter">Login UI</span>
       </div>
 
       <div class="product-grid">
-        <a class="product-card" href="/optilitedb.html?lang=en" data-product-card>
+        <a class="product-card" href="/optilitedb.html?lang=en" data-product-card data-product-url="/optilitedb.html">
           <div class="product-media">
             <img src="assets/optilitedb/optilitedb_pomo_banner.png" alt="OptiLiteDB interface preview">
           </div>
@@ -362,6 +364,24 @@
             <h2>OptiLiteDB</h2>
             <p data-en>SQLite Browser and Runtime API for Unity. Browse, edit, import, export, query, and ship local SQLite data with a lean native-linking architecture.</p>
             <p data-zh>Unity 專用 SQLite Browser 與 Runtime API。支援瀏覽、編輯、匯入匯出、查詢，並以輕量原生動態連結架構發布。</p>
+            <span class="product-action" data-en>View product</span>
+            <span class="product-action" data-zh>查看產品</span>
+          </div>
+        </a>
+
+        <a class="product-card" href="/optilogin.html?lang=en" data-product-card data-product-url="/optilogin.html">
+          <div class="product-media">
+            <img src="assets/optilogin/OptiLogin_POMO.png" alt="OptiLogin login UI preview">
+          </div>
+          <div class="product-body">
+            <div class="product-meta">
+              <span class="tag">Unity</span>
+              <span class="tag">Authentication</span>
+              <span class="tag">UI Toolkit</span>
+            </div>
+            <h2>OptiLogin</h2>
+            <p data-en>Login UI and authentication system for Unity. Build a polished multilingual sign-in flow with themes, guided setup, and REST API, UGS, or Firebase backends.</p>
+            <p data-zh>Unity 專用登入 UI 與驗證系統。支援多語系登入流程、主題預設、設定精靈，以及 REST API、UGS 或 Firebase 後端。</p>
             <span class="product-action" data-en>View product</span>
             <span class="product-action" data-zh>查看產品</span>
           </div>
@@ -402,7 +422,10 @@
       document.querySelectorAll('[data-home-link], [data-home-nav]').forEach((link) => { link.href = '/?lang=' + nextLang + '#top2'; });
       document.querySelectorAll('[data-products-link]').forEach((link) => { link.href = '/products.html?lang=' + nextLang; });
       document.querySelectorAll('[data-contact-link]').forEach((link) => { link.href = '/contact.html?lang=' + nextLang; });
-      document.querySelectorAll('[data-product-card]').forEach((link) => { link.href = '/optilitedb.html?lang=' + nextLang; });
+      document.querySelectorAll('[data-product-card]').forEach((link) => {
+        const productUrl = link.getAttribute('data-product-url') || '/optilitedb.html';
+        link.href = productUrl + '?lang=' + nextLang;
+      });
       document.querySelectorAll('[data-label-en][data-label-zh]').forEach((item) => {
         item.textContent = nextLang === 'zh' ? item.dataset.labelZh : item.dataset.labelEn;
       });
