@@ -193,6 +193,14 @@ html, body {
       <section class="group">
         <h2>車輛尺寸</h2>
         <div class="field">
+          <label>車種</label>
+          <div class="segmented">
+            <button data-vehicle="car" class="seg active">四輪汽車</button>
+            <button data-vehicle="trike" class="seg">三輪車 前2後1</button>
+          </div>
+        </div>
+        <div class="readout" id="vehicleNote" style="display:none">前輪轉向的三輪車：車身路徑與四輪車相同，但後方僅一條中央輪跡，後內輪差較小。</div>
+        <div class="field">
           <label>車長 <span id="carLengthVal">4.5 m</span></label>
           <input type="range" id="carLength" min="3.0" max="6.5" step="0.1" value="4.5">
         </div>
@@ -235,6 +243,7 @@ html, body {
         <h2>顯示選項</h2>
         <label class="checkbox"><input type="checkbox" id="showPath" checked> 顯示規劃路徑</label>
         <label class="checkbox"><input type="checkbox" id="showTrail" checked> 顯示行駛軌跡</label>
+        <label class="checkbox"><input type="checkbox" id="showWheelTrail" checked> 顯示車輪軌跡（輪跡）</label>
         <label class="checkbox"><input type="checkbox" id="showMeasure" checked> 顯示尺寸標註</label>
       </section>
 
@@ -487,6 +496,7 @@ function computeManeuver(p) {
 
 // ---------- state ----------
 const state = {
+  vehicleType: "car",
   spotType: "perp",
   angleDeg: 45,
   laneDir: 1,
@@ -502,6 +512,7 @@ const state = {
   laneWidth: 6,
   showPath: true,
   showTrail: true,
+  showWheelTrail: true,
   showMeasure: true,
   speed: 1,
   playing: false,
@@ -696,6 +707,44 @@ function drawTrail() {
   ctx.stroke();
 }
 
+// Wheel positions in the vehicle frame (origin = rear axle centre).
+// A tadpole trike steers its two front wheels and has a single centred rear
+// wheel — the bicycle-model body path is identical to a car's; only the
+// wheel tracks (swept paths) differ.
+function wheelLayout(p) {
+  const front = [
+    { x: p.wheelbase, y: p.track / 2, steers: true, rear: false },
+    { x: p.wheelbase, y: -p.track / 2, steers: true, rear: false },
+  ];
+  const rear =
+    p.vehicleType === "trike"
+      ? [{ x: 0, y: 0, steers: false, rear: true }]
+      : [
+          { x: 0, y: p.track / 2, steers: false, rear: true },
+          { x: 0, y: -p.track / 2, steers: false, rear: true },
+        ];
+  return front.concat(rear);
+}
+
+function drawWheelTrails() {
+  if (!state.showWheelTrail || state.traveled <= 0) return;
+  const path = state.manoeuvre.path;
+  const wheels = wheelLayout(state);
+  const N = Math.max(8, Math.floor((state.traveled / path.totalLength) * 140));
+  ctx.lineWidth = Math.max(1, 0.025 * PPM);
+  for (const w of wheels) {
+    ctx.strokeStyle = w.rear ? "rgba(120,220,255,0.7)" : "rgba(255,175,70,0.7)";
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const pose = path.poseAt((state.traveled * i) / N);
+      const pt = toScreen(V.add(pose.pos, rotateLocal({ x: w.x, y: w.y }, pose.theta)));
+      if (i === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.stroke();
+  }
+}
+
 function drawWheel(origin, localPos, bodyTheta, steerAngle, wheelLen, wheelWidth) {
   ctx.save();
   const world = V.add(origin, rotateLocal(localPos, bodyTheta));
@@ -774,10 +823,9 @@ function drawCar(pose) {
   // Wheels drawn on top of the body (blueprint style) at their true positions,
   // so the track / wheelbase sliders are directly visible.
   const wheelLen = 0.72, wheelWidth = 0.3;
-  drawWheel(rearAxle, { x: p.wheelbase, y: p.track / 2 }, theta, steerAngle, wheelLen, wheelWidth);
-  drawWheel(rearAxle, { x: p.wheelbase, y: -p.track / 2 }, theta, steerAngle, wheelLen, wheelWidth);
-  drawWheel(rearAxle, { x: 0, y: p.track / 2 }, theta, 0, wheelLen, wheelWidth);
-  drawWheel(rearAxle, { x: 0, y: -p.track / 2 }, theta, 0, wheelLen, wheelWidth);
+  for (const w of wheelLayout(p)) {
+    drawWheel(rearAxle, w, theta, w.steers ? steerAngle : 0, wheelLen, wheelWidth);
+  }
 
   return steerAngle;
 }
@@ -797,6 +845,7 @@ function render() {
   drawSpot();
   drawPlannedPath();
   drawTrail();
+  drawWheelTrails();
   const pose = state.manoeuvre.path.poseAt(state.traveled);
   const steerAngle = drawCar(pose);
 
@@ -864,6 +913,11 @@ function setupUI() {
     });
   });
 
+  bindSegmented('[data-vehicle]', "vehicleType", (btn) => {
+    state.vehicleType = btn.dataset.vehicle;
+    document.getElementById("vehicleNote").style.display = state.vehicleType === "trike" ? "block" : "none";
+  });
+
   bindSegmented('[data-lane]', "laneDir", (btn) => {
     state.laneDir = parseInt(btn.dataset.lane, 10);
     recompute();
@@ -898,6 +952,7 @@ function setupUI() {
 
   document.getElementById("showPath").addEventListener("change", (e) => (state.showPath = e.target.checked));
   document.getElementById("showTrail").addEventListener("change", (e) => (state.showTrail = e.target.checked));
+  document.getElementById("showWheelTrail").addEventListener("change", (e) => (state.showWheelTrail = e.target.checked));
   document.getElementById("showMeasure").addEventListener("change", (e) => (state.showMeasure = e.target.checked));
 
   document.getElementById("speed").addEventListener("input", (e) => {
