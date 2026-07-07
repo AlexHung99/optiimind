@@ -1,4 +1,1308 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>停車模擬器 Parking Simulator</title>
 <style>
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #101317;
+  color: #e8ebef;
+  font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+}
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: #171b21;
+  border-bottom: 1px solid #262c35;
+  flex: 0 0 auto;
+}
+.topbar h1 { font-size: 17px; margin: 0; font-weight: 600; }
+.topbar-actions { display: flex; align-items: center; gap: 10px; }
+
+.btn {
+  background: #262c35;
+  color: #e8ebef;
+  border: 1px solid #333a45;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn:hover { background: #2f3743; }
+.btn-primary { background: #2d6cdf; border-color: #2d6cdf; }
+.btn-primary:hover { background: #3a78ea; }
+
+.speed-label { font-size: 12px; color: #9aa4b2; display: flex; align-items: center; gap: 6px; }
+.speed-label input[type=range] { width: 90px; }
+
+.main { flex: 1 1 auto; display: flex; min-height: 0; }
+
+.panel {
+  width: 300px;
+  flex: 0 0 auto;
+  overflow-y: auto;
+  padding: 14px;
+  background: #14171c;
+  border-right: 1px solid #262c35;
+}
+
+.group {
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #21252c;
+}
+.group h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: #7f8a9b;
+  margin: 0 0 10px;
+}
+
+.field { margin-bottom: 10px; }
+.field label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: #c7ceda;
+  margin-bottom: 4px;
+}
+.field input[type=range] { width: 100%; }
+
+.segmented { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid #333a45; }
+.seg {
+  flex: 1;
+  background: #1c2129;
+  color: #aab3c0;
+  border: none;
+  padding: 7px 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border-right: 1px solid #333a45;
+}
+.seg:last-child { border-right: none; }
+.seg.active { background: #2d6cdf; color: #fff; }
+.seg:hover:not(.active) { background: #262c35; }
+
+.readout { font-size: 12px; color: #7f8a9b; margin-top: 6px; }
+
+.checkbox { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #c7ceda; margin-bottom: 8px; }
+
+.warning {
+  background: #3a2a15;
+  border: 1px solid #7a5424;
+  color: #ffcf8a;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.warning.notice {
+  background: #14283a;
+  border-color: #2d5b8a;
+  color: #9ccaff;
+}
+
+.stage {
+  flex: 1 1 auto;
+  position: relative;
+  min-width: 0;
+  display: flex;
+}
+#canvas { width: 100%; height: 100%; display: block; }
+
+.hud {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 10px;
+}
+.hud-item {
+  background: rgba(20,23,28,.85);
+  border: 1px solid #333a45;
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-width: 64px;
+  text-align: center;
+}
+.hud-label { display: block; font-size: 10px; color: #7f8a9b; margin-bottom: 2px; }
+.hud-item span:last-child { font-size: 16px; font-weight: 600; }
 </style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <h1>🚗 停車模擬器</h1>
+    <div class="topbar-actions">
+      <button id="btnPlay" class="btn btn-primary">▶ 播放</button>
+      <button id="btnStep" class="btn">單步</button>
+      <button id="btnReset" class="btn">重置</button>
+      <label class="speed-label">速度
+        <input type="range" id="speed" min="0.2" max="3" step="0.1" value="1">
+        <span id="speedVal">1.0x</span>
+      </label>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="panel">
+
+      <section class="group">
+        <h2>停車格類型</h2>
+        <div class="segmented" id="spotTypeGroup">
+          <button data-type="perp" class="seg active">垂直</button>
+          <button data-type="angle" class="seg">斜角</button>
+          <button data-type="parallel" class="seg">平行</button>
+        </div>
+        <div class="field" id="angleField" style="display:none">
+          <label>傾斜角度 <span id="angleDegVal">45°</span></label>
+          <input type="range" id="angleDeg" min="20" max="80" step="1" value="45">
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>進場方向</h2>
+        <div class="field">
+          <label>車道行駛方向</label>
+          <div class="segmented">
+            <button data-lane="1" class="seg active">由左向右 →</button>
+            <button data-lane="-1" class="seg">由右向左 ←</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>停車格位置</label>
+          <div class="segmented">
+            <button data-row="1" class="seg active">車道下方 ▽</button>
+            <button data-row="-1" class="seg">車道上方 △</button>
+          </div>
+        </div>
+        <div class="field" id="entryModeField">
+          <label>入庫方式</label>
+          <div class="segmented">
+            <button data-entry="reverse" class="seg active">倒車入庫</button>
+            <button data-entry="forward" class="seg">前進入庫</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>車輛尺寸</h2>
+        <div class="field">
+          <label>車種</label>
+          <div class="segmented">
+            <button data-vehicle="car" class="seg active">四輪汽車</button>
+            <button data-vehicle="trike" class="seg">三輪車 前2後1</button>
+          </div>
+        </div>
+        <div class="readout" id="vehicleNote" style="display:none">前輪轉向的三輪車：車身路徑與四輪車相同，但後方僅一條中央輪跡，後內輪差較小。</div>
+        <div class="field">
+          <label>車長 <span id="carLengthVal">2.47 m</span></label>
+          <input type="range" id="carLength" min="0.5" max="5" step="0.01" value="2.47">
+        </div>
+        <div class="field">
+          <label>車寬 <span id="carWidthVal">0.97 m</span></label>
+          <input type="range" id="carWidth" min="0.5" max="5" step="0.01" value="0.97">
+        </div>
+        <div class="field">
+          <label>軸距 (前後輪距) <span id="wheelbaseVal">1.80 m</span></label>
+          <input type="range" id="wheelbase" min="0.5" max="5" step="0.05" value="1.8">
+        </div>
+        <div class="field">
+          <label>輪距 (左右輪距) <span id="trackVal">0.85 m</span></label>
+          <input type="range" id="track" min="0.5" max="3" step="0.05" value="0.85">
+        </div>
+        <div class="field">
+          <label>最小迴轉半徑 <span id="turnRadiusVal">3.6 m</span></label>
+          <input type="range" id="turnRadius" min="2" max="9" step="0.1" value="3.6">
+        </div>
+        <div class="readout" id="steerReadout">最大轉向角：約 26°</div>
+      </section>
+
+      <section class="group">
+        <h2>停車格與車道</h2>
+        <div class="field">
+          <label>停車格寬度 <span id="spotWidthVal">2.5 m</span></label>
+          <input type="range" id="spotWidth" min="0.5" max="5" step="0.1" value="2.5">
+        </div>
+        <div class="field">
+          <label>停車格深度 <span id="spotDepthVal">6.0 m</span></label>
+          <input type="range" id="spotDepth" min="0.5" max="10" step="0.1" value="6">
+        </div>
+        <div class="field">
+          <label>車道寬度 <span id="laneWidthVal">6 m</span></label>
+          <input type="range" id="laneWidth" min="2" max="10" step="0.1" value="6">
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>顯示選項</h2>
+        <label class="checkbox"><input type="checkbox" id="showPath" checked> 顯示規劃路徑</label>
+        <label class="checkbox"><input type="checkbox" id="showTrail" checked> 顯示行駛軌跡</label>
+        <label class="checkbox"><input type="checkbox" id="showWheelTrail" checked> 顯示車輪軌跡（輪跡）</label>
+        <label class="checkbox"><input type="checkbox" id="showMeasure" checked> 顯示尺寸標註</label>
+      </section>
+
+      <div id="warningBox" class="warning" style="display:none"></div>
+    </aside>
+
+    <main class="stage">
+      <canvas id="canvas"></canvas>
+      <div class="hud">
+        <div class="hud-item"><span class="hud-label">檔位</span><span id="hudGear">D</span></div>
+        <div class="hud-item"><span class="hud-label">方向盤</span><span id="hudSteer">0°</span></div>
+        <div class="hud-item"><span class="hud-label">進度</span><span id="hudProgress">0%</span></div>
+      </div>
+    </main>
+  </div>
+</div>
 <script>
+(() => {
+"use strict";
+
+// ---------- vector helpers ----------
+const V = {
+  add: (a, b) => ({ x: a.x + b.x, y: a.y + b.y }),
+  sub: (a, b) => ({ x: a.x - b.x, y: a.y - b.y }),
+  scale: (a, s) => ({ x: a.x * s, y: a.y * s }),
+  dot: (a, b) => a.x * b.x + a.y * b.y,
+  cross: (a, b) => a.x * b.y - a.y * b.x,
+  len: (a) => Math.hypot(a.x, a.y),
+  fromAngle: (rad) => ({ x: Math.cos(rad), y: Math.sin(rad) }),
+  angle: (a) => Math.atan2(a.y, a.x),
+  leftNormal: (h) => ({ x: -h.y, y: h.x }), // rotate +90 deg
+  rotate90ccwUnit: (a) => ({ x: -a.y, y: a.x }),
+};
+const RAD = Math.PI / 180;
+
+// ---------- path segments ----------
+// A segment: { length, gear, curvatureSign, sample(sLocal) => {pos:{x,y}, theta} }
+
+function makeStraight(startPos, theta, length, gear) {
+  const h = V.fromAngle(theta);
+  return {
+    length,
+    gear,
+    curvatureSign: 0,
+    sample(s) {
+      return { pos: V.add(startPos, V.scale(h, s * gear)), theta };
+    },
+  };
+}
+
+function makeArc(C, R, turnSign, gear, thetaStart, length) {
+  return {
+    length,
+    gear,
+    curvatureSign: turnSign,
+    sample(s) {
+      const theta = thetaStart + gear * turnSign * (s / R);
+      const h = V.fromAngle(theta);
+      const pos = V.sub(C, V.scale(V.leftNormal(h), R * turnSign));
+      return { pos, theta, kappa: turnSign / R };
+    },
+  };
+}
+
+// Numerically integrated segment from a precomputed pose table (clothoid S-curve).
+function makeTableSegment(P0, table, gear) {
+  const last = table.xs.length - 1;
+  return {
+    length: table.S,
+    gear,
+    curvatureSign: 0,
+    sample(s) {
+      const f = Math.min(last, Math.max(0, s / table.ds));
+      const i0 = Math.floor(f), i1 = Math.min(last, i0 + 1), t = f - i0;
+      const lerp = (a) => a[i0] + (a[i1] - a[i0]) * t;
+      return {
+        pos: { x: P0.x + lerp(table.xs), y: P0.y + lerp(table.ys) },
+        theta: lerp(table.ths),
+        kappa: lerp(table.ks),
+      };
+    },
+  };
+}
+
+// Reverse S-curve with rate-limited steering: curvature ramps 0 -> +k over
+// dRamp, holds L, swings to -k over 2*dRamp, holds L, returns to 0 over dRamp.
+// Antisymmetric profile, so the net heading change is zero.
+function integrateSCurve(kS, L, dRamp, thetaStart, gear) {
+  const S = 4 * dRamp + 2 * L;
+  const ds = 0.02;
+  const kappaAt = (s) => {
+    if (s < dRamp) return (kS * s) / dRamp;
+    if (s < dRamp + L) return kS;
+    if (s < 3 * dRamp + L) return kS * (1 - (s - dRamp - L) / dRamp);
+    if (s < 3 * dRamp + 2 * L) return -kS;
+    if (s < S) return -kS * (1 - (s - 3 * dRamp - 2 * L) / dRamp);
+    return 0;
+  };
+  const xs = [0], ys = [0], ths = [thetaStart], ks = [0];
+  let x = 0, y = 0, th = thetaStart;
+  for (let s = ds; s <= S + 1e-9; s += ds) {
+    th += gear * kappaAt(s - ds / 2) * ds;
+    x += gear * Math.cos(th) * ds;
+    y += gear * Math.sin(th) * ds;
+    xs.push(x); ys.push(y); ths.push(th); ks.push(kappaAt(s));
+  }
+  return { S, ds, xs, ys, ths, ks, dx: x, dy: y };
+}
+
+// Find hold length L (or reduced peak curvature) so the S-curve's lateral
+// displacement matches targetDy. Both relations are monotonic, so bisect.
+function solveSCurve(targetDy, kMax, dRamp, thetaStart, gear, turnSignK) {
+  const dyOf = (kPeak, L) => integrateSCurve(kPeak * turnSignK, L, dRamp, thetaStart, gear).dy;
+  const target = Math.abs(targetDy);
+  // Cap the mid-manoeuvre swing angle (= kPeak*(dRamp+L)) at ~50°: keeps the
+  // path realistic and dy monotonic in L so the bisection below is valid.
+  const THETA_CAP = 0.87;
+  const LCap = Math.max(0, THETA_CAP / kMax - dRamp);
+  let kPeak = kMax, L = 0, feasible = true;
+  if (Math.abs(dyOf(kMax, 0)) >= target) {
+    let lo = 1e-3, hi = kMax;
+    for (let i = 0; i < 36; i++) {
+      const mid = (lo + hi) / 2;
+      if (Math.abs(dyOf(mid, 0)) >= target) hi = mid; else lo = mid;
+    }
+    kPeak = hi;
+  } else if (Math.abs(dyOf(kMax, LCap)) < target) {
+    feasible = false;
+    L = LCap;
+  } else {
+    let lo = 0, hi = LCap;
+    for (let i = 0; i < 36; i++) {
+      const mid = (lo + hi) / 2;
+      if (Math.abs(dyOf(kMax, mid)) >= target) hi = mid; else lo = mid;
+    }
+    L = hi;
+  }
+  return { kPeak, L, feasible };
+}
+
+// ---------- collision helpers ----------
+function rectCorners(cx, cy, hl, hw, th) {
+  const c = Math.cos(th), s = Math.sin(th);
+  return [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([ex, ey]) => ({
+    x: cx + c * hl * ex - s * hw * ey,
+    y: cy + s * hl * ex + c * hw * ey,
+  }));
+}
+
+function egoCorners(p, geo, pose) {
+  const cLocal = { x: (p.wheelbase + geo.frontOverhang - geo.rearOverhang) / 2, y: 0 };
+  const c = V.add(pose.pos, rotateLocal(cLocal, pose.theta));
+  return rectCorners(c.x, c.y, p.carLength / 2, p.carWidth / 2, pose.theta);
+}
+
+function polysIntersectSAT(A, B) {
+  for (const poly of [A, B]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p1 = poly[i], p2 = poly[(i + 1) % poly.length];
+      const ax = p1.y - p2.y, ay = p2.x - p1.x;
+      let minA = Infinity, maxA = -Infinity, minB = Infinity, maxB = -Infinity;
+      for (const pt of A) { const d = pt.x * ax + pt.y * ay; if (d < minA) minA = d; if (d > maxA) maxA = d; }
+      for (const pt of B) { const d = pt.x * ax + pt.y * ay; if (d < minB) minB = d; if (d > maxB) maxB = d; }
+      if (maxA < minB || maxB < minA) return false;
+    }
+  }
+  return true;
+}
+
+function wrapAngle(a) {
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return a;
+}
+
+// Multi-attempt parallel parking: feedback-steered rollout that reverses into
+// the gap, stops just short of a neighbour, swaps gear to realign, and repeats
+// — like a driver working a tight spot — until aligned and centred.
+function simulateShuffleParallel(p, geo, start, thetaStart, yFinal, xfCenter, neighbors, kMax) {
+  const ds = 0.02;
+  const marginRects = neighbors.map((n) => rectCorners(n.cx, n.cy, n.hl + 0.05, n.hw + 0.05, 0));
+  const hitAt = (pose) => {
+    const ego = egoCorners(p, geo, pose);
+    return marginRects.some((r) => polysIntersectSAT(ego, r));
+  };
+  const KLAT = 0.9, GAIN = 2.5, PHI_MAX = 0.5;
+  // Creeping speed: the wheel can be wound much faster relative to distance
+  // travelled than at driving speed — full lock over ~0.35 m of travel.
+  const slew = kMax / 0.35;
+  // Rear-axle x window (in downstream coords) anchoring the shuffle to the bay:
+  // reverse never backs the tail past the rear car, forward never wanders
+  // beyond the front car — forcing the sideways creep into the gap.
+  const uMin = -p.spotDepth / 2 + geo.rearOverhang + 0.06;
+  const uMaxLane = p.spotDepth / 2 + p.carLength;
+  // Parked = aligned and the whole body between the two cars (centring is
+  // cosmetic; any position fully inside the gap is legally parked).
+  const uFrontLim = p.spotDepth / 2 - (p.wheelbase + geo.frontOverhang) - 0.05;
+  const uTarget = (uMin + uFrontLim) / 2;
+  let x = start.x, y = start.y, th = thetaStart, kappa = 0, gear = -1;
+  const segsOut = [];
+  let parked = false, stuck = 0, phases = 0;
+
+  for (let phase = 0; phase < 64 && !parked; phase++) {
+    const phi0 = wrapAngle(th - thetaStart);
+    const aligned0 = Math.abs(phi0) < 0.05 && Math.abs(y - yFinal) < 0.15;
+    // Phase intent: reverse phases approach the kerb; forward phases only
+    // straighten the car (short move, wheel toward the kerb); once aligned,
+    // straight moves centre the car in the gap.
+    let mode;
+    if (aligned0 && phase > 0) {
+      mode = "center";
+      gear = uTarget - x * p.laneDir > 0 ? 1 : -1;
+    } else if (phase === 0 || gear > 0) {
+      mode = "approach";
+      gear = -1;
+    } else {
+      mode = "straighten";
+      gear = 1;
+    }
+    const maxTravel = mode === "straighten" ? 3.5 : 16;
+    // The wheel is re-centred while stopped at the gear change (as drivers do
+    // when working a tight spot), so the short runway isn't wasted unwinding.
+    kappa = 0;
+
+    // Approach phases: reverse straight until the tail clears the front car's
+    // rear corner, wind toward the kerb up to a swing angle scaled by the
+    // remaining lateral error, then unwind to straight — the swing happens in
+    // the gap mouth, not beside the front car. If the wind is blocked, unwind
+    // immediately instead of ending the phase.
+    const tS = p.rowSide * p.laneDir;
+    const phiSwing = Math.min(PHI_MAX, Math.max(0.12, Math.atan(KLAT * Math.abs(y - yFinal))));
+    const uWind = p.spotDepth / 2 + geo.rearOverhang + 0.1; // start winding here
+    let subState = x * p.laneDir > uWind ? 0 : 1; // 0 straight-back, 1 wind, 2 unwind
+    // Spend at most half the remaining reverse runway winding, so there is
+    // always room to unwind while still reversing (the unwind half also gains
+    // lateral ground; giving the angle back while going forward loses it).
+    const windBudget = Math.max(0.3, (Math.min(x * p.laneDir, uWind) - uMin) / 2);
+    let windTravel = 0;
+    const xs = [x], ys = [y], ths = [th], ks = [kappa];
+    let travel = 0;
+    while (travel < maxTravel) {
+      const phi = wrapAngle(th - thetaStart);
+      const eY = y - yFinal;
+      const u = x * p.laneDir;
+      const eU = uTarget - u;
+      const aligned = Math.abs(phi) < 0.05 && Math.abs(eY) < 0.15;
+      const inside = u >= uMin - 0.001 && u <= uFrontLim + 0.001;
+      if (aligned && inside) { parked = true; break; }
+      if (mode === "center" && travel > 0.02 && gear !== (eU > 0 ? 1 : -1)) break;
+      if (mode !== "center" && aligned && travel > 0.02) break;
+      if (gear < 0 && u <= uMin && travel > 0.02) break;
+      if (gear > 0 && u >= Math.min(uWind + 0.8, uMaxLane) && travel > 0.02) break;
+      let kCmd;
+      if (mode === "approach") {
+        if (subState === 0 && u <= uWind) subState = 1;
+        const swung = -phi * tS; // >0 once swung toward the kerb
+        if (subState === 1 && (swung >= phiSwing || windTravel >= windBudget)) subState = 2;
+        if (subState === 1) windTravel += ds;
+        if (subState === 2 && Math.abs(phi) < 0.012 && travel > 0.02) break;
+        kCmd = subState === 0 ? -GAIN * gear * phi : subState === 1 ? kMax * tS : -kMax * tS;
+        kCmd = Math.max(-kMax, Math.min(kMax, kCmd));
+      } else {
+        const phiDes = mode === "straighten"
+          ? 0
+          : Math.max(-PHI_MAX, Math.min(PHI_MAX, (gear > 0 ? -1 : 1) * p.laneDir * Math.atan(KLAT * eY)));
+        kCmd = Math.max(-kMax, Math.min(kMax, (gear > 0 ? 1 : -1) * GAIN * (phiDes - phi)));
+      }
+      const kNew = kappa + Math.max(-slew * ds, Math.min(slew * ds, kCmd - kappa));
+      const thNew = th + gear * kNew * ds;
+      const xNew = x + gear * Math.cos(thNew) * ds;
+      const yNew = y + gear * Math.sin(thNew) * ds;
+      if (hitAt({ pos: { x: xNew, y: yNew }, theta: thNew })) {
+        if (mode === "approach" && subState <= 1) { subState = 2; continue; }
+        break;
+      }
+      kappa = kNew; th = thNew; x = xNew; y = yNew; travel += ds;
+      xs.push(x); ys.push(y); ths.push(th); ks.push(kappa);
+    }
+    if (travel > 0.05 || parked) stuck = 0; else stuck++;
+    if (xs.length > 1) {
+      segsOut.push(makeTableSegment({ x: 0, y: 0 }, { S: travel, ds, xs, ys, ths, ks }, gear));
+      phases++;
+    }
+    if (stuck >= 2) break;
+  }
+  return { segs: segsOut, parked, phases, endPose: { x, y, th }, stuck };
+}
+
+function findFirstCollision(path, p, geo, neighbors) {
+  const step = 0.12;
+  for (let s = 0; s <= path.totalLength + 1e-9; s += step) {
+    const pose = path.poseAt(s);
+    const ego = egoCorners(p, geo, pose);
+    for (let i = 0; i < neighbors.length; i++) {
+      const n = neighbors[i];
+      if (polysIntersectSAT(ego, rectCorners(n.cx, n.cy, n.hl, n.hw, 0))) {
+        return { s, neighborIndex: i };
+      }
+    }
+  }
+  return null;
+}
+
+function buildPath(segments) {
+  let total = 0;
+  const withOffsets = segments.map((seg) => {
+    const offset = total;
+    total += seg.length;
+    return { seg, offset };
+  });
+  return {
+    totalLength: total,
+    poseAt(s) {
+      s = Math.max(0, Math.min(total, s));
+      for (const { seg, offset } of withOffsets) {
+        if (s <= offset + seg.length + 1e-6 || seg === withOffsets[withOffsets.length - 1].seg) {
+          return { ...seg.sample(Math.min(s - offset, seg.length)), gear: seg.gear, curvatureSign: seg.curvatureSign };
+        }
+      }
+    },
+    segmentsInfo: withOffsets,
+  };
+}
+
+// ---------- parking maneuver generation ----------
+
+const APPROACH_LEN = 7.5; // meters of straight lead-in for camera context
+
+function computeGeometry(p) {
+  const frontOverhang = (p.carLength - p.wheelbase) / 2;
+  const rearOverhang = frontOverhang;
+  const maxSteerRad = Math.atan(p.wheelbase / p.turnRadius);
+  return { frontOverhang, rearOverhang, maxSteerRad, maxSteerDeg: maxSteerRad / RAD };
+}
+
+function computeBayManeuver(p, geo) {
+  // Plan: straight along lane -> single arc -> straight along spot axis.
+  const R = p.turnRadius;
+  const gear = p.entryMode === "reverse" ? -1 : 1;
+  const aisleDir = { x: p.laneDir, y: 0 };
+  const thetaStart = V.angle(aisleDir);
+  const N = V.leftNormal(aisleDir);
+
+  const angleDegUsed = p.spotType === "perp" ? 90 : p.angleDeg;
+  const tiltMag = (90 - angleDegUsed) * RAD;
+  // Angled spots lean downstream for forward entry, upstream for reverse entry,
+  // so the arc sweep stays small — matching how angled lots are actually laid out.
+  const leanDir = gear * p.laneDir;
+  const spotAxis = { x: leanDir * Math.sin(tiltMag), y: p.rowSide * Math.cos(tiltMag) };
+
+  const spotMouth = { x: 0, y: p.rowSide * (p.laneWidth / 2) };
+  const frontClearance = 0.3;
+  const spotDeep = V.add(spotMouth, V.scale(spotAxis, p.spotDepth - frontClearance));
+
+  const finalHeadingVec = V.scale(spotAxis, gear);
+  const finalHeadingAngle = V.angle(finalHeadingVec);
+
+  const Pf =
+    gear > 0
+      ? V.sub(spotDeep, V.scale(spotAxis, geo.frontOverhang + p.wheelbase))
+      : V.sub(spotDeep, V.scale(spotAxis, geo.rearOverhang));
+
+  let dTheta = finalHeadingAngle - thetaStart;
+  while (dTheta > Math.PI) dTheta -= 2 * Math.PI;
+  while (dTheta < -Math.PI) dTheta += 2 * Math.PI;
+
+  const turnSign = gear * Math.sign(dTheta || 1);
+  const arcLen = R * Math.abs(dTheta);
+
+  // Approach hugging the far side of the lane for maximum swing room.
+  const yOff = Math.max(0, p.laneWidth / 2 - p.carWidth / 2 - 0.4);
+  const yDrive = -p.rowSide * yOff;
+
+  // After the arc the heading equals the final heading; the arc-exit point Pa
+  // must lie on the spot-axis line through Pf. C.y is fixed by tangency to the lane.
+  const Cy = yDrive + N.y * R * turnSign;
+  const lnf = V.leftNormal(finalHeadingVec);
+  const PaY = Cy - lnf.y * R * turnSign;
+  const PaX = Pf.x + ((PaY - Pf.y) * spotAxis.x) / spotAxis.y;
+  const x0 = PaX + lnf.x * R * turnSign;
+  const P0 = { x: x0, y: yDrive };
+  const C = { x: x0, y: Cy };
+  const Pa = { x: PaX, y: PaY };
+
+  const dStraight = V.dot(V.sub(Pf, Pa), spotAxis);
+
+  const leadStart = V.sub(P0, V.scale(aisleDir, APPROACH_LEN));
+  const segs = [
+    makeStraight(leadStart, thetaStart, APPROACH_LEN, 1),
+    makeArc(C, R, turnSign, gear, thetaStart, arcLen),
+  ];
+  if (dStraight > 0.01) segs.push(makeStraight(Pa, finalHeadingAngle, dStraight, gear));
+
+  const warnings = [];
+  if (dStraight < 0) warnings.push("迴轉半徑相對車道與車格過大，單一圓弧會越過停止點，實際需多次前後修正。");
+  if (p.spotDepth <= p.carLength + 0.3) warnings.push("停車格深度可能不足以容納此車長，車頭/車尾可能突出。");
+  if (p.spotWidth <= p.carWidth + 0.3) warnings.push("停車格寬度偏窄，車輛可能無法置中停放。");
+  const feasible = warnings.length === 0;
+
+  return {
+    path: buildPath(segs),
+    spotRect: { center: V.add(spotMouth, V.scale(spotAxis, p.spotDepth / 2)), axis: spotAxis, width: p.spotWidth, depth: p.spotDepth },
+    mouth: spotMouth,
+    feasible,
+    warnings,
+    finalPose: { pos: Pf, theta: finalHeadingAngle },
+  };
+}
+
+function computeParallelManeuver(p, geo) {
+  const gear = -1; // always reverse-in
+  const aisleDir = { x: p.laneDir, y: 0 };
+  const thetaStart = V.angle(aisleDir);
+
+  const halfRoad = p.laneWidth / 2;
+  // The parallel bay sits at the kerb, outside the driving lane; the car parks
+  // centred in the bay, whose lateral size is the spot-width parameter.
+  const yFinal = p.rowSide * (halfRoad + p.spotWidth / 2);
+  // Start the manoeuvre hugging the parked row (0.4 m side gap) — the closer
+  // the start, the smaller the swing and the front-corner sweep.
+  const yHug = Math.abs(yFinal) - p.carWidth - 0.4;
+  const yMaxInLane = halfRoad - p.carWidth / 2 - 0.1;
+  const yDrive = p.rowSide * Math.min(yHug, yMaxInLane);
+
+  // Rear-axle target such that the car body ends up centred in the spot box.
+  const xf = -p.laneDir * ((p.wheelbase + geo.frontOverhang - geo.rearOverhang) / 2);
+  const turnSign1 = p.rowSide * p.laneDir;
+
+  const kMax = 1 / p.turnRadius;
+  const targetDy = yFinal - yDrive;
+
+  // Parked cars occupying the kerb on both ends of the bay.
+  const nHalfL = p.carLength / 2, nHalfW = p.carWidth / 2;
+  const neighbors = [
+    { cx: -(p.spotDepth / 2 + nHalfL), cy: yFinal, hl: nHalfL, hw: nHalfW },
+    { cx: p.spotDepth / 2 + nHalfL, cy: yFinal, hl: nHalfL, hw: nHalfW },
+  ];
+
+  // Classic technique: reverse deep toward the rear car (0.3 m margin), then
+  // pull forward to centre — keeps the swinging phase clear of the front car.
+  const dForward = Math.max(0, p.spotDepth / 2 - p.carLength / 2 - 0.3);
+  const xfReverse = xf - p.laneDir * dForward;
+
+  // Rate-limited steering: the wheel is wound on over dRamp metres of travel
+  // instead of snapping to full lock while stationary. Start with a leisurely
+  // wind; if the swing would clip a neighbour, wind faster — like a driver
+  // working a tighter gap — before giving up and warning.
+  let feasible = true, path = null, collision = null, lastP0 = null;
+  const info = [];
+  for (const dRamp of [1.5, 1.0, 0.6]) {
+    const sol = solveSCurve(targetDy, kMax, dRamp, thetaStart, gear, turnSign1);
+    const table = integrateSCurve(sol.kPeak * turnSign1, sol.L, dRamp, thetaStart, gear);
+    const P0 = { x: xfReverse - table.dx, y: yDrive };
+    lastP0 = P0;
+    const leadStart = V.sub(P0, V.scale(aisleDir, APPROACH_LEN));
+    const segs = [makeStraight(leadStart, thetaStart, APPROACH_LEN, 1), makeTableSegment(P0, table, gear)];
+    if (dForward > 0.01) segs.push(makeStraight({ x: xfReverse, y: yFinal }, thetaStart, dForward, 1));
+    path = buildPath(segs);
+    feasible = sol.feasible;
+    collision = findFirstCollision(path, p, geo, neighbors);
+    if (!collision) break;
+  }
+
+  // Single-shot would clip a neighbour: fall back to a multi-attempt shuffle,
+  // stopping short of the neighbours and swapping gear to work the car in.
+  const debugSingleShot = collision ? { s: collision.s, idx: collision.neighborIndex, pose: path.poseAt(collision.s) } : null;
+  let debugShuffle = null;
+  let shuffleFailed = false;
+  if (collision || !feasible) {
+    const shuffle = simulateShuffleParallel(p, geo, lastP0, thetaStart, yFinal, xf, neighbors, kMax);
+    debugShuffle = shuffle;
+    if (shuffle.segs.length) {
+      const leadStart = V.sub(lastP0, V.scale(aisleDir, APPROACH_LEN));
+      path = buildPath([makeStraight(leadStart, thetaStart, APPROACH_LEN, 1), ...shuffle.segs]);
+      collision = null;
+      if (shuffle.parked) {
+        feasible = true;
+        if (shuffle.phases > 1) info.push(`車位較短，經 ${shuffle.phases} 段移動（${shuffle.phases - 1} 次換檔前後修正）後停入。`);
+      } else {
+        feasible = false;
+        shuffleFailed = true;
+      }
+    }
+  }
+
+  const warnings = [];
+  if (shuffleFailed) warnings.push("車位過短：模擬駕駛多次前後修正後仍無法完全停正，畫面顯示嘗試過程。");
+  else if (!feasible) warnings.push("車道過寬或迴轉半徑過大，單次倒車無法貼到路邊位置。");
+  if (collision) warnings.push("此參數下會擦撞到相鄰停放車輛（紅框標示），實際需要更長的車位或多段前後修正。");
+  if (p.spotDepth < p.carLength * 1.15) warnings.push("平行停車格深度偏短，建議至少為車長的 1.2 倍以上。");
+  if (p.spotWidth < p.carWidth + 0.2) warnings.push("路邊車格寬度不足，車身可能超出車格。");
+
+  return {
+    path,
+    spotRect: { center: { x: 0, y: yFinal }, axis: aisleDir, width: p.spotWidth, depth: p.spotDepth },
+    mouth: { x: 0, y: p.rowSide * halfRoad },
+    feasible: warnings.length === 0,
+    warnings,
+    info,
+    neighbors,
+    collision,
+    debugSingleShot,
+    debugShuffle,
+    finalPose: { pos: { x: xf, y: yFinal }, theta: thetaStart },
+  };
+}
+
+function computeManeuver(p) {
+  const geo = computeGeometry(p);
+  const result = p.spotType === "parallel" ? computeParallelManeuver(p, geo) : computeBayManeuver(p, geo);
+  if (p.wheelbase > p.carLength) result.warnings.push("軸距大於車長，前後輪會超出車身範圍。");
+  if (p.track > p.carWidth) result.warnings.push("輪距大於車寬，左右輪會超出車身範圍。");
+  return { ...result, geo };
+}
+
+// ---------- state ----------
+const state = {
+  vehicleType: "car",
+  spotType: "perp",
+  angleDeg: 45,
+  laneDir: 1,
+  rowSide: 1,
+  entryMode: "reverse",
+  carLength: 2.47,
+  carWidth: 0.97,
+  wheelbase: 1.8,
+  track: 0.85,
+  turnRadius: 3.6,
+  spotWidth: 2.5,
+  spotDepth: 6,
+  laneWidth: 6,
+  showPath: true,
+  showTrail: true,
+  showWheelTrail: true,
+  showMeasure: true,
+  speed: 1,
+  playing: false,
+  traveled: 0,
+  manoeuvre: null,
+};
+
+function recompute() {
+  state.manoeuvre = computeManeuver(state);
+  state.traveled = 0;
+  updateWarningBox();
+  updateReadouts();
+}
+
+function updateWarningBox() {
+  const box = document.getElementById("warningBox");
+  const warnings = state.manoeuvre.warnings;
+  const infos = state.manoeuvre.info || [];
+  if (warnings.length + infos.length === 0) {
+    box.style.display = "none";
+    box.textContent = "";
+  } else {
+    box.style.display = "block";
+    box.innerHTML = infos.map((t) => "ℹ " + t).concat(warnings.map((t) => "⚠ " + t)).join("<br>");
+    box.classList.toggle("notice", warnings.length === 0);
+  }
+}
+
+function updateReadouts() {
+  const geo = state.manoeuvre.geo;
+  document.getElementById("steerReadout").textContent = `最大轉向角：約 ${geo.maxSteerDeg.toFixed(0)}°`;
+}
+
+// ---------- rendering ----------
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+let PPM = 40; // pixels per meter, recalculated to fit
+let camOffset = { x: 0, y: 0 };
+
+function resizeCanvas() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + "px";
+  canvas.style.height = rect.height + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  fitCamera();
+}
+
+function collectBoundsPoints() {
+  const pts = [];
+  const path = state.manoeuvre.path;
+  const N = 40;
+  for (let i = 0; i <= N; i++) {
+    const s = (path.totalLength * i) / N;
+    pts.push(path.poseAt(s).pos);
+  }
+  const sr = state.manoeuvre.spotRect;
+  const half = V.leftNormal(sr.axis);
+  for (const sSign of [-1, 1]) {
+    for (const dSign of [0, 1]) {
+      pts.push(V.add(V.add(sr.center, V.scale(sr.axis, (dSign - 0.5) * sr.depth)), V.scale(half, (sSign * sr.width) / 2)));
+    }
+  }
+  if (state.manoeuvre.neighbors) {
+    for (const n of state.manoeuvre.neighbors) {
+      pts.push(...rectCorners(n.cx, n.cy, n.hl, n.hw, 0));
+    }
+  }
+  return pts;
+}
+
+function fitCamera() {
+  const pts = collectBoundsPoints();
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const pt of pts) {
+    minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
+    minY = Math.min(minY, pt.y); maxY = Math.max(maxY, pt.y);
+  }
+  const pad = 3.5;
+  minX -= pad; maxX += pad; minY -= pad; maxY += pad;
+  const w = maxX - minX, h = maxY - minY;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = rect.width / w, scaleY = rect.height / h;
+  PPM = Math.min(scaleX, scaleY);
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  camOffset = { x: rect.width / 2 - cx * PPM, y: rect.height / 2 - cy * PPM };
+}
+
+function toScreen(p) {
+  return { x: p.x * PPM + camOffset.x, y: p.y * PPM + camOffset.y };
+}
+
+function drawBackground() {
+  const rect = canvas.getBoundingClientRect();
+  ctx.fillStyle = "#3a3d42";
+  ctx.fillRect(0, 0, rect.width, rect.height);
+
+  // aisle band
+  const halfLane = state.laneWidth / 2;
+  const top = toScreen({ x: -1000, y: -halfLane });
+  const bot = toScreen({ x: -1000, y: halfLane });
+  ctx.fillStyle = "#46494f";
+  ctx.fillRect(0, top.y, rect.width, bot.y - top.y);
+
+  // lane centerline dashed
+  ctx.strokeStyle = "#d8c96a";
+  ctx.lineWidth = Math.max(1.5, 0.06 * PPM);
+  ctx.setLineDash([0.5 * PPM, 0.4 * PPM]);
+  const cl0 = toScreen({ x: -1000, y: 0 });
+  const cl1 = toScreen({ x: 1000, y: 0 });
+  ctx.beginPath();
+  ctx.moveTo(cl0.x, cl0.y);
+  ctx.lineTo(cl1.x, cl1.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawSpot() {
+  const sr = state.manoeuvre.spotRect;
+  const half = V.leftNormal(sr.axis);
+  const corners = [
+    V.add(sr.center, V.add(V.scale(sr.axis, -sr.depth / 2), V.scale(half, sr.width / 2))),
+    V.add(sr.center, V.add(V.scale(sr.axis, sr.depth / 2), V.scale(half, sr.width / 2))),
+    V.add(sr.center, V.add(V.scale(sr.axis, sr.depth / 2), V.scale(half, -sr.width / 2))),
+    V.add(sr.center, V.add(V.scale(sr.axis, -sr.depth / 2), V.scale(half, -sr.width / 2))),
+  ].map(toScreen);
+
+  ctx.strokeStyle = state.manoeuvre.feasible ? "#f5d442" : "#e0764a";
+  ctx.lineWidth = Math.max(2, 0.05 * PPM);
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x, corners[0].y);
+  for (let i = 1; i < 4; i++) ctx.lineTo(corners[i].x, corners[i].y);
+  ctx.closePath();
+  ctx.stroke();
+
+  // neighbouring spots (context only) for perpendicular/angle types
+  if (state.spotType !== "parallel") {
+    // Neighbouring stalls sit side by side along the lane, so the offset is
+    // horizontal with spacing = width / |axis.y| (equals width for 90° spots).
+    const spacing = sr.width / Math.max(0.2, Math.abs(sr.axis.y));
+    for (const off of [-1, 1]) {
+      const c2 = V.add(sr.center, { x: off * spacing, y: 0 });
+      const cc = [
+        V.add(c2, V.add(V.scale(sr.axis, -sr.depth / 2), V.scale(half, sr.width / 2))),
+        V.add(c2, V.add(V.scale(sr.axis, sr.depth / 2), V.scale(half, sr.width / 2))),
+        V.add(c2, V.add(V.scale(sr.axis, sr.depth / 2), V.scale(half, -sr.width / 2))),
+        V.add(c2, V.add(V.scale(sr.axis, -sr.depth / 2), V.scale(half, -sr.width / 2))),
+      ].map(toScreen);
+      ctx.strokeStyle = "#7d7f85";
+      ctx.beginPath();
+      ctx.moveTo(cc[0].x, cc[0].y);
+      for (let i = 1; i < 4; i++) ctx.lineTo(cc[i].x, cc[i].y);
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+
+  if (state.showMeasure) {
+    const label = toScreen(V.add(sr.center, V.scale(half, sr.width / 2 + 0.6)));
+    ctx.fillStyle = "#c7ceda";
+    ctx.font = "12px sans-serif";
+    ctx.fillText(`${sr.width.toFixed(1)}m x ${sr.depth.toFixed(1)}m`, label.x - 30, label.y);
+  }
+}
+
+function drawNeighbors() {
+  const m = state.manoeuvre;
+  if (!m.neighbors) return;
+  m.neighbors.forEach((n, i) => {
+    const tl = toScreen({ x: n.cx - n.hl, y: n.cy - n.hw });
+    const w = 2 * n.hl * PPM, h = 2 * n.hw * PPM;
+    ctx.fillStyle = "#5a6069";
+    roundRect(ctx, tl.x, tl.y, w, h, 5);
+    ctx.fill();
+    ctx.fillStyle = "#4a5058";
+    roundRect(ctx, tl.x + w * 0.55, tl.y + h * 0.12, w * 0.2, h * 0.76, 3);
+    ctx.fill();
+    const hit = m.collision && m.collision.neighborIndex === i && state.traveled >= m.collision.s - 1e-6;
+    ctx.strokeStyle = hit ? "#ff5c5c" : "#3a4048";
+    ctx.lineWidth = hit ? 3 : 1.5;
+    roundRect(ctx, tl.x, tl.y, w, h, 5);
+    ctx.stroke();
+  });
+}
+
+function drawPlannedPath() {
+  if (!state.showPath) return;
+  const path = state.manoeuvre.path;
+  ctx.strokeStyle = "rgba(120,190,255,0.55)";
+  ctx.lineWidth = Math.max(1.5, 0.035 * PPM);
+  ctx.setLineDash([0.25 * PPM, 0.2 * PPM]);
+  ctx.beginPath();
+  const N = 80;
+  for (let i = 0; i <= N; i++) {
+    const s = (path.totalLength * i) / N;
+    const pt = toScreen(path.poseAt(s).pos);
+    if (i === 0) ctx.moveTo(pt.x, pt.y);
+    else ctx.lineTo(pt.x, pt.y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawTrail() {
+  if (!state.showTrail) return;
+  const path = state.manoeuvre.path;
+  ctx.strokeStyle = "#4fd47a";
+  ctx.lineWidth = Math.max(2, 0.045 * PPM);
+  ctx.beginPath();
+  const N = Math.max(4, Math.floor((state.traveled / path.totalLength) * 100));
+  for (let i = 0; i <= N; i++) {
+    const s = (state.traveled * i) / N;
+    const pt = toScreen(path.poseAt(s).pos);
+    if (i === 0) ctx.moveTo(pt.x, pt.y);
+    else ctx.lineTo(pt.x, pt.y);
+  }
+  ctx.stroke();
+}
+
+// Wheel positions in the vehicle frame (origin = rear axle centre).
+// A tadpole trike steers its two front wheels and has a single centred rear
+// wheel — the bicycle-model body path is identical to a car's; only the
+// wheel tracks (swept paths) differ.
+function wheelLayout(p) {
+  const front = [
+    { x: p.wheelbase, y: p.track / 2, steers: true, rear: false },
+    { x: p.wheelbase, y: -p.track / 2, steers: true, rear: false },
+  ];
+  const rear =
+    p.vehicleType === "trike"
+      ? [{ x: 0, y: 0, steers: false, rear: true }]
+      : [
+          { x: 0, y: p.track / 2, steers: false, rear: true },
+          { x: 0, y: -p.track / 2, steers: false, rear: true },
+        ];
+  return front.concat(rear);
+}
+
+function drawWheelTrails() {
+  if (!state.showWheelTrail || state.traveled <= 0) return;
+  const path = state.manoeuvre.path;
+  const wheels = wheelLayout(state);
+  const N = Math.max(8, Math.floor((state.traveled / path.totalLength) * 140));
+  ctx.lineWidth = Math.max(1, 0.025 * PPM);
+  for (const w of wheels) {
+    ctx.strokeStyle = w.rear ? "rgba(120,220,255,0.7)" : "rgba(255,175,70,0.7)";
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const pose = path.poseAt((state.traveled * i) / N);
+      const pt = toScreen(V.add(pose.pos, rotateLocal({ x: w.x, y: w.y }, pose.theta)));
+      if (i === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawWheel(origin, localPos, bodyTheta, steerAngle, wheelLen, wheelWidth) {
+  ctx.save();
+  const world = V.add(origin, rotateLocal(localPos, bodyTheta));
+  const screenPos = toScreen(world);
+  ctx.translate(screenPos.x, screenPos.y);
+  ctx.rotate(bodyTheta + steerAngle);
+  ctx.fillStyle = "#111417";
+  ctx.strokeStyle = "rgba(220,230,240,0.75)";
+  ctx.lineWidth = 1;
+  roundRect(ctx, (-wheelLen / 2) * PPM, (-wheelWidth / 2) * PPM, wheelLen * PPM, wheelWidth * PPM, 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function rotateLocal(local, theta) {
+  const c = Math.cos(theta), s = Math.sin(theta);
+  return { x: local.x * c - local.y * s, y: local.x * s + local.y * c };
+}
+
+function drawCar(pose) {
+  const p = state;
+  const geo = state.manoeuvre.geo;
+  const rearAxle = pose.pos;
+  const theta = pose.theta;
+
+  const steerAngle = Math.atan(p.wheelbase * (pose.kappa || 0));
+
+  // shadow
+  const centerLocal = { x: (p.wheelbase + geo.frontOverhang - geo.rearOverhang) / 2, y: 0 };
+  const centerWorld = V.add(rearAxle, rotateLocal(centerLocal, theta));
+  const centerScreen = toScreen(centerWorld);
+
+  ctx.save();
+  ctx.translate(centerScreen.x, centerScreen.y);
+  ctx.rotate(theta);
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  const bodyLen = p.carLength * PPM;
+  const bodyWid = p.carWidth * PPM;
+  roundRect(ctx, -bodyLen / 2 - 2, -bodyWid / 2 - 2 + 3, bodyLen + 4, bodyWid + 4, 6 * PPM / 40);
+  ctx.fill();
+  ctx.restore();
+
+  // body
+  ctx.save();
+  ctx.translate(centerScreen.x, centerScreen.y);
+  ctx.rotate(theta);
+  const grad = ctx.createLinearGradient(0, -bodyWid / 2, 0, bodyWid / 2);
+  grad.addColorStop(0, "#4fa8e0");
+  grad.addColorStop(0.5, "#2d78c9");
+  grad.addColorStop(1, "#1c5a9c");
+  ctx.fillStyle = grad;
+  roundRect(ctx, -bodyLen / 2, -bodyWid / 2, bodyLen, bodyWid, 6 * PPM / 40);
+  ctx.fill();
+  ctx.strokeStyle = "#0e2c4a";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // windshield (front indicator)
+  ctx.fillStyle = "rgba(200,230,255,0.55)";
+  roundRect(ctx, bodyLen / 2 - bodyLen * 0.32, -bodyWid / 2 + 3, bodyLen * 0.22, bodyWid - 6, 3);
+  ctx.fill();
+
+  // headlights
+  ctx.fillStyle = "#fff6c8";
+  ctx.fillRect(bodyLen / 2 - 3, -bodyWid / 2 + 2, 3, 5);
+  ctx.fillRect(bodyLen / 2 - 3, bodyWid / 2 - 7, 3, 5);
+  // taillights
+  ctx.fillStyle = "#e04b4b";
+  ctx.fillRect(-bodyLen / 2, -bodyWid / 2 + 2, 3, 5);
+  ctx.fillRect(-bodyLen / 2, bodyWid / 2 - 7, 3, 5);
+
+  ctx.restore();
+
+  // Wheels drawn on top of the body (blueprint style) at their true positions,
+  // so the track / wheelbase sliders are directly visible.
+  const wheelLen = 0.72, wheelWidth = 0.3;
+  for (const w of wheelLayout(p)) {
+    drawWheel(rearAxle, w, theta, w.steers ? steerAngle : 0, wheelLen, wheelWidth);
+  }
+
+  return steerAngle;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function render() {
+  drawBackground();
+  drawSpot();
+  drawNeighbors();
+  drawPlannedPath();
+  drawTrail();
+  drawWheelTrails();
+  const pose = state.manoeuvre.path.poseAt(state.traveled);
+  const steerAngle = drawCar(pose);
+
+  const col = state.manoeuvre.collision;
+  if (col && state.traveled >= col.s - 1e-6) {
+    const corners = egoCorners(state, state.manoeuvre.geo, pose).map(toScreen);
+    ctx.strokeStyle = "#ff5c5c";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    for (let i = 1; i < 4; i++) ctx.lineTo(corners[i].x, corners[i].y);
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  document.getElementById("hudGear").textContent = pose.gear > 0 ? "D" : "R";
+  document.getElementById("hudSteer").textContent = (steerAngle / RAD).toFixed(0) + "°";
+  const progress = Math.round((state.traveled / state.manoeuvre.path.totalLength) * 100);
+  document.getElementById("hudProgress").textContent = progress + "%";
+}
+
+// ---------- animation ----------
+let lastTime = null;
+function tick(now) {
+  if (lastTime === null) lastTime = now;
+  const dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+
+  if (state.playing) {
+    const carSpeed = 1.4; // m/s baseline
+    const prev = state.traveled;
+    state.traveled += carSpeed * state.speed * dt;
+    const col = state.manoeuvre.collision;
+    if (col && prev < col.s && state.traveled >= col.s) {
+      // Stop playback at the moment of impact; pressing play again continues.
+      state.traveled = col.s;
+      state.playing = false;
+      document.getElementById("btnPlay").textContent = "▶ 播放";
+    }
+    if (state.traveled >= state.manoeuvre.path.totalLength) {
+      state.traveled = state.manoeuvre.path.totalLength;
+      state.playing = false;
+      document.getElementById("btnPlay").textContent = "▶ 播放";
+    }
+  }
+  render();
+  requestAnimationFrame(tick);
+}
+
+// ---------- UI wiring ----------
+function bindSegmented(groupSelector, key, onChange) {
+  document.querySelectorAll(groupSelector).forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(groupSelector).forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      onChange(btn);
+    });
+  });
+}
+
+function bindSlider(id, key, fmt) {
+  const el = document.getElementById(id);
+  const valEl = document.getElementById(id + "Val");
+  el.addEventListener("input", () => {
+    state[key] = parseFloat(el.value);
+    if (valEl) valEl.textContent = fmt(state[key]);
+    recompute();
+    fitCamera();
+  });
+}
+
+function setupUI() {
+  // spot type
+  document.querySelectorAll("#spotTypeGroup .seg").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#spotTypeGroup .seg").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.spotType = btn.dataset.type;
+      document.getElementById("angleField").style.display = state.spotType === "angle" ? "block" : "none";
+      const entryField = document.getElementById("entryModeField");
+      entryField.style.display = state.spotType === "parallel" ? "none" : "block";
+      if (state.spotType === "parallel") state.entryMode = "reverse";
+      recompute();
+      fitCamera();
+    });
+  });
+
+  bindSegmented('[data-vehicle]', "vehicleType", (btn) => {
+    state.vehicleType = btn.dataset.vehicle;
+    document.getElementById("vehicleNote").style.display = state.vehicleType === "trike" ? "block" : "none";
+  });
+
+  bindSegmented('[data-lane]', "laneDir", (btn) => {
+    state.laneDir = parseInt(btn.dataset.lane, 10);
+    recompute();
+    fitCamera();
+  });
+  bindSegmented('[data-row]', "rowSide", (btn) => {
+    state.rowSide = parseInt(btn.dataset.row, 10);
+    recompute();
+    fitCamera();
+  });
+  bindSegmented('[data-entry]', "entryMode", (btn) => {
+    state.entryMode = btn.dataset.entry;
+    recompute();
+    fitCamera();
+  });
+
+  document.getElementById("angleDeg").addEventListener("input", (e) => {
+    state.angleDeg = parseFloat(e.target.value);
+    document.getElementById("angleDegVal").textContent = state.angleDeg + "°";
+    recompute();
+    fitCamera();
+  });
+
+  bindSlider("carLength", "carLength", (v) => v.toFixed(2) + " m");
+  bindSlider("carWidth", "carWidth", (v) => v.toFixed(2) + " m");
+  bindSlider("wheelbase", "wheelbase", (v) => v.toFixed(2) + " m");
+  bindSlider("track", "track", (v) => v.toFixed(2) + " m");
+  bindSlider("turnRadius", "turnRadius", (v) => v.toFixed(1) + " m");
+  bindSlider("spotWidth", "spotWidth", (v) => v.toFixed(1) + " m");
+  bindSlider("spotDepth", "spotDepth", (v) => v.toFixed(1) + " m");
+  bindSlider("laneWidth", "laneWidth", (v) => v.toFixed(1) + " m");
+
+  document.getElementById("showPath").addEventListener("change", (e) => (state.showPath = e.target.checked));
+  document.getElementById("showTrail").addEventListener("change", (e) => (state.showTrail = e.target.checked));
+  document.getElementById("showWheelTrail").addEventListener("change", (e) => (state.showWheelTrail = e.target.checked));
+  document.getElementById("showMeasure").addEventListener("change", (e) => (state.showMeasure = e.target.checked));
+
+  document.getElementById("speed").addEventListener("input", (e) => {
+    state.speed = parseFloat(e.target.value);
+    document.getElementById("speedVal").textContent = state.speed.toFixed(1) + "x";
+  });
+
+  document.getElementById("btnPlay").addEventListener("click", () => {
+    if (state.traveled >= state.manoeuvre.path.totalLength) state.traveled = 0;
+    state.playing = !state.playing;
+    document.getElementById("btnPlay").textContent = state.playing ? "⏸ 暫停" : "▶ 播放";
+  });
+  document.getElementById("btnReset").addEventListener("click", () => {
+    state.traveled = 0;
+    state.playing = false;
+    document.getElementById("btnPlay").textContent = "▶ 播放";
+  });
+  document.getElementById("btnStep").addEventListener("click", () => {
+    state.playing = false;
+    document.getElementById("btnPlay").textContent = "▶ 播放";
+    state.traveled = Math.min(state.manoeuvre.path.totalLength, state.traveled + 0.3);
+  });
+
+  window.addEventListener("resize", resizeCanvas);
+}
+
+setupUI();
+recompute();
+resizeCanvas();
+requestAnimationFrame(tick);
+
+window.__debugSim = { state, recompute, fitCamera, computeManeuver };
+})();
 </script>
+</body>
+</html>
