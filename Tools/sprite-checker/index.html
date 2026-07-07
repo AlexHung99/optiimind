@@ -13,17 +13,19 @@
   html,body{margin:0;height:100%}
   body{display:flex;background:var(--bg);color:var(--fg);
        font:14px/1.5 "Segoe UI","Microsoft JhengHei",sans-serif}
-  aside{width:300px;min-width:300px;overflow-y:auto;background:var(--panel);
+  aside{width:340px;min-width:280px;max-width:70vw;flex:none;resize:horizontal;
+        overflow-y:auto;overflow-x:hidden;background:var(--panel);
         border-right:1px solid var(--line);padding:14px}
-  main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
   h1{font-size:16px;margin:0 0 12px}
-  fieldset{border:1px solid var(--line);border-radius:8px;margin:0 0 12px;padding:10px 12px}
+  fieldset{min-width:0;border:1px solid var(--line);border-radius:8px;margin:0 0 12px;padding:10px 12px}
   legend{color:var(--accent);font-size:12px;padding:0 6px}
-  label{display:flex;align-items:center;gap:6px;margin:4px 0;color:var(--dim)}
+  label{display:flex;align-items:center;gap:6px;margin:4px 0;color:var(--dim);
+        flex-wrap:wrap;min-width:0}
   label span.k{width:88px;flex:none}
-  input[type=number]{width:64px;background:#161820;color:var(--fg);
+  input[type=number]{width:64px;min-width:0;flex:0 1 64px;background:#161820;color:var(--fg);
       border:1px solid var(--line);border-radius:4px;padding:3px 6px}
-  input[type=range]{flex:1}
+  input[type=range]{flex:1 1 80px;min-width:0}
   select,button{background:#161820;color:var(--fg);border:1px solid var(--line);
       border-radius:4px;padding:4px 10px;cursor:pointer}
   button:hover{border-color:var(--accent)}
@@ -49,6 +51,15 @@
   .bg-light{background:#eee}
   .bg-green{background:#3a7d44}
   kbd{background:#161820;border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:11px}
+
+  /* 窄螢幕：改為直向堆疊，避免橫向捲軸 */
+  @media (max-width:720px){
+    html,body{height:auto}
+    body{flex-direction:column}
+    aside{width:auto;min-width:0;max-width:none;resize:none;
+          border-right:none;border-bottom:1px solid var(--line)}
+    main{min-height:70vh}
+  }
 </style>
 </head>
 <body>
