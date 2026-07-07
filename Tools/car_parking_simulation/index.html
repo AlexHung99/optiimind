@@ -202,23 +202,23 @@ html, body {
         <div class="readout" id="vehicleNote" style="display:none">前輪轉向的三輪車：車身路徑與四輪車相同，但後方僅一條中央輪跡，後內輪差較小。</div>
         <div class="field">
           <label>車長 <span id="carLengthVal">4.5 m</span></label>
-          <input type="range" id="carLength" min="3.0" max="6.5" step="0.1" value="4.5">
+          <input type="range" id="carLength" min="0.5" max="5" step="0.1" value="4.5">
         </div>
         <div class="field">
           <label>車寬 <span id="carWidthVal">1.8 m</span></label>
-          <input type="range" id="carWidth" min="1.4" max="2.3" step="0.05" value="1.8">
+          <input type="range" id="carWidth" min="0.5" max="5" step="0.05" value="1.8">
         </div>
         <div class="field">
           <label>軸距 (前後輪距) <span id="wheelbaseVal">2.7 m</span></label>
-          <input type="range" id="wheelbase" min="1.8" max="4.2" step="0.05" value="2.7">
+          <input type="range" id="wheelbase" min="0.5" max="5" step="0.05" value="2.7">
         </div>
         <div class="field">
           <label>輪距 (左右輪距) <span id="trackVal">1.55 m</span></label>
-          <input type="range" id="track" min="1.2" max="2.0" step="0.05" value="1.55">
+          <input type="range" id="track" min="0.5" max="3" step="0.05" value="1.55">
         </div>
         <div class="field">
           <label>最小迴轉半徑 <span id="turnRadiusVal">5.5 m</span></label>
-          <input type="range" id="turnRadius" min="3.5" max="9" step="0.1" value="5.5">
+          <input type="range" id="turnRadius" min="2" max="9" step="0.1" value="5.5">
         </div>
         <div class="readout" id="steerReadout">最大轉向角：約 26°</div>
       </section>
@@ -227,15 +227,15 @@ html, body {
         <h2>停車格與車道</h2>
         <div class="field">
           <label>停車格寬度 <span id="spotWidthVal">2.5 m</span></label>
-          <input type="range" id="spotWidth" min="2.0" max="3.5" step="0.1" value="2.5">
+          <input type="range" id="spotWidth" min="0.5" max="5" step="0.1" value="2.5">
         </div>
         <div class="field">
           <label>停車格深度 <span id="spotDepthVal">5.5 m</span></label>
-          <input type="range" id="spotDepth" min="4.5" max="8" step="0.1" value="5.5">
+          <input type="range" id="spotDepth" min="0.5" max="10" step="0.1" value="5.5">
         </div>
         <div class="field">
           <label>車道寬度 <span id="laneWidthVal">6 m</span></label>
-          <input type="range" id="laneWidth" min="3.5" max="9" step="0.1" value="6">
+          <input type="range" id="laneWidth" min="2" max="10" step="0.1" value="6">
         </div>
       </section>
 
@@ -491,6 +491,8 @@ function computeParallelManeuver(p, geo) {
 function computeManeuver(p) {
   const geo = computeGeometry(p);
   const result = p.spotType === "parallel" ? computeParallelManeuver(p, geo) : computeBayManeuver(p, geo);
+  if (p.wheelbase > p.carLength) result.warnings.push("軸距大於車長，前後輪會超出車身範圍。");
+  if (p.track > p.carWidth) result.warnings.push("輪距大於車寬，左右輪會超出車身範圍。");
   return { ...result, geo };
 }
 
