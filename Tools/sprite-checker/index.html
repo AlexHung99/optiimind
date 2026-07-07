@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sprite Sheet 驗證工具</title>
+<style>
+  :root{
+    --bg:#1b1d23; --panel:#23262e; --line:#343845; --fg:#e6e8ee; --dim:#9aa0ad;
+    --accent:#4da3ff; --accent2:#ffb84d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{display:flex;background:var(--bg);color:var(--fg);
+       font:14px/1.5 "Segoe UI","Microsoft JhengHei",sans-serif}
+  aside{width:300px;min-width:300px;overflow-y:auto;background:var(--panel);
+        border-right:1px solid var(--line);padding:14px}
+  main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  h1{font-size:16px;margin:0 0 12px}
+  fieldset{border:1px solid var(--line);border-radius:8px;margin:0 0 12px;padding:10px 12px}
+  legend{color:var(--accent);font-size:12px;padding:0 6px}
+  label{display:flex;align-items:center;gap:6px;margin:4px 0;color:var(--dim)}
+  label span.k{width:88px;flex:none}
+  input[type=number]{width:64px;background:#161820;color:var(--fg);
+      border:1px solid var(--line);border-radius:4px;padding:3px 6px}
+  input[type=range]{flex:1}
+  select,button{background:#161820;color:var(--fg);border:1px solid var(--line);
+      border-radius:4px;padding:4px 10px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#10131a;border-color:var(--accent);font-weight:600}
+  .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0}
+  .hint{font-size:12px;color:var(--dim)}
+  #drop{border:2px dashed var(--line);border-radius:8px;padding:14px;text-align:center;
+        color:var(--dim);cursor:pointer;transition:.15s}
+  #drop.over{border-color:var(--accent);color:var(--accent)}
+  #rowBtns{display:flex;flex-wrap:wrap;gap:4px}
+  #rowBtns button{padding:2px 8px;font-size:12px}
+  #rowBtns button.active{border-color:var(--accent2);color:var(--accent2)}
+
+  #sheetWrap{flex:1;overflow:auto;padding:12px;min-height:120px}
+  #sheet{image-rendering:pixelated;background:
+      repeating-conic-gradient(#2a2d36 0 25%,#20232b 0 50%) 0 0/16px 16px;cursor:crosshair}
+  #previewWrap{border-top:1px solid var(--line);background:var(--panel);
+      display:flex;align-items:center;gap:16px;padding:12px;overflow-x:auto}
+  #preview{image-rendering:pixelated;flex:none}
+  #frameInfo{white-space:pre;font:12px/1.6 Consolas,monospace;color:var(--dim)}
+  .bg-checker{background:repeating-conic-gradient(#666 0 25%,#999 0 50%) 0 0/16px 16px}
+  .bg-dark{background:#111}
+  .bg-light{background:#eee}
+  .bg-green{background:#3a7d44}
+  kbd{background:#161820;border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:11px}
+</style>
+</head>
+<body>
+<aside>
+  <h1>🎞️ Sprite Sheet 驗證工具</h1>
+
+  <fieldset>
+    <legend>1. 載入圖片</legend>
+    <div id="drop">點擊選擇圖片<br>或拖放 / <kbd>Ctrl+V</kbd> 貼上</div>
+    <input type="file" id="file" accept="image/*" hidden>
+    <div class="hint" id="imgInfo">尚未載入圖片</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>2. 切割設定</legend>
+    <div class="row">
+      <label><input type="radio" name="mode" value="grid" checked> 依欄列數</label>
+      <label><input type="radio" name="mode" value="size"> 依格子尺寸</label>
+    </div>
+    <div id="gridInputs">
+      <label><span class="k">欄數 (cols)</span><input type="number" id="cols" min="1" value="7"></label>
+      <label><span class="k">列數 (rows)</span><input type="number" id="rows" min="1" value="11"></label>
+    </div>
+    <div id="sizeInputs" style="display:none">
+      <label><span class="k">格寬 (px)</span><input type="number" id="fw" min="1" value="32"></label>
+      <label><span class="k">格高 (px)</span><input type="number" id="fh" min="1" value="32"></label>
+    </div>
+    <label><span class="k">位移 X / Y</span>
+      <input type="number" id="offX" value="0"><input type="number" id="offY" value="0"></label>
+    <label><span class="k">間距 X / Y</span>
+      <input type="number" id="spX" min="0" value="0"><input type="number" id="spY" min="0" value="0"></label>
+    <div class="hint" id="gridInfo"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>3. 動畫範圍</legend>
+    <label><span class="k">起始格</span><input type="number" id="start" min="0" value="0"></label>
+    <label><span class="k">格數</span><input type="number" id="count" min="1" value="7"></label>
+    <div class="hint">在左圖點格子＝設起始格；<kbd>Shift</kbd>+點＝設結束格</div>
+    <div class="hint" style="margin-top:6px">快速選整列（自動略過空白格）：</div>
+    <div id="rowBtns"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>4. 播放控制</legend>
+    <label><span class="k">FPS</span>
+      <input type="range" id="fpsR" min="1" max="60" value="10">
+      <input type="number" id="fps" min="1" max="60" value="10"></label>
+    <div class="row">
+      <button id="play" class="primary">⏸ 暫停</button>
+      <button id="prev">⏮ 上一格</button>
+      <button id="next">⏭ 下一格</button>
+    </div>
+    <div class="hint"><kbd>Space</kbd> 播放/暫停，<kbd>←</kbd><kbd>→</kbd> 逐格</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>5. 預覽顯示</legend>
+    <label><span class="k">縮放</span>
+      <input type="range" id="zoomR" min="1" max="16" value="4">
+      <input type="number" id="zoom" min="1" max="16" value="4"></label>
+    <label><span class="k">錨點 X %</span>
+      <input type="range" id="axR" min="0" max="100" value="50">
+      <input type="number" id="ax" min="0" max="100" value="50"></label>
+    <label><span class="k">錨點 Y %</span>
+      <input type="range" id="ayR" min="0" max="100" value="50">
+      <input type="number" id="ay" min="0" max="100" value="50"></label>
+    <div class="row">
+      <label><input type="checkbox" id="showAnchor" checked> 顯示錨點十字</label>
+      <label><input type="checkbox" id="onion"> 洋蔥皮疊圖</label>
+    </div>
+    <label><span class="k">預覽背景</span>
+      <select id="bg">
+        <option value="checker">棋盤格</option>
+        <option value="dark">深色</option>
+        <option value="light">淺色</option>
+        <option value="green">綠幕</option>
+      </select></label>
+    <div class="hint">錨點十字固定不動，若角色相對十字晃動，代表各格中心位置不一致。洋蔥皮可一次疊看整段動畫的對齊情況。</div>
+  </fieldset>
+</aside>
+
+<main>
+  <div id="sheetWrap">
+    <div class="row" style="margin-bottom:8px">
+      <span class="hint">原圖檢視縮放</span>
+      <input type="range" id="sheetZoomR" min="0.25" max="6" step="0.25" value="1" style="width:160px">
+      <span class="hint" id="sheetZoomV">1x</span>
+    </div>
+    <canvas id="sheet" width="0" height="0"></canvas>
+  </div>
+  <div id="previewWrap">
+    <canvas id="preview" class="bg-checker" width="128" height="128"></canvas>
+    <div id="frameInfo">請先載入 sprite sheet 圖片</div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+
+const state = {
+  img:null, mode:'grid',
+  cols:7, rows:11, fw:32, fh:32,
+  offX:0, offY:0, spX:0, spY:0,
+  start:0, count:7, fps:10,
+  playing:true, idx:0,
+  zoom:4, ax:50, ay:50,
+  showAnchor:true, onion:false,
+  sheetZoom:1
+};
+let emptyMap = [];        // 每格是否為全透明
+let emptyKey = '';
+let lastTick = 0, acc = 0;
+
+/* ---------- 格線計算 ---------- */
+function grid(){
+  const s = state, img = s.img;
+  if(!img) return {fw:1,fh:1,cols:1,rows:1,total:0};
+  let fw,fh,cols,rows;
+  if(s.mode === 'grid'){
+    cols = Math.max(1, s.cols); rows = Math.max(1, s.rows);
+    fw = Math.floor((img.width  - s.offX - (cols-1)*s.spX) / cols);
+    fh = Math.floor((img.height - s.offY - (rows-1)*s.spY) / rows);
+  }else{
+    fw = Math.max(1, s.fw); fh = Math.max(1, s.fh);
+    cols = Math.max(1, Math.floor((img.width  - s.offX + s.spX) / (fw + s.spX)));
+    rows = Math.max(1, Math.floor((img.height - s.offY + s.spY) / (fh + s.spY)));
+  }
+  fw = Math.max(1,fw); fh = Math.max(1,fh);
+  return {fw,fh,cols,rows,total:cols*rows};
+}
+function frameRect(i,g){
+  g = g || grid();
+  const c = i % g.cols, r = Math.floor(i / g.cols);
+  return {x:state.offX + c*(g.fw+state.spX), y:state.offY + r*(g.fh+state.spY), w:g.fw, h:g.fh};
+}
+
+/* ---------- 空白格偵測 ---------- */
+function buildEmptyMap(){
+  const s = state, g = grid();
+  const key = [s.img && s.img.src.length, s.mode, g.fw, g.fh, g.cols, g.rows,
+               s.offX, s.offY, s.spX, s.spY].join('|');
+  if(key === emptyKey) return;
+  emptyKey = key;
+  emptyMap = new Array(g.total).fill(false);
+  if(!s.img) return;
+  try{
+    const cv = document.createElement('canvas');
+    cv.width = s.img.width; cv.height = s.img.height;
+    const cx = cv.getContext('2d', {willReadFrequently:true});
+    cx.drawImage(s.img, 0, 0);
+    for(let i=0;i<g.total;i++){
+      const r = frameRect(i,g);
+      if(r.x+r.w > cv.width || r.y+r.h > cv.height){ emptyMap[i]=true; continue; }
+      const d = cx.getImageData(r.x, r.y, r.w, r.h).data;
+      let empty = true;
+      for(let p=3;p<d.length;p+=8){ if(d[p] > 8){ empty=false; break; } }
+      emptyMap[i] = empty;
+    }
+  }catch(e){ /* 跨網域圖片無法讀取像素時略過偵測 */ }
+}
+
+/* ---------- 原圖 + 格線 ---------- */
+const sheet = $('sheet'), sctx = sheet.getContext('2d');
+function drawSheet(){
+  const s = state;
+  if(!s.img){ sheet.width = sheet.height = 0; return; }
+  const g = grid();
+  sheet.width = s.img.width; sheet.height = s.img.height;
+  sheet.style.width  = (s.img.width  * s.sheetZoom) + 'px';
+  sheet.style.height = (s.img.height * s.sheetZoom) + 'px';
+  sctx.imageSmoothingEnabled = false;
+  sctx.drawImage(s.img, 0, 0);
+
+  const end = s.start + s.count - 1;
+  for(let i=0;i<g.total;i++){
+    const r = frameRect(i,g);
+    if(i >= s.start && i <= end){
+      sctx.fillStyle = 'rgba(77,163,255,.18)';
+      sctx.fillRect(r.x, r.y, r.w, r.h);
+    }
+    sctx.strokeStyle = emptyMap[i] ? 'rgba(255,255,255,.12)' : 'rgba(77,163,255,.45)';
+    sctx.lineWidth = 1;
+    sctx.strokeRect(r.x+.5, r.y+.5, r.w-1, r.h-1);
+  }
+  // 目前播放格
+  const cur = frameRect(s.start + s.idx, g);
+  sctx.strokeStyle = '#ffb84d'; sctx.lineWidth = 2;
+  sctx.strokeRect(cur.x+1, cur.y+1, cur.w-2, cur.h-2);
+}
+sheet.addEventListener('click', e=>{
+  const s = state; if(!s.img) return;
+  const g = grid(), rc = sheet.getBoundingClientRect();
+  const px = (e.clientX - rc.left) / rc.width  * s.img.width;
+  const py = (e.clientY - rc.top)  / rc.height * s.img.height;
+  const c = Math.floor((px - s.offX) / (g.fw + s.spX));
+  const r = Math.floor((py - s.offY) / (g.fh + s.spY));
+  if(c<0||r<0||c>=g.cols||r>=g.rows) return;
+  const i = r*g.cols + c;
+  if(e.shiftKey && i >= s.start){ s.count = i - s.start + 1; }
+  else { s.start = i; s.count = Math.min(s.count, g.total - i); }
+  s.idx = 0;
+  syncInputs(); refresh();
+});
+
+/* ---------- 動畫預覽 ---------- */
+const pv = $('preview'), pctx = pv.getContext('2d');
+function drawPreview(){
+  const s = state; if(!s.img) return;
+  const g = grid(), z = s.zoom;
+  const W = g.fw*z, H = g.fh*z;
+  if(pv.width !== W || pv.height !== H){ pv.width = W; pv.height = H; }
+  pctx.imageSmoothingEnabled = false;
+  pctx.clearRect(0,0,W,H);
+
+  if(s.onion){
+    pctx.globalAlpha = Math.max(.08, .5 / s.count);
+    for(let k=0;k<s.count;k++){
+      const r = frameRect(s.start+k, g);
+      pctx.drawImage(s.img, r.x, r.y, r.w, r.h, 0, 0, W, H);
+    }
+    pctx.globalAlpha = 1;
+  }
+  const r = frameRect(s.start + s.idx, g);
+  pctx.drawImage(s.img, r.x, r.y, r.w, r.h, 0, 0, W, H);
+
+  if(s.showAnchor){
+    const axp = s.ax/100*W, ayp = s.ay/100*H;
+    pctx.strokeStyle = 'rgba(255,80,80,.9)'; pctx.lineWidth = 1;
+    pctx.beginPath();
+    pctx.moveTo(axp+.5, 0); pctx.lineTo(axp+.5, H);
+    pctx.moveTo(0, ayp+.5); pctx.lineTo(W, ayp+.5);
+    pctx.stroke();
+    pctx.strokeStyle = 'rgba(255,80,80,.9)';
+    pctx.strokeRect(axp-4.5, ayp-4.5, 9, 9);
+  }
+  const gi = grid();
+  $('frameInfo').textContent =
+    `格 ${s.start + s.idx}（範圍 ${s.start} ~ ${s.start+s.count-1}，第 ${s.idx+1}/${s.count} 張）\n` +
+    `來源座標 x=${r.x} y=${r.y}  尺寸 ${r.w}×${r.h}px\n` +
+    `切割：${gi.cols} 欄 × ${gi.rows} 列，共 ${gi.total} 格` +
+    (emptyMap[s.start+s.idx] ? '\n⚠ 此格偵測為空白' : '');
+}
+function loop(t){
+  const s = state;
+  if(s.playing && s.img && s.count > 0){
+    acc += (t - lastTick);
+    const dur = 1000 / s.fps;
+    if(acc >= dur){
+      const steps = Math.floor(acc / dur);
+      acc -= steps * dur;
+      s.idx = (s.idx + steps) % s.count;
+      drawPreview(); drawSheet();
+    }
+  }
+  lastTick = t;
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(t=>{ lastTick = t; requestAnimationFrame(loop); });
+
+/* ---------- 整列快速選擇 ---------- */
+function buildRowBtns(){
+  const box = $('rowBtns'); box.innerHTML = '';
+  if(!state.img) return;
+  const g = grid();
+  for(let r=0;r<g.rows;r++){
+    const b = document.createElement('button');
+    b.textContent = '列 ' + r;
+    b.onclick = ()=>{
+      buildEmptyMap();
+      const s = state, startI = r*g.cols;
+      let n = 0;
+      while(n < g.cols && !emptyMap[startI+n]) n++;
+      s.start = startI; s.count = Math.max(1, n || g.cols); s.idx = 0;
+      box.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      syncInputs(); refresh();
+    };
+    box.appendChild(b);
+  }
+}
+
+/* ---------- 載入圖片 ---------- */
+function loadFile(f){
+  if(!f || !f.type.startsWith('image/')) return;
+  const rd = new FileReader();
+  rd.onload = ()=> loadImageURL(rd.result, f.name);
+  rd.readAsDataURL(f);
+}
+function loadImageURL(url, name){
+  const img = new Image();
+  img.onload = ()=>{
+    state.img = img; state.idx = 0; emptyKey = '';
+    $('imgInfo').textContent = `${name||'圖片'}：${img.width} × ${img.height} px`;
+    clampAll(); buildEmptyMap(); buildRowBtns(); syncInputs(); refresh();
+  };
+  img.onerror = ()=> $('imgInfo').textContent = '圖片載入失敗';
+  img.src = url;
+}
+window.loadImageURL = loadImageURL; // 方便外部/測試呼叫
+
+const drop = $('drop');
+drop.onclick = ()=> $('file').click();
+$('file').onchange = e=> loadFile(e.target.files[0]);
+['dragover','dragleave','drop'].forEach(ev=>{
+  document.addEventListener(ev, e=>{
+    e.preventDefault();
+    drop.classList.toggle('over', ev==='dragover');
+    if(ev==='drop' && e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+  });
+});
+document.addEventListener('paste', e=>{
+  for(const it of e.clipboardData.items)
+    if(it.type.startsWith('image/')){ loadFile(it.getAsFile()); break; }
+});
+
+/* ---------- 輸入綁定 ---------- */
+function clampAll(){
+  const s = state, g = grid();
+  s.start = Math.min(Math.max(0, s.start), Math.max(0, g.total-1));
+  s.count = Math.min(Math.max(1, s.count), g.total - s.start);
+  if(s.idx >= s.count) s.idx = 0;
+}
+function refresh(){
+  clampAll(); buildEmptyMap(); drawSheet(); drawPreview();
+  const g = grid();
+  $('gridInfo').textContent = state.img ?
+    `每格 ${g.fw} × ${g.fh} px｜${g.cols} 欄 × ${g.rows} 列 = ${g.total} 格` : '';
+}
+function syncInputs(){
+  const s = state;
+  $('cols').value=s.cols; $('rows').value=s.rows; $('fw').value=s.fw; $('fh').value=s.fh;
+  $('offX').value=s.offX; $('offY').value=s.offY; $('spX').value=s.spX; $('spY').value=s.spY;
+  $('start').value=s.start; $('count').value=s.count;
+  $('fps').value=$('fpsR').value=s.fps;
+  $('zoom').value=$('zoomR').value=s.zoom;
+  $('ax').value=$('axR').value=s.ax; $('ay').value=$('ayR').value=s.ay;
+}
+function bindNum(id, key, rebuild){
+  $(id).addEventListener('input', ()=>{
+    const v = parseInt($(id).value, 10);
+    if(isNaN(v)) return;
+    state[key] = v;
+    if(rebuild){ state.idx = 0; buildRowBtns(); }
+    refresh();
+  });
+}
+bindNum('cols','cols',true); bindNum('rows','rows',true);
+bindNum('fw','fw',true);     bindNum('fh','fh',true);
+bindNum('offX','offX',true); bindNum('offY','offY',true);
+bindNum('spX','spX',true);   bindNum('spY','spY',true);
+bindNum('start','start');    bindNum('count','count');
+
+function bindPair(rId, nId, key, min, max){
+  const set = v=>{
+    v = Math.min(max, Math.max(min, v||min));
+    state[key] = v; $(rId).value = $(nId).value = v;
+    drawPreview();
+  };
+  $(rId).addEventListener('input', ()=> set(+$(rId).value));
+  $(nId).addEventListener('input', ()=> set(+$(nId).value));
+}
+bindPair('fpsR','fps','fps',1,60);
+bindPair('zoomR','zoom','zoom',1,16);
+bindPair('axR','ax','ax',0,100);
+bindPair('ayR','ay','ay',0,100);
+
+document.querySelectorAll('input[name=mode]').forEach(r=>{
+  r.addEventListener('change', ()=>{
+    state.mode = r.value;
+    $('gridInputs').style.display = state.mode==='grid' ? '' : 'none';
+    $('sizeInputs').style.display = state.mode==='size' ? '' : 'none';
+    // 切換模式時把目前計算值帶入另一組欄位，避免跳動
+    const g = grid();
+    if(state.mode==='size'){ state.fw = g.fw; state.fh = g.fh; }
+    else { state.cols = g.cols; state.rows = g.rows; }
+    syncInputs(); buildRowBtns(); refresh();
+  });
+});
+
+$('showAnchor').onchange = e=>{ state.showAnchor = e.target.checked; drawPreview(); };
+$('onion').onchange      = e=>{ state.onion = e.target.checked; drawPreview(); };
+$('bg').onchange = e=>{ pv.className = 'bg-' + e.target.value; };
+$('sheetZoomR').oninput = e=>{
+  state.sheetZoom = +e.target.value;
+  $('sheetZoomV').textContent = state.sheetZoom + 'x';
+  drawSheet();
+};
+
+const playBtn = $('play');
+function setPlaying(p){
+  state.playing = p; acc = 0;
+  playBtn.textContent = p ? '⏸ 暫停' : '▶ 播放';
+}
+playBtn.onclick = ()=> setPlaying(!state.playing);
+function step(d){
+  setPlaying(false);
+  state.idx = (state.idx + d + state.count) % state.count;
+  drawPreview(); drawSheet();
+}
+$('prev').onclick = ()=> step(-1);
+$('next').onclick = ()=> step(1);
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if(e.code === 'Space'){ e.preventDefault(); setPlaying(!state.playing); }
+  else if(e.code === 'ArrowLeft')  step(-1);
+  else if(e.code === 'ArrowRight') step(1);
+});
+
+// 支援 ?img=網址 直接載入
+const q = new URLSearchParams(location.search).get('img');
+if(q) loadImageURL(q, q.split('/').pop());
+</script>
+</body>
+</html>
