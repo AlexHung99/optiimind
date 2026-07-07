@@ -74,23 +74,34 @@
 
   /* ---- sfx grid ---- */
   .catTitle{font-size:13px; color:var(--dim); margin:14px 0 8px; font-weight:600;}
-  .sfxGrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px;}
+  .sfxGrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(172px,1fr)); gap:8px;}
   .sfxCard{
-    display:flex; align-items:center; background:var(--panel2);
+    position:relative; display:flex; align-items:center; background:var(--panel2);
     border:1px solid var(--line); border-radius:10px; overflow:hidden;
   }
   .sfxCard:hover{border-color:var(--c1);}
   .sfxCard .play{
-    flex:1; display:flex; align-items:center; gap:8px; padding:10px 10px;
+    position:relative; z-index:1;
+    flex:1; min-width:0; display:flex; align-items:center; gap:8px; padding:10px 10px;
     cursor:pointer; font-size:13px; user-select:none;
   }
-  .sfxCard .play .ico{font-size:17px;}
+  .sfxCard .play .ico{font-size:17px; flex:none;}
+  .sfxCard .play .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;}
   .sfxCard .dl, .sfxCard .st{
+    position:relative; z-index:1;
     border:none; border-left:1px solid var(--line); border-radius:0;
     background:transparent; padding:10px 8px; font-size:13px; color:var(--dim);
   }
   .sfxCard .dl:hover{color:var(--c1); background:#0003;}
   .sfxCard .st:hover{color:#ffd75e; background:#0003;}
+  .sfxCard .mut{
+    position:relative; z-index:1;
+    border:none; border-left:1px solid var(--line); border-radius:0;
+    background:transparent; padding:10px 8px; font-size:13px; color:var(--dim);
+  }
+  .sfxCard .mut:hover{color:var(--c1); background:#0003;}
+  .sfxCard .wf{position:absolute; inset:0; width:100%; height:100%; opacity:.16; z-index:0; pointer-events:none;}
+  .miniBtn{padding:3px 8px !important; font-size:12px !important; margin-left:6px;}
 
   /* ---- saved presets ---- */
   .savedList{display:flex; flex-direction:column; gap:6px;}
@@ -125,7 +136,33 @@
     <canvas id="viz" width="1000" height="70"></canvas>
     <div class="ctlRow" style="margin-top:10px;">
       <div class="ctl">🔊 主音量 <input type="range" id="masterVol" min="0" max="1" step="0.01" value="0.8"> <b id="masterVolV">0.80</b></div>
+      <div class="ctl">匯出格式
+        <select id="expCh"><option value="2" selected>立體聲</option><option value="1">單聲道（SFX 建議）</option></select>
+        <select id="expSr"><option value="44100" selected>44100 Hz</option><option value="22050">22050 Hz（省記憶體）</option><option value="48000">48000 Hz</option></select>
+        <select id="expBits"><option value="16" selected>16-bit</option><option value="8">8-bit（復古）</option><option value="24">24-bit</option></select>
+      </div>
     </div>
+    <div class="ctlRow" style="margin-top:8px;">
+      <span class="ctl">收藏備份：</span>
+      <button id="expJson">⬇ 匯出全部收藏 JSON</button>
+      <button id="impJson">⬆ 匯入 JSON</button>
+      <input type="file" id="impFile" accept="application/json,.json" style="display:none">
+    </div>
+  </div>
+
+  <!-- ================= FX ================= -->
+  <div class="panel">
+    <h2>🎛️ 效果器（套用到所有試聽與匯出）</h2>
+    <div class="ctlRow">
+      <div class="ctl">殘響 <input type="range" id="fxReverb" min="0" max="1" step="0.01" value="0"> <b id="fxReverbV">0.00</b></div>
+      <div class="ctl">空間大小 <input type="range" id="fxRvSize" min="0.2" max="4" step="0.1" value="1.8"> <b id="fxRvSizeV">1.8</b>s</div>
+      <div class="ctl">延遲 <input type="range" id="fxDelay" min="0" max="1" step="0.01" value="0"> <b id="fxDelayV">0.00</b></div>
+      <div class="ctl">延遲時間 <input type="range" id="fxDlTime" min="0.05" max="0.6" step="0.01" value="0.25"> <b id="fxDlTimeV">0.25</b>s</div>
+      <div class="ctl">延遲回授 <input type="range" id="fxDlFb" min="0" max="0.8" step="0.01" value="0.35"> <b id="fxDlFbV">0.35</b></div>
+      <div class="ctl">位元壓縮 <input type="range" id="fxCrush" min="2" max="16" step="1" value="16"> <b id="fxCrushV">16</b>bit</div>
+      <button id="fxReset">乾聲</button>
+    </div>
+    <p class="hint">殘響給魔法/環境音空間感；延遲做迴音；位元壓縮把 bit 拉低 = 復古 8-bit 音色（<code>16</code> = 關閉）。這些設定即時套用，並在你按 <code>⭐</code> 收藏時一起記下，重播/匯出都會帶著同樣的效果。</p>
   </div>
 
   <!-- ================= SFX ================= -->
@@ -139,7 +176,7 @@
       <button id="sfxReset">重設</button>
     </div>
     <div id="sfxList"></div>
-    <div class="catTitle">⭐ 已儲存音效</div>
+    <div class="catTitle">⭐ 已儲存音效 <button id="expAllSfx" class="miniBtn">⬇ 全部打包 ZIP</button></div>
     <div id="savedSfxList" class="savedList"></div>
     <p class="hint">點擊音效卡片試聽（「隨機變化」讓每次播放的音高/長度有微小差異，連續砍怪不單調）；
       覺得剛剛那一聲不錯就點 <code>⭐</code> — 會連同當次的隨機種子一起存下來，重播和匯出都是<b>一模一樣</b>的聲音；
@@ -172,7 +209,10 @@
           <option value="32">32 小節</option>
         </select>
       </div>
+      <label class="chk"><input type="checkbox" id="expIntro">前奏</label>
+      <label class="chk"><input type="checkbox" id="expOutro">尾奏</label>
       <button id="expMusic">⬇ 匯出 WAV</button>
+      <button id="expStems">⬇ 分軌 ZIP</button>
       <button id="saveBgm">⭐ 儲存目前組合</button>
     </div>
     <div class="catTitle">⭐ 已儲存音樂</div>
@@ -242,6 +282,122 @@ function makeOfflineChain(ctx){
   const comp = ctx.createDynamicsCompressor();
   g.connect(comp); comp.connect(ctx.destination);
   return g;
+}
+
+/* ============================================================
+   效果器鏈（reverb / delay / bitcrush）— realtime 與 offline 共用
+============================================================ */
+const NOFX = {reverb:0, rvSize:1.8, delay:0, dlTime:0.25, dlFb:0.35, crush:16};
+function fxFromUI(){
+  return {
+    reverb: +$('#fxReverb').value,
+    rvSize: +$('#fxRvSize').value,
+    delay:  +$('#fxDelay').value,
+    dlTime: +$('#fxDlTime').value,
+    dlFb:   +$('#fxDlFb').value,
+    crush:  +$('#fxCrush').value,
+  };
+}
+function fxTail(fx){
+  if(!fx) return 0;
+  return Math.max(fx.reverb > 0.001 ? fx.rvSize : 0, fx.delay > 0.001 ? fx.dlTime * 5 : 0);
+}
+function makeIR(ctx, seconds){
+  const rate = ctx.sampleRate;
+  const len = Math.max(1, Math.floor(seconds * rate));
+  const ir = ctx.createBuffer(2, len, rate);
+  const rnd = mulberry32(0x2BAD1DEA); // 固定種子 → 殘響一致、可重現
+  for(let ch = 0; ch < 2; ch++){
+    const d = ir.getChannelData(ch);
+    for(let i = 0; i < len; i++) d[i] = (rnd() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+  }
+  return ir;
+}
+function crushCurve(bits){
+  const steps = Math.pow(2, bits), n = 2048, c = new Float32Array(n);
+  for(let i = 0; i < n; i++){
+    const x = (i / (n - 1)) * 2 - 1;
+    c[i] = Math.round(x * steps / 2) / (steps / 2);
+  }
+  return c;
+}
+// 回傳 {input, output}；把音源接到 input，output 接到目的地
+function buildFX(ctx, fx){
+  fx = fx || NOFX;
+  const input = ctx.createGain(), output = ctx.createGain();
+  let head = input;
+  if(fx.crush < 16){
+    const ws = ctx.createWaveShaper();
+    ws.curve = crushCurve(fx.crush); ws.oversample = 'none';
+    head.connect(ws); head = ws;
+  }
+  head.connect(output); // 乾聲
+  if(fx.reverb > 0.001){
+    const conv = ctx.createConvolver();
+    conv.buffer = makeIR(ctx, fx.rvSize);
+    const wg = ctx.createGain(); wg.gain.value = fx.reverb;
+    head.connect(conv); conv.connect(wg); wg.connect(output);
+  }
+  if(fx.delay > 0.001){
+    const dl = ctx.createDelay(1.5);
+    dl.delayTime.value = Math.min(1.5, fx.dlTime);
+    const fb = ctx.createGain(); fb.gain.value = Math.min(0.85, fx.dlFb);
+    const wg = ctx.createGain(); wg.gain.value = fx.delay;
+    head.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wg); wg.connect(output);
+  }
+  return {input, output};
+}
+
+/* ---- 匯出格式 ---- */
+function exportFmt(){
+  return {
+    ch:   (+$('#expCh').value) | 0,
+    sr:   (+$('#expSr').value) | 0,
+    bits: (+$('#expBits').value) | 0,
+  };
+}
+
+/* ============================================================
+   ZIP 打包（STORE，無壓縮）+ CRC32
+============================================================ */
+const crcTable = (() => {
+  const t = new Uint32Array(256);
+  for(let n = 0; n < 256; n++){
+    let c = n;
+    for(let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(u8){
+  let c = 0xFFFFFFFF;
+  for(let i = 0; i < u8.length; i++) c = crcTable[(c ^ u8[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function makeZip(files){ // files: [{name, data:Uint8Array}]
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+  files.forEach(f => {
+    const nb = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, sz, true); lh.setUint32(22, sz, true);
+    lh.setUint16(26, nb.length, true);
+    parts.push(new Uint8Array(lh.buffer), nb, f.data);
+    const cd = new DataView(new ArrayBuffer(46));
+    cd.setUint32(0, 0x02014b50, true); cd.setUint16(4, 20, true); cd.setUint16(6, 20, true);
+    cd.setUint32(16, crc, true); cd.setUint32(20, sz, true); cd.setUint32(24, sz, true);
+    cd.setUint16(28, nb.length, true); cd.setUint32(42, offset, true);
+    central.push(new Uint8Array(cd.buffer), nb);
+    offset += 30 + nb.length + sz;
+  });
+  let cSize = 0; central.forEach(c => cSize += c.length);
+  const eo = new DataView(new ArrayBuffer(22));
+  eo.setUint32(0, 0x06054b50, true);
+  eo.setUint16(8, files.length, true); eo.setUint16(10, files.length, true);
+  eo.setUint32(12, cSize, true); eo.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(eo.buffer)], {type:'application/zip'});
 }
 
 /* ---- 基本合成元件 ---- */
@@ -448,10 +604,104 @@ const SFX = [
     tone(ctx,out,{t:t+0.2, f:880*p.pitch, dur:0.14, wave:'sawtooth', vol:0.15*p.vol, fType:'lowpass', fFreq:3000});
     return 0.4;
   }},
-];
-const CATS = {attack:'⚔️ 攻擊戰鬥', magic:'✨ 魔法技能', item:'💰 道具獎勵', move:'🏃 角色動作', ui:'🖱️ 介面 UI'};
+  {id:'notify', name:'通知', ico:'🔔', cat:'ui', fn(ctx,out,t,p){
+    tone(ctx,out,{t, f:1174*p.pitch, dur:0.5*p.dur, wave:'sine', vol:0.2*p.vol, att:0.002});
+    tone(ctx,out,{t, f:1567*p.pitch, dur:0.6*p.dur, wave:'sine', vol:0.14*p.vol, att:0.002});
+    tone(ctx,out,{t:t+0.11, f:2349*p.pitch, dur:0.4*p.dur, wave:'sine', vol:0.1*p.vol, att:0.002});
+    return 0.7 * p.dur;
+  }},
 
-/* 音效快照 = 滑桿基準值 + 隨機種子；同一份快照永遠重現同一個聲音 */
+  // ⚔️ 攻擊戰鬥（追加）
+  {id:'parry', name:'格擋彈反', ico:'🛡️', cat:'attack', fn(ctx,out,t,p){
+    noiseHit(ctx,out,{t, dur:0.08*p.dur, vol:0.5*p.vol, fType:'bandpass', f0:4000*p.pitch, f1:7000*p.pitch, q:3});
+    [4200,6300,8100].forEach(f =>
+      tone(ctx,out,{t, f:f*p.pitch, dur:0.4*p.dur, wave:'triangle', vol:0.08*p.vol, att:0.001}));
+    tone(ctx,out,{t, f:2100*p.pitch, f1:1400*p.pitch, dur:0.3*p.dur, wave:'sine', vol:0.12*p.vol, att:0.001});
+    return 0.45 * p.dur;
+  }},
+  {id:'charge', name:'蓄力', ico:'🔋', cat:'attack', fn(ctx,out,t,p){
+    const d = 1.0 * p.dur;
+    tone(ctx,out,{t, f:80*p.pitch, f1:700*p.pitch, dur:d, wave:'sawtooth', vol:0.22*p.vol, att:0.05, fType:'lowpass', fFreq:2000});
+    tone(ctx,out,{t, f:120*p.pitch, f1:1050*p.pitch, dur:d, wave:'square', vol:0.08*p.vol, att:0.05});
+    noiseHit(ctx,out,{t:t+d*0.85, dur:0.2, vol:0.25*p.vol, fType:'highpass', f0:3000, att:0.02});
+    return d + 0.15;
+  }},
+
+  // 🏃 角色動作（追加）
+  {id:'dash', name:'衝刺', ico:'💨', cat:'move', fn(ctx,out,t,p){
+    const d = 0.35 * p.dur;
+    const s = noiseSrc(ctx);
+    const fl = ctx.createBiquadFilter();
+    fl.type = 'bandpass'; fl.Q.value = 1.5;
+    fl.frequency.setValueAtTime(400*p.pitch, t);
+    fl.frequency.exponentialRampToValueAtTime(2600*p.pitch, t + d);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.5*p.vol, t + d*0.3);
+    g.gain.exponentialRampToValueAtTime(0.001, t + d);
+    s.connect(fl); fl.connect(g); g.connect(out);
+    s.start(t); s.stop(t + d + 0.05);
+    return d + 0.1;
+  }},
+
+  // 🌲 環境循環（可無縫 loop）
+  {id:'amb_wind', name:'風聲', ico:'🌬️', cat:'ambient', loop:true, fn(ctx,out,t,p){
+    const d = 2.0;
+    const s = noiseSrc(ctx);
+    const fl = ctx.createBiquadFilter();
+    fl.type = 'lowpass'; fl.Q.value = 3;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.5;
+    const lg = ctx.createGain(); lg.gain.value = 400;
+    lfo.connect(lg); lg.connect(fl.frequency);
+    fl.frequency.value = 700 * p.pitch;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.28*p.vol, t + 0.5);
+    g.gain.setValueAtTime(0.28*p.vol, t + d - 0.5);
+    g.gain.linearRampToValueAtTime(0, t + d);
+    s.connect(fl); fl.connect(g); g.connect(out);
+    s.start(t); lfo.start(t); s.stop(t + d + 0.05); lfo.stop(t + d + 0.05);
+    return d;
+  }},
+  {id:'amb_fire', name:'火把', ico:'🔥', cat:'ambient', loop:true, fn(ctx,out,t,p){
+    const d = 2.0;
+    const s = noiseSrc(ctx);
+    const fl = ctx.createBiquadFilter();
+    fl.type = 'lowpass'; fl.frequency.value = 900 * p.pitch; fl.Q.value = 0.7;
+    const g = ctx.createGain(); g.gain.value = 0.18 * p.vol;
+    // 劈啪
+    for(let i = 0; i < 14; i++){
+      noiseHit(ctx,out,{t:t + p.rng()*d, dur:0.03, vol:0.18*p.vol, fType:'highpass', f0:2000+p.rng()*3000});
+    }
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(1, t + 0.3);
+    env.gain.setValueAtTime(1, t + d - 0.3);
+    env.gain.linearRampToValueAtTime(0, t + d);
+    s.connect(fl); fl.connect(g); g.connect(env); env.connect(out);
+    s.start(t); s.stop(t + d + 0.05);
+    return d;
+  }},
+  {id:'amb_water', name:'水滴/洞窟', ico:'💧', cat:'ambient', loop:true, fn(ctx,out,t,p){
+    const d = 2.0;
+    for(let i = 0; i < 6; i++){
+      const tt = t + p.rng() * d;
+      tone(ctx,out,{t:tt, f:(900+p.rng()*700)*p.pitch, f1:(500+p.rng()*300)*p.pitch, dur:0.12, wave:'sine', vol:0.22*p.vol, att:0.001});
+    }
+    return d;
+  }},
+  {id:'boss_roar', name:'Boss 咆哮', ico:'🐲', cat:'ambient', fn(ctx,out,t,p){
+    const d = 1.4 * p.dur;
+    tone(ctx,out,{t, f:70*p.pitch, f1:120*p.pitch, dur:d*0.5, wave:'sawtooth', vol:0.5*p.vol, att:0.06, fType:'lowpass', fFreq:900});
+    tone(ctx,out,{t:t+d*0.35, f:130*p.pitch, f1:45*p.pitch, dur:d*0.6, wave:'sawtooth', vol:0.5*p.vol, att:0.02, fType:'lowpass', fFreq:1100});
+    tone(ctx,out,{t, f:35*p.pitch, dur:d, wave:'sine', vol:0.4*p.vol, att:0.05});
+    noiseHit(ctx,out,{t, dur:d, vol:0.12*p.vol, fType:'lowpass', f0:600, att:0.1});
+    return d + 0.2;
+  }},
+];
+const CATS = {attack:'⚔️ 攻擊戰鬥', magic:'✨ 魔法技能', item:'💰 道具獎勵', move:'🏃 角色動作', ui:'🖱️ 介面 UI', ambient:'🌲 環境／Boss'};
+
+/* 音效快照 = 滑桿基準值 + 隨機種子 + 效果器設定；同一份快照永遠重現同一個聲音 */
 function currentSfxSnap(){
   return {
     pitch: +$('#sfxPitch').value,
@@ -459,6 +709,7 @@ function currentSfxSnap(){
     vari:  +$('#sfxVar').value,
     vol:   +$('#sfxVol').value,
     seed:  (Math.random() * 1e9) | 0,
+    fx:    fxFromUI(),
   };
 }
 function materialize(snap){
@@ -469,7 +720,9 @@ function materialize(snap){
 const lastPlay = {}; // 每個音效最後一次播放的快照
 function playSnap(def, snap){
   const ctx = getCtx();
-  def.fn(ctx, master, ctx.currentTime + 0.03, materialize(snap));
+  const fx = buildFX(ctx, snap.fx || NOFX);
+  fx.output.connect(master);
+  def.fn(ctx, fx.input, ctx.currentTime + 0.03, materialize(snap));
 }
 function playSfx(def, card){
   const snap = currentSfxSnap();
@@ -478,20 +731,48 @@ function playSfx(def, card){
   if(card){
     card.classList.add('flash');
     setTimeout(() => card.classList.remove('flash'), 180);
+    drawCardWave(def, snap);
   }
 }
-async function renderSfxWav(def, snap, name){
-  const cap = 3 * Math.max(0.3, snap.dur * (1 + snap.vari)) + 1; // 保守上限
-  const octx = new OfflineAudioContext(2, Math.ceil(44100 * cap), 44100);
-  const out = makeOfflineChain(octx);
-  const len = def.fn(octx, out, 0.02, materialize(snap));
+// 以指定格式離線渲染音效，回傳裁切後的 AudioBuffer
+async function renderSfxBuffer(def, snap){
+  const fmt = exportFmt();
+  const tail = fxTail(snap.fx) + 0.55;
+  const cap = 3 * Math.max(0.3, snap.dur * (1 + snap.vari)) + 1 + tail;
+  const octx = new OfflineAudioContext(fmt.ch, Math.ceil(fmt.sr * cap), fmt.sr);
+  const chain = makeOfflineChain(octx);
+  const fx = buildFX(octx, snap.fx || NOFX);
+  fx.output.connect(chain);
+  const len = def.fn(octx, fx.input, 0.02, materialize(snap));
   const buf = await octx.startRendering();
-  downloadWav(trimBuffer(buf, len + 0.55), name);
+  return trimBuffer(buf, (def.loop ? len : len + tail));
+}
+async function renderSfxWav(def, snap, name){
+  const buf = await renderSfxBuffer(def, snap);
+  downloadWav(buf, name, exportFmt().bits);
 }
 function exportSfx(def){
   // 匯出「最後聽到的那個版本」；沒播過就以目前參數抽一次
   const snap = lastPlay[def.id] || currentSfxSnap();
   return renderSfxWav(def, snap, 'sfx_' + def.id + '.wav');
+}
+// 🎲 變異：重roll 音高/長度/種子，播放並設為 lastPlay（按 ⭐ 即可收藏這一版）
+function mutateSfx(def, card){
+  const snap = {
+    pitch: +(0.6 + Math.random() * 1.1).toFixed(3),
+    dur:   +(0.7 + Math.random() * 0.8).toFixed(3),
+    vari:  +$('#sfxVar').value,
+    vol:   +$('#sfxVol').value,
+    seed:  (Math.random() * 1e9) | 0,
+    fx:    fxFromUI(),
+  };
+  lastPlay[def.id] = snap;
+  playSnap(def, snap);
+  if(card){
+    card.classList.add('flash');
+    setTimeout(() => card.classList.remove('flash'), 180);
+    drawCardWave(def, snap);
+  }
 }
 function trimBuffer(buf, seconds){
   const len = Math.min(buf.length, Math.ceil(seconds * buf.sampleRate));
@@ -727,14 +1008,16 @@ function currentSettings(state){
 }
 
 /* ---- 即時播放（前瞻排程器） ---- */
-let playing = false, timer = null, barIdx = 0, nextT = 0, musicBus = null;
+let playing = false, timer = null, barIdx = 0, nextT = 0, musicBus = null, musicFx = null;
 function playMusic(){
   const ctx = getCtx();
   stopMusic(false);
   playing = true;
   delete liveState.lead;
   musicBus = ctx.createGain();
-  musicBus.connect(master);
+  musicFx = buildFX(ctx, fxFromUI());
+  musicBus.connect(musicFx.input);
+  musicFx.output.connect(master);
   barIdx = 0;
   nextT = ctx.currentTime + 0.1;
   timer = setInterval(() => {
@@ -751,10 +1034,10 @@ function playMusic(){
 function stopMusic(updateUI){
   if(timer){ clearInterval(timer); timer = null; }
   if(musicBus){
-    const b = musicBus;
+    const b = musicBus, fx = musicFx;
     b.gain.setTargetAtTime(0, actx.currentTime, 0.06);
-    setTimeout(() => b.disconnect(), 500);
-    musicBus = null;
+    setTimeout(() => { b.disconnect(); if(fx) fx.output.disconnect(); }, 500);
+    musicBus = null; musicFx = null;
   }
   playing = false;
   if(updateUI !== false){
@@ -762,58 +1045,125 @@ function stopMusic(updateUI){
     $('#playBtn').classList.remove('on');
   }
 }
+/* 前奏：主音鋪底 + 貝斯漸強 */
+function scheduleIntro(ctx, out, t, S){
+  const g = ctx.createGain();
+  const barDur = 4 * 60 / S.tempo;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(1, t + barDur);
+  g.connect(out);
+  const SS = Object.assign({}, S, {layers:{drums:false, bass:true, arp:false, pad:true, lead:false}, state:{}});
+  scheduleBar(ctx, g, t, 0, SS);
+}
+/* 尾奏：回到主和弦 + 銅鈸收尾 */
+function scheduleOutro(ctx, out, t, S){
+  const sc = S.scale;
+  const chord = [0,2,4].map(k => S.root + sc[k % 7] + 12 * Math.floor(k / 7));
+  chord.forEach(m => { pad(ctx, out, t, m2f(m - 12), 2.2); pluck(ctx, out, t, m2f(m + 12), 2, S.arpWave, 0.12); });
+  bassN(ctx, out, t, m2f(chord[0] - 24), 2.2, 'sawtooth', 0.22);
+  const s = noiseSrc(ctx);
+  const fl = ctx.createBiquadFilter(); fl.type = 'highpass'; fl.frequency.value = 5000;
+  const cg = ctx.createGain();
+  cg.gain.setValueAtTime(0.4, t); cg.gain.exponentialRampToValueAtTime(0.001, t + 2);
+  s.connect(fl); fl.connect(cg); cg.connect(out); s.start(t); s.stop(t + 2.1);
+}
 async function exportMusic(){
   const btn = $('#expMusic');
   btn.disabled = true; btn.textContent = '⏳ 轉檔中…';
   try{
     const bars = +$('#expBars').value;
+    const intro = $('#expIntro').checked, outro = $('#expOutro').checked;
     const S = currentSettings({});
-    const beat = 60 / S.tempo;
-    const dur = bars * 4 * beat + 1.5;
-    const octx = new OfflineAudioContext(2, Math.ceil(44100 * dur), 44100);
-    const out = makeOfflineChain(octx);
-    for(let b = 0; b < bars; b++) scheduleBar(octx, out, 0.05 + b * 4 * beat, b, S);
+    const fmt = exportFmt();
+    const beat = 60 / S.tempo, barDur = 4 * beat;
+    const totalBars = bars + (intro ? 1 : 0);
+    const dur = totalBars * barDur + (outro ? 2.4 : 1.5);
+    const octx = new OfflineAudioContext(fmt.ch, Math.ceil(fmt.sr * dur), fmt.sr);
+    const chain = makeOfflineChain(octx);
+    const fx = buildFX(octx, fxFromUI());
+    fx.output.connect(chain);
+    const out = fx.input;
+    let t0 = 0.05;
+    if(intro){ scheduleIntro(octx, out, t0, S); t0 += barDur; }
+    for(let b = 0; b < bars; b++) scheduleBar(octx, out, t0 + b * barDur, b, S);
+    if(outro) scheduleOutro(octx, out, t0 + bars * barDur, S);
     const buf = await octx.startRendering();
-    downloadWav(buf, 'bgm_' + curMood + '_seed' + S.seed + '_' + S.tempo + 'bpm.wav');
+    const tag = (intro || outro) ? '_cue' : '';
+    downloadWav(buf, 'bgm_' + curMood + '_seed' + S.seed + '_' + S.tempo + 'bpm' + tag + '.wav', fmt.bits);
   } finally {
     btn.disabled = false; btn.textContent = '⬇ 匯出 WAV';
+  }
+}
+/* 分軌：每個啟用音軌各自輸出成獨立 WAV（乾聲，供 FMOD/Wwise 動態混音） */
+async function exportStems(){
+  const btn = $('#expStems');
+  btn.disabled = true; btn.textContent = '⏳ 轉檔中…';
+  try{
+    const bars = +$('#expBars').value;
+    const S = currentSettings({});
+    const fmt = exportFmt();
+    const beat = 60 / S.tempo, barDur = 4 * beat;
+    const dur = bars * barDur + 1.5;
+    const keys = ['drums','bass','arp','pad','lead'];
+    const files = [];
+    for(const ly of keys){
+      if(!S.layers[ly]) continue;
+      const mask = {drums:false, bass:false, arp:false, pad:false, lead:false}; mask[ly] = true;
+      const SS = Object.assign({}, S, {layers: mask, state: {}});
+      const octx = new OfflineAudioContext(fmt.ch, Math.ceil(fmt.sr * dur), fmt.sr);
+      const chain = makeOfflineChain(octx);
+      for(let b = 0; b < bars; b++) scheduleBar(octx, chain, 0.05 + b * barDur, b, SS);
+      const buf = await octx.startRendering();
+      files.push({name: 'stem_' + ly + '.wav', data: new Uint8Array(encodeWav(buf, fmt.bits))});
+    }
+    if(!files.length){ alert('沒有啟用的音軌可分軌匯出'); return; }
+    downloadBlob(makeZip(files), 'bgm_' + curMood + '_seed' + S.seed + '_stems.zip');
+  } finally {
+    btn.disabled = false; btn.textContent = '⬇ 分軌 ZIP';
   }
 }
 
 /* ============================================================
    WAV 匯出
 ============================================================ */
-function encodeWav(buffer){
+function encodeWav(buffer, bits){
+  bits = bits || 16;
   const nCh = buffer.numberOfChannels, sr = buffer.sampleRate, len = buffer.length;
-  const bytes = 44 + len * nCh * 2;
-  const ab = new ArrayBuffer(bytes);
+  const bp = bits / 8, dataBytes = len * nCh * bp;
+  const ab = new ArrayBuffer(44 + dataBytes);
   const v = new DataView(ab);
   const ws = (o, s) => { for(let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-  ws(0, 'RIFF'); v.setUint32(4, bytes - 8, true); ws(8, 'WAVE');
+  ws(0, 'RIFF'); v.setUint32(4, 36 + dataBytes, true); ws(8, 'WAVE');
   ws(12, 'fmt '); v.setUint32(16, 16, true);
   v.setUint16(20, 1, true); v.setUint16(22, nCh, true);
-  v.setUint32(24, sr, true); v.setUint32(28, sr * nCh * 2, true);
-  v.setUint16(32, nCh * 2, true); v.setUint16(34, 16, true);
-  ws(36, 'data'); v.setUint32(40, len * nCh * 2, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * nCh * bp, true);
+  v.setUint16(32, nCh * bp, true); v.setUint16(34, bits, true);
+  ws(36, 'data'); v.setUint32(40, dataBytes, true);
   const chs = [];
   for(let c = 0; c < nCh; c++) chs.push(buffer.getChannelData(c));
   let o = 44;
   for(let i = 0; i < len; i++){
     for(let c = 0; c < nCh; c++){
       const s = Math.max(-1, Math.min(1, chs[c][i]));
-      v.setInt16(o, s < 0 ? s * 32768 : s * 32767, true);
-      o += 2;
+      if(bits === 8){ v.setUint8(o, Math.round((s * 0.5 + 0.5) * 255)); o += 1; }
+      else if(bits === 24){
+        const val = Math.round(s < 0 ? s * 8388608 : s * 8388607);
+        v.setUint8(o, val & 0xff); v.setUint8(o + 1, (val >> 8) & 0xff); v.setUint8(o + 2, (val >> 16) & 0xff);
+        o += 3;
+      } else { v.setInt16(o, s < 0 ? s * 32768 : s * 32767, true); o += 2; }
     }
   }
   return ab;
 }
-function downloadWav(buffer, name){
-  const blob = new Blob([encodeWav(buffer)], {type:'audio/wav'});
+function downloadBlob(blob, name){
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function downloadWav(buffer, name, bits){
+  downloadBlob(new Blob([encodeWav(buffer, bits)], {type:'audio/wav'}), name);
 }
 
 /* ============================================================
@@ -835,6 +1185,46 @@ function startViz(){
   })();
 }
 
+/* ---- 音效卡片波形縮圖（22kHz 單聲道快速離線渲染，乾聲） ---- */
+const cardCanvas = {}; // def.id -> canvas
+async function renderThumb(def, snap){
+  const cap = 3 * Math.max(0.3, snap.dur * (1 + snap.vari)) + 0.4;
+  const octx = new OfflineAudioContext(1, Math.ceil(22050 * cap), 22050);
+  const g = octx.createGain(); g.connect(octx.destination);
+  const len = def.fn(octx, g, 0.02, materialize(snap));
+  const buf = await octx.startRendering();
+  const clip = Math.min(buf.length, Math.ceil((def.loop ? len : len + 0.25) * 22050));
+  return { d: buf.getChannelData(0), n: clip };
+}
+function drawWaveform(cv, d, n){
+  const cx = cv.getContext('2d'), W = cv.width, H = cv.height, mid = H / 2;
+  cx.clearRect(0, 0, W, H);
+  cx.strokeStyle = 'rgba(0,229,255,0.85)'; cx.lineWidth = 1;
+  cx.beginPath();
+  const per = Math.max(1, Math.floor(n / W));
+  for(let x = 0; x < W; x++){
+    let mn = 1, mx = -1;
+    for(let j = 0; j < per; j++){
+      const s = d[x * per + j] || 0;
+      if(s < mn) mn = s; if(s > mx) mx = s;
+    }
+    cx.moveTo(x + 0.5, mid - mx * mid);
+    cx.lineTo(x + 0.5, mid - mn * mid);
+  }
+  cx.stroke();
+}
+async function drawCardWave(def, snap){
+  const cv = cardCanvas[def.id];
+  if(!cv) return;
+  try{ const {d, n} = await renderThumb(def, snap); drawWaveform(cv, d, n); }catch(e){}
+}
+// 載入時依序畫出每個音效的預設波形（避免同時開太多 offline context）
+async function initThumbs(){
+  for(const def of SFX){
+    await drawCardWave(def, {pitch:1, dur:1, vari:0, vol:0.8, seed:1});
+  }
+}
+
 /* ============================================================
    UI 綁定
 ============================================================ */
@@ -850,6 +1240,17 @@ bindSlider('sfxDur');
 bindSlider('sfxVar');
 bindSlider('sfxVol');
 bindSlider('tempo', v => String(v));
+bindSlider('fxReverb');
+bindSlider('fxRvSize', v => v.toFixed(1));
+bindSlider('fxDelay');
+bindSlider('fxDlTime');
+bindSlider('fxDlFb');
+bindSlider('fxCrush', v => String(v));
+$('#fxReset').addEventListener('click', () => {
+  [['fxReverb',0],['fxRvSize',1.8],['fxDelay',0],['fxDlTime',0.25],['fxDlFb',0.35],['fxCrush',16]].forEach(([id,v]) => {
+    $('#' + id).value = v; $('#' + id).dispatchEvent(new Event('input'));
+  });
+});
 
 $('#masterVol').addEventListener('input', () => {
   if(master) master.gain.setTargetAtTime(+$('#masterVol').value, actx.currentTime, 0.02);
@@ -876,15 +1277,22 @@ $('#sfxReset').addEventListener('click', () => {
       card.className = 'sfxCard';
       const play = document.createElement('div');
       play.className = 'play';
-      play.innerHTML = '<span class="ico">' + def.ico + '</span><span>' + def.name + '</span>';
+      play.innerHTML = '<span class="ico">' + def.ico + '</span><span class="nm">' + def.name + '</span>';
+      const wf = document.createElement('canvas');
+      wf.className = 'wf'; wf.width = 220; wf.height = 46;
+      cardCanvas[def.id] = wf;
       play.addEventListener('click', () => playSfx(def, card));
+      const mut = document.createElement('button');
+      mut.className = 'mut'; mut.textContent = '🎲'; mut.title = '變異：隨機生一個新變體（喜歡就按 ⭐）';
+      mut.addEventListener('click', e => { e.stopPropagation(); mutateSfx(def, card); });
       const st = document.createElement('button');
       st.className = 'st'; st.textContent = '⭐'; st.title = '儲存剛剛聽到的聲音';
       st.addEventListener('click', e => { e.stopPropagation(); saveSfxPreset(def); });
       const dl = document.createElement('button');
       dl.className = 'dl'; dl.textContent = '⬇'; dl.title = '匯出 WAV（最後聽到的版本）';
       dl.addEventListener('click', e => { e.stopPropagation(); exportSfx(def); });
-      card.appendChild(play); card.appendChild(st); card.appendChild(dl);
+      card.appendChild(play); card.appendChild(mut); card.appendChild(st); card.appendChild(dl);
+      card.appendChild(wf);
       grid.appendChild(card);
     });
     box.appendChild(grid);
@@ -980,6 +1388,7 @@ function renderSavedSfx(){
     const item = savedRow(def.ico, s.name, meta, () => playSnap(def, s));
     item.appendChild(iconBtn('▶', '試聽', () => playSnap(def, s)));
     item.appendChild(iconBtn('⬇', '匯出 WAV', () => renderSfxWav(def, s, 'sfx_' + fnSafe(s.name) + '.wav')));
+    item.appendChild(iconBtn('</>', '複製 Unity C# 播放程式碼', () => copyCsharp(s)));
     item.appendChild(iconBtn('✏', '重新命名', () => {
       const v = prompt('新名稱', s.name);
       if(v){ s.name = v; saveStore('gag_sfx_presets', savedSfx); renderSavedSfx(); }
@@ -1041,9 +1450,91 @@ function renderSavedBgm(){
   });
 }
 
+/* ---- 批次 ZIP：把收藏音效全部打包 ---- */
+async function exportAllSfx(){
+  if(!savedSfx.length){ alert('尚無收藏音效 — 先在卡片上按 ⭐ 收藏'); return; }
+  const btn = $('#expAllSfx');
+  btn.disabled = true; const orig = btn.textContent; btn.textContent = '⏳ 轉檔中…';
+  try{
+    const fmt = exportFmt();
+    const files = [], used = {};
+    for(const s of savedSfx){
+      const def = SFX.find(d => d.id === s.sfx); if(!def) continue;
+      const buf = await renderSfxBuffer(def, s);
+      let nm = fnSafe(s.name); used[nm] = (used[nm] || 0) + 1;
+      if(used[nm] > 1) nm += '_' + used[nm];
+      files.push({name: nm + '.wav', data: new Uint8Array(encodeWav(buf, fmt.bits))});
+    }
+    downloadBlob(makeZip(files), 'sfx_presets_' + files.length + '.zip');
+  } finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+/* ---- JSON 備份 / 還原 ---- */
+function exportJSON(){
+  if(!savedSfx.length && !savedBgm.length){ alert('尚無收藏可匯出'); return; }
+  const data = {app:'game-audio-generator', version:1, sfx:savedSfx, bgm:savedBgm};
+  downloadBlob(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}), 'audio_presets.json');
+}
+function importJSON(file){
+  const rd = new FileReader();
+  rd.onload = () => {
+    try{
+      const d = JSON.parse(rd.result);
+      let n = 0;
+      if(Array.isArray(d.sfx)){ savedSfx = savedSfx.concat(d.sfx); n += d.sfx.length; }
+      if(Array.isArray(d.bgm)){ savedBgm = savedBgm.concat(d.bgm); n += d.bgm.length; }
+      saveStore('gag_sfx_presets', savedSfx); saveStore('gag_bgm_presets', savedBgm);
+      renderSavedSfx(); renderSavedBgm();
+      alert('已匯入 ' + n + ' 筆收藏（附加到現有清單）');
+    }catch(e){ alert('JSON 格式錯誤，無法匯入'); }
+  };
+  rd.readAsText(file);
+}
+
+/* ---- 複製 Unity C# 播放程式碼 ---- */
+function copyCsharp(s){
+  const fname = 'sfx_' + fnSafe(s.name);
+  const field = (s.sfx || 'sfx').replace(/[^a-zA-Z0-9]/g, '') + 'Clip';
+  const code =
+`// 播放「${s.name}」 — 匯出的 ${fname}.wav 放進 Assets 後拖到這個欄位
+[SerializeField] private AudioClip ${field};
+
+void Play${field.charAt(0).toUpperCase() + field.slice(1)}()
+{
+    // 一次性音效（無 3D 位置）
+    var src = GetComponent<AudioSource>();
+    src.PlayOneShot(${field});
+
+    // 或在世界座標播放：
+    // AudioSource.PlayClipAtPoint(${field}, transform.position);
+}`;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(code).then(
+      () => toast('已複製 C# 程式碼'),
+      () => window.prompt('手動複製：', code));
+  } else { window.prompt('手動複製：', code); }
+}
+function toast(msg){
+  let el = $('#toast');
+  if(!el){
+    el = document.createElement('div'); el.id = 'toast';
+    el.style.cssText = 'position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1b2233;border:1px solid var(--c1);color:#fff;padding:9px 16px;border-radius:10px;font-size:13px;z-index:99;box-shadow:0 4px 18px #000a;transition:opacity .3s;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg; el.style.opacity = '1';
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.style.opacity = '0', 1400);
+}
+
 $('#saveBgm').addEventListener('click', saveBgmPreset);
+$('#expStems').addEventListener('click', exportStems);
+$('#expAllSfx').addEventListener('click', exportAllSfx);
+$('#expJson').addEventListener('click', exportJSON);
+$('#impJson').addEventListener('click', () => $('#impFile').click());
+$('#impFile').addEventListener('change', e => { if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ''; });
+
 renderSavedSfx();
 renderSavedBgm();
+initThumbs();
 </script>
 </body>
 </html>
