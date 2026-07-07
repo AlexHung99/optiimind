@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>停車模擬器 — 軌跡計算公式說明</title>
+<style>
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  background: #101317;
+  color: #e8ebef;
+  font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+  line-height: 1.75;
+}
+.wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 80px; }
+h1 { font-size: 24px; border-bottom: 2px solid #2d6cdf; padding-bottom: 10px; }
+h2 { font-size: 19px; color: #7fb3ff; margin-top: 42px; border-left: 4px solid #2d6cdf; padding-left: 10px; }
+h3 { font-size: 15.5px; color: #c7ceda; margin-top: 26px; }
+p, li { font-size: 14.5px; color: #c7ceda; }
+.formula {
+  background: #171b21;
+  border: 1px solid #262c35;
+  border-left: 3px solid #2d6cdf;
+  border-radius: 6px;
+  padding: 14px 18px;
+  margin: 14px 0;
+  font-family: "Cambria Math", "STIX Two Math", Georgia, serif;
+  font-size: 17px;
+  color: #e8ebef;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.formula .note { font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; font-size: 12.5px; color: #7f8a9b; white-space: normal; display: block; margin-top: 6px; }
+var { font-style: italic; }
+code {
+  background: #1c2129;
+  border: 1px solid #333a45;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12.5px;
+  color: #9ccaff;
+}
+table { border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+th, td { border: 1px solid #2b313a; padding: 7px 12px; text-align: left; color: #c7ceda; }
+th { background: #171b21; color: #9aa4b2; }
+.back {
+  display: inline-block;
+  margin-bottom: 18px;
+  color: #7fb3ff;
+  text-decoration: none;
+  font-size: 13.5px;
+}
+.back:hover { text-decoration: underline; }
+.tip { background: #14283a; border: 1px solid #2d5b8a; border-radius: 6px; padding: 10px 14px; font-size: 13px; color: #9ccaff; margin: 14px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="back" href="index.html">← 回到停車模擬器</a>
+<h1>🚗 停車模擬器 — 軌跡計算公式說明</h1>
+<p>本頁說明模擬器計算車輛軌跡所用的數學模型與公式。所有長度單位為公尺（m）、角度為弧度（文中標示度數者已換算）。</p>
+
+<h2>1. 座標系與符號約定</h2>
+<ul>
+  <li>世界座標：<var>x</var> 沿車道方向（畫面向右為正）、<var>y</var> 垂直車道（畫面向下為正）。停車格開口中心為原點。</li>
+  <li>車輛姿態（pose）以<strong>後軸中心</strong>為參考點：位置 (<var>x</var>, <var>y</var>) 與車頭朝向角 <var>θ</var>。</li>
+  <li><var>g</var> = 檔位方向：前進 <var>g</var> = +1，倒車 <var>g</var> = −1。</li>
+  <li><var>L</var> = 軸距、<var>δ</var> = 前輪轉向角、<var>R</var> = 迴轉半徑、<var>s</var> = 沿路徑累計行駛距離。</li>
+</ul>
+
+<h2>2. 單車模型（Bicycle Model）</h2>
+<p>四輪車以等效兩輪（單車）模型近似：後輪固定、前輪轉向。低速無側滑時，車輛繞著「後軸延長線與前輪軸延長線的交點」（瞬時迴轉中心）旋轉。</p>
+<div class="formula">
+  tan <var>δ</var> = <var>L</var> / <var>R</var>
+  <span class="note">轉向角與迴轉半徑的關係（半徑量至後軸中心）。由使用者輸入的最小迴轉半徑 R<sub>min</sub> 反推最大轉向角：δ<sub>max</sub> = atan(L / R<sub>min</sub>)</span>
+</div>
+<div class="formula">
+  <var>κ</var> = tan <var>δ</var> / <var>L</var> = 1 / <var>R</var>
+  <span class="note">κ 為路徑曲率（curvature），方向盤打越多曲率越大。</span>
+</div>
+<p>車輛運動微分方程（以行駛距離 <var>s</var> 為參數，與速度無關）：</p>
+<div class="formula">
+  d<var>θ</var>/d<var>s</var> = <var>g</var> · <var>κ</var><br>
+  d<var>x</var>/d<var>s</var> = <var>g</var> · cos <var>θ</var><br>
+  d<var>y</var>/d<var>s</var> = <var>g</var> · sin <var>θ</var>
+  <span class="note">倒車（g = −1）時位置沿車頭反方向移動、旋轉方向也反向。這組方程是全部軌跡計算的基礎。</span>
+</div>
+<div class="tip">前輪轉向的三輪車（前2後1）：瞬時迴轉中心同樣位於後輪軸延長線上，上述方程完全相同——車身軌跡與四輪車一致，僅輪跡（各車輪掃過的路線）不同。</div>
+
+<h2>3. 垂直／斜角入庫 — 三段幾何解</h2>
+<p>路徑規劃為三段：<strong>車道直線 → 定曲率圓弧 → 車格軸線直線</strong>。已知條件：</p>
+<ul>
+  <li>進場直線在車道遠側，橫向位置 <var>y</var><sub>drive</sub> = −rowSide · (車道寬/2 − 車寬/2 − 0.4)</li>
+  <li>車格軸線單位向量 <var>a</var>，斜角車位的傾斜方向依「入庫方式 × 行駛方向」決定：leanDir = <var>g</var> · laneDir，使圓弧掃角最小（對應真實斜角停車場的排列方向）。</li>
+  <li>終點後軸位置 <var>P<sub>f</sub></var>：由車格深處往回推——前進入庫扣（前懸 + 軸距）、倒車入庫扣（後懸）。</li>
+</ul>
+<h3>3.1 圓弧段</h3>
+<p>圓弧半徑取 <var>R</var> = R<sub>min</sub>（方向盤打滿），圓心 <var>C</var> 位於車輛左法線方向：</p>
+<div class="formula">
+  <var>C</var> = <var>P</var> + <var>N</var>(<var>θ</var>) · <var>R</var> · <var>σ</var>
+  <span class="note">N(θ) = (−sin θ, cos θ) 為朝向的左法線；σ = ±1 為轉向側（σ = g · sign(Δθ)，Δθ 為起訖朝向差的主值）。</span>
+</div>
+<p>圓弧上取樣（起始朝向 θ₀、走過弧長 <var>s</var>）：</p>
+<div class="formula">
+  <var>θ</var>(<var>s</var>) = <var>θ</var>₀ + <var>g</var> · <var>σ</var> · <var>s</var> / <var>R</var> ，
+  <var>P</var>(<var>s</var>) = <var>C</var> − <var>N</var>(<var>θ</var>) · <var>R</var> · <var>σ</var>
+</div>
+<h3>3.2 求圓弧起點（相切條件）</h3>
+<p>圓弧須同時與車道直線（起點）及車格軸線（終點）相切。圓心縱座標由車道相切決定：</p>
+<div class="formula">
+  <var>C<sub>y</sub></var> = <var>y</var><sub>drive</sub> + <var>N<sub>y</sub></var> · <var>R</var> · <var>σ</var>
+</div>
+<p>弧末端點 <var>P<sub>a</sub></var>（朝向已轉到終向 <var>θ<sub>f</sub></var>）必須落在通過 <var>P<sub>f</sub></var> 的車格軸線上：</p>
+<div class="formula">
+  <var>P<sub>a,y</sub></var> = <var>C<sub>y</sub></var> − <var>n<sub>y</sub></var> · <var>R</var> · <var>σ</var> ，
+  <var>P<sub>a,x</sub></var> = <var>P<sub>f,x</sub></var> + (<var>P<sub>a,y</sub></var> − <var>P<sub>f,y</sub></var>) · <var>a<sub>x</sub></var> / <var>a<sub>y</sub></var>
+  <span class="note">n = N(θ_f) 為終向左法線。由此反推圓弧起點 x₀ = P_a,x + n_x·R·σ，即「該在車道上哪個位置開始打方向盤」。</span>
+</div>
+<h3>3.3 格內直線段</h3>
+<div class="formula">
+  <var>d</var> = (<var>P<sub>f</sub></var> − <var>P<sub>a</sub></var>) · <var>a</var>
+  <span class="note">沿車格軸線的剩餘直線距離。若 d &lt; 0 表示單一圓弧會越過停止點（迴轉半徑相對車道／車格過大），顯示需多段修正的警告。</span>
+</div>
+
+<h2>4. 平行停車 — 速率受限轉向的 S 曲線</h2>
+<p>「方向盤不能瞬間打到底」以<strong>曲率對行駛距離的變化率限制</strong>建模：κ 隨 s 線性變化（近似緩和曲線 clothoid / Euler spiral）。倒車入庫的曲率剖面為反對稱五段：</p>
+<div class="formula">
+  κ(s) = ⎧ +k·s/d<sub>R</sub> （0 ≤ s &lt; d<sub>R</sub>，打盤）<br>
+  　　　⎪ +k （保持 L 米）<br>
+  　　　⎪ +k → −k 線性（2d<sub>R</sub> 米，反打）<br>
+  　　　⎪ −k （保持 L 米）<br>
+  　　　⎩ −k → 0 線性（d<sub>R</sub> 米，回正）
+  <span class="note">d_R = 1.5 m（打滿一圈方向盤所需行駛距離），k ≤ 1/R_min。剖面反對稱 ⇒ 淨朝向變化 Δθ = 0，倒車結束時車身自動回正。</span>
+</div>
+<p>軌跡由第 2 節微分方程以 Δs = 0.02 m 數值積分（中點法）求得。橫向位移目標：</p>
+<div class="formula">
+  Δ<var>y</var><sub>target</sub> = <var>y</var><sub>final</sub> − <var>y</var><sub>drive</sub>
+  <span class="note">y_final 為路邊車格中心線、y_drive 為起始行駛線（貼近停放車列 0.4 m）。</span>
+</div>
+<p>因 Δ<var>y</var> 對保持段長度 <var>L</var>（及對峰值曲率 <var>k</var>）單調遞增，以<strong>二分法</strong>求解：</p>
+<ul>
+  <li>若最大擺角內即可達標 → 固定 <var>L</var> = 0，二分 <var>k</var>；</li>
+  <li>否則固定 <var>k</var> = 1/R<sub>min</sub>，二分 <var>L</var>，且限制中途擺角 <var>k</var>·(d<sub>R</sub>+<var>L</var>) ≤ 50°（保證單調性與真實性）。</li>
+</ul>
+<p>解出後將整條 S 曲線沿 <var>x</var> 平移，使倒車終點落在「距後車 0.3 m」的深處，再前進置中（真實駕駛的先深倒、後拉正技巧）。</p>
+
+<h2>5. 碰撞偵測 — 分離軸定理（SAT）</h2>
+<p>自車與前後停放車輛皆為矩形（OBB）。兩凸多邊形不相交 ⇔ 存在一條分離軸使兩者投影區間不重疊；候選軸取兩矩形各邊的法線（共 4 條不重複方向）：</p>
+<div class="formula">
+  對每條軸 <var>u</var>：若 max(proj<sub>A</sub>) &lt; min(proj<sub>B</sub>) 或 max(proj<sub>B</sub>) &lt; min(proj<sub>A</sub>) ⇒ 不相交
+  <span class="note">proj(p) = p · u。全路徑以 0.12 m 間隔取樣做此檢查，找出最早撞擊點。</span>
+</div>
+
+<h2>6. 車位過短時的多段前後修正</h2>
+<p>單次 S 曲線會擦撞鄰車時，改用逐步數值模擬（rollout）產生多段路徑，模仿真實駕駛要領：</p>
+<table>
+  <tr><th>階段</th><th>行為</th><th>停止條件</th></tr>
+  <tr><td>倒車接近</td><td>直退到車尾越過前車 → 朝路緣打盤至擺角 φ<sub>swing</sub> → 反打回正（回正過程仍在倒車、持續獲得橫移）</td><td>距鄰車 0.05 m、後軸到達深度下限、或已對齊</td></tr>
+  <tr><td>前進拉直</td><td>方向盤朝路緣，把車身轉回與路平行</td><td>距鄰車 0.05 m、超出前界、或走滿 3.5 m</td></tr>
+  <tr><td>置中</td><td>對齊後前後直線移動至整車進格</td><td>停妥判定</td></tr>
+</table>
+<p>關鍵公式與參數：</p>
+<div class="formula">
+  φ<sub>swing</sub> = clamp( atan(0.9 · |e<sub>y</sub>|), 0.12, 0.5 )
+  <span class="note">目標擺角隨剩餘橫向誤差 e_y 縮小；打盤最多只用剩餘倒車跑道的一半，保留空間回正。</span>
+</div>
+<div class="formula">
+  停妥判定：|φ| &lt; 0.05 rad（≈2.9°） 且 |e<sub>y</sub>| &lt; 0.15 m 且 整車位於前後車之間
+  <span class="note">φ 為車身與車道的夾角。挪車時方向盤在換檔停止的瞬間原地回正（行進間仍受打盤速率限制，全鎖約需 0.35 m 行程）。</span>
+</div>
+<p>每段移動記錄為姿態表格段，播放時依序重現；64 段內無法停妥則顯示「車位過短」警告並保留嘗試過程。</p>
+
+<h2>7. 車輪位置與方向盤顯示</h2>
+<div class="formula">
+  前輪：(<var>L</var>, ±T/2)、後輪：(0, ±T/2)（三輪車後輪為 (0, 0)）
+  <span class="note">T = 輪距；座標在車身坐標系（原點 = 後軸中心，x 朝車頭）。</span>
+</div>
+<div class="formula">
+  方向盤顯示角 <var>δ</var> = atan( <var>L</var> · <var>κ</var>(s) )
+  <span class="note">HUD 與前輪動畫角度直接由當前路徑曲率換算，倒車段亦同。</span>
+</div>
+
+<h2>8. 參數對應表</h2>
+<table>
+  <tr><th>介面參數</th><th>公式符號</th><th>影響</th></tr>
+  <tr><td>軸距</td><td><var>L</var></td><td>轉向角↔曲率換算、前輪位置、車身中心偏移</td></tr>
+  <tr><td>最小迴轉半徑</td><td>R<sub>min</sub></td><td>最大曲率 κ<sub>max</sub> = 1/R<sub>min</sub>、最大轉向角</td></tr>
+  <tr><td>車長／車寬</td><td>—</td><td>車身矩形（碰撞偵測）、前後懸 = (車長 − 軸距)/2</td></tr>
+  <tr><td>輪距</td><td>T</td><td>僅影響車輪繪製與輪跡（單車模型不含輪距）</td></tr>
+  <tr><td>車格寬／深、車道寬</td><td>—</td><td>目標位姿 P<sub>f</sub>、y<sub>drive</sub>、鄰車位置與可行性判斷</td></tr>
+</table>
+
+<p style="margin-top:40px"><a class="back" href="index.html">← 回到停車模擬器</a></p>
+</div>
+</body>
+</html>
