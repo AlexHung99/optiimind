@@ -427,8 +427,9 @@ function computeParallelManeuver(p, geo) {
   const N = V.leftNormal(aisleDir); // (0, laneDir)
 
   const halfRoad = p.laneWidth / 2;
-  // The parallel bay sits at the kerb, outside the driving lane.
-  const yFinal = p.rowSide * (halfRoad + p.carWidth / 2 + 0.3);
+  // The parallel bay sits at the kerb, outside the driving lane; the car parks
+  // centred in the bay, whose lateral size is the spot-width parameter.
+  const yFinal = p.rowSide * (halfRoad + p.spotWidth / 2);
   const yDrive = p.rowSide * (halfRoad - p.carWidth / 2 - 0.5);
 
   // Rear-axle target such that the car body ends up centred in the spot box.
@@ -466,10 +467,11 @@ function computeParallelManeuver(p, geo) {
   const warnings = [];
   if (!feasible) warnings.push("以目前的迴轉半徑與車格深度，單一倒車動作無法完成，實際需要多次前後修正（回檔重來）。");
   if (p.spotDepth < p.carLength * 1.15) warnings.push("平行停車格深度偏短，建議至少為車長的 1.2 倍以上。");
+  if (p.spotWidth < p.carWidth + 0.2) warnings.push("路邊車格寬度不足，車身可能超出車格。");
 
   return {
     path: buildPath([straight, arc1, arc2]),
-    spotRect: { center: { x: 0, y: yFinal }, axis: aisleDir, width: p.carWidth + 0.6, depth: p.spotDepth },
+    spotRect: { center: { x: 0, y: yFinal }, axis: aisleDir, width: p.spotWidth, depth: p.spotDepth },
     mouth: { x: 0, y: p.rowSide * halfRoad },
     feasible,
     warnings,
@@ -701,7 +703,11 @@ function drawWheel(origin, localPos, bodyTheta, steerAngle, wheelLen, wheelWidth
   ctx.translate(screenPos.x, screenPos.y);
   ctx.rotate(bodyTheta + steerAngle);
   ctx.fillStyle = "#111417";
-  ctx.fillRect((-wheelLen / 2) * PPM, (-wheelWidth / 2) * PPM, wheelLen * PPM, wheelWidth * PPM);
+  ctx.strokeStyle = "rgba(220,230,240,0.75)";
+  ctx.lineWidth = 1;
+  roundRect(ctx, (-wheelLen / 2) * PPM, (-wheelWidth / 2) * PPM, wheelLen * PPM, wheelWidth * PPM, 2);
+  ctx.fill();
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -734,16 +740,6 @@ function drawCar(pose) {
   ctx.fill();
   ctx.restore();
 
-  // wheels (drawn before body so body overlaps wheel hubs slightly)
-  const wheelLen = 0.72, wheelWidth = 0.3;
-  // Display position: keep at least the real half-track, but push the wheels out
-  // to the body edge so they peek out in top-down view instead of hiding under it.
-  const wheelY = Math.max(p.track / 2, p.carWidth / 2 - wheelWidth / 2 + 0.18);
-  drawWheel(rearAxle, { x: p.wheelbase, y: wheelY }, theta, steerAngle, wheelLen, wheelWidth);
-  drawWheel(rearAxle, { x: p.wheelbase, y: -wheelY }, theta, steerAngle, wheelLen, wheelWidth);
-  drawWheel(rearAxle, { x: 0, y: wheelY }, theta, 0, wheelLen, wheelWidth);
-  drawWheel(rearAxle, { x: 0, y: -wheelY }, theta, 0, wheelLen, wheelWidth);
-
   // body
   ctx.save();
   ctx.translate(centerScreen.x, centerScreen.y);
@@ -774,6 +770,14 @@ function drawCar(pose) {
   ctx.fillRect(-bodyLen / 2, bodyWid / 2 - 7, 3, 5);
 
   ctx.restore();
+
+  // Wheels drawn on top of the body (blueprint style) at their true positions,
+  // so the track / wheelbase sliders are directly visible.
+  const wheelLen = 0.72, wheelWidth = 0.3;
+  drawWheel(rearAxle, { x: p.wheelbase, y: p.track / 2 }, theta, steerAngle, wheelLen, wheelWidth);
+  drawWheel(rearAxle, { x: p.wheelbase, y: -p.track / 2 }, theta, steerAngle, wheelLen, wheelWidth);
+  drawWheel(rearAxle, { x: 0, y: p.track / 2 }, theta, 0, wheelLen, wheelWidth);
+  drawWheel(rearAxle, { x: 0, y: -p.track / 2 }, theta, 0, wheelLen, wheelWidth);
 
   return steerAngle;
 }
