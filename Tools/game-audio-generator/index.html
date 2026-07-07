@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>遊戲音樂音效生成器</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141925; --panel2:#1b2233; --line:#2a3450;
+    --txt:#e8ecf4; --dim:#8b96ad;
+    --c1:#00e5ff; --c2:#ff2ee6;
+    --grad:linear-gradient(90deg,var(--c1),var(--c2));
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:"Segoe UI","Microsoft JhengHei",system-ui,sans-serif;
+    min-height:100vh; padding:20px;
+  }
+  header{max-width:1100px; margin:0 auto 14px;}
+  h1{
+    font-size:26px; font-weight:800; letter-spacing:1px;
+    background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  header p{color:var(--dim); font-size:13px; margin-top:4px;}
+  .wrap{max-width:1100px; margin:0 auto; display:flex; flex-direction:column; gap:16px;}
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+  }
+  .panel h2{
+    font-size:16px; margin-bottom:12px; display:flex; align-items:center; gap:8px;
+  }
+  .panel h2::after{content:""; flex:1; height:1px; background:var(--line);}
+  canvas#viz{width:100%; height:70px; display:block; background:#0a0d13; border-radius:10px;}
+
+  /* ---- controls ---- */
+  .ctlRow{display:flex; flex-wrap:wrap; gap:14px 22px; align-items:center;}
+  .ctl{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--dim);}
+  .ctl b{color:var(--txt); font-weight:600; min-width:2.5em; text-align:right;}
+  input[type=range]{
+    -webkit-appearance:none; width:130px; height:4px; border-radius:2px;
+    background:var(--line); outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+    background:var(--grad); border:2px solid #fff2;
+  }
+  input[type=number]{
+    width:90px; background:var(--panel2); color:var(--txt);
+    border:1px solid var(--line); border-radius:8px; padding:5px 8px; font-size:13px;
+  }
+  select{
+    background:var(--panel2); color:var(--txt); border:1px solid var(--line);
+    border-radius:8px; padding:5px 8px; font-size:13px; cursor:pointer;
+  }
+  label.chk{display:flex; align-items:center; gap:5px; font-size:13px; color:var(--txt); cursor:pointer;}
+  input[type=checkbox]{accent-color:var(--c2); width:15px; height:15px; cursor:pointer;}
+
+  button{
+    background:var(--panel2); color:var(--txt); border:1px solid var(--line);
+    border-radius:10px; padding:8px 14px; font-size:13px; cursor:pointer;
+    transition:border-color .15s, transform .05s;
+    font-family:inherit;
+  }
+  button:hover{border-color:var(--c1);}
+  button:active{transform:scale(0.96);}
+  button.primary{
+    background:var(--grad); border:none; color:#081018; font-weight:700; padding:9px 20px;
+  }
+  button.mood{padding:8px 12px;}
+  button.mood.on{
+    border-color:transparent; background:var(--grad); color:#081018; font-weight:700;
+  }
+
+  /* ---- sfx grid ---- */
+  .catTitle{font-size:13px; color:var(--dim); margin:14px 0 8px; font-weight:600;}
+  .sfxGrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px;}
+  .sfxCard{
+    display:flex; align-items:center; background:var(--panel2);
+    border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  }
+  .sfxCard:hover{border-color:var(--c1);}
+  .sfxCard .play{
+    flex:1; display:flex; align-items:center; gap:8px; padding:10px 10px;
+    cursor:pointer; font-size:13px; user-select:none;
+  }
+  .sfxCard .play .ico{font-size:17px;}
+  .sfxCard .dl, .sfxCard .st{
+    border:none; border-left:1px solid var(--line); border-radius:0;
+    background:transparent; padding:10px 8px; font-size:13px; color:var(--dim);
+  }
+  .sfxCard .dl:hover{color:var(--c1); background:#0003;}
+  .sfxCard .st:hover{color:#ffd75e; background:#0003;}
+
+  /* ---- saved presets ---- */
+  .savedList{display:flex; flex-direction:column; gap:6px;}
+  .savedItem{
+    display:flex; align-items:center; gap:8px; background:var(--panel2);
+    border:1px solid var(--line); border-radius:10px; padding:6px 10px; font-size:13px;
+  }
+  .savedItem:hover{border-color:var(--c1);}
+  .savedItem .nm{flex:1; cursor:pointer; display:flex; align-items:center; gap:7px; min-width:0;}
+  .savedItem .nm span.tx{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .savedItem .meta{color:var(--dim); font-size:11px; white-space:nowrap;}
+  .savedItem button{padding:4px 8px; font-size:12px;}
+  .empty{color:var(--dim); font-size:12px; padding:4px 2px;}
+  .sfxCard.flash{border-color:var(--c2); box-shadow:0 0 10px #ff2ee655;}
+
+  .moodRow{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
+  .musicBtns{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:14px;}
+  .hint{color:var(--dim); font-size:12px; margin-top:10px; line-height:1.7;}
+  .hint code{background:var(--panel2); padding:1px 5px; border-radius:4px;}
+  footer{max-width:1100px; margin:18px auto 6px; color:var(--dim); font-size:12px; text-align:center;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎮 遊戲音樂音效生成器</h1>
+  <p>Web Audio 即時合成 — 免素材、可調參、一鍵匯出 WAV（可直接丟進 Unity 的 Assets）</p>
+</header>
+
+<div class="wrap">
+
+  <div class="panel">
+    <canvas id="viz" width="1000" height="70"></canvas>
+    <div class="ctlRow" style="margin-top:10px;">
+      <div class="ctl">🔊 主音量 <input type="range" id="masterVol" min="0" max="1" step="0.01" value="0.8"> <b id="masterVolV">0.80</b></div>
+    </div>
+  </div>
+
+  <!-- ================= SFX ================= -->
+  <div class="panel">
+    <h2>🔨 音效生成器</h2>
+    <div class="ctlRow">
+      <div class="ctl">音高 <input type="range" id="sfxPitch" min="0.4" max="2.5" step="0.01" value="1"> <b id="sfxPitchV">1.00</b></div>
+      <div class="ctl">長度 <input type="range" id="sfxDur" min="0.4" max="2.5" step="0.01" value="1"> <b id="sfxDurV">1.00</b></div>
+      <div class="ctl">隨機變化 <input type="range" id="sfxVar" min="0" max="0.5" step="0.01" value="0.08"> <b id="sfxVarV">0.08</b></div>
+      <div class="ctl">音量 <input type="range" id="sfxVol" min="0" max="1" step="0.01" value="0.8"> <b id="sfxVolV">0.80</b></div>
+      <button id="sfxReset">重設</button>
+    </div>
+    <div id="sfxList"></div>
+    <div class="catTitle">⭐ 已儲存音效</div>
+    <div id="savedSfxList" class="savedList"></div>
+    <p class="hint">點擊音效卡片試聽（「隨機變化」讓每次播放的音高/長度有微小差異，連續砍怪不單調）；
+      覺得剛剛那一聲不錯就點 <code>⭐</code> — 會連同當次的隨機種子一起存下來，重播和匯出都是<b>一模一樣</b>的聲音；
+      <code>⬇</code> 匯出最後聽到的版本為 WAV。儲存內容放在瀏覽器 localStorage，關掉頁面也不會消失。</p>
+  </div>
+
+  <!-- ================= BGM ================= -->
+  <div class="panel">
+    <h2>🎵 背景音樂生成器</h2>
+    <div class="moodRow" id="moodRow"></div>
+    <div class="ctlRow">
+      <div class="ctl">速度 <input type="range" id="tempo" min="50" max="200" step="1" value="160"> <b id="tempoV">160</b> BPM</div>
+      <div class="ctl">種子 <input type="number" id="seed" value="1234" min="0" max="999999"> <button id="dice" title="隨機種子">🎲</button></div>
+    </div>
+    <div class="ctlRow" style="margin-top:10px;">
+      <span class="ctl">音軌：</span>
+      <label class="chk"><input type="checkbox" id="lyDrums" checked>🥁 鼓組</label>
+      <label class="chk"><input type="checkbox" id="lyBass" checked>🎸 貝斯</label>
+      <label class="chk"><input type="checkbox" id="lyArp" checked>🎹 琶音</label>
+      <label class="chk"><input type="checkbox" id="lyPad" checked>🌫️ 和聲鋪底</label>
+      <label class="chk"><input type="checkbox" id="lyLead" checked>🎺 主旋律</label>
+    </div>
+    <div class="musicBtns">
+      <button class="primary" id="playBtn">▶ 播放</button>
+      <div class="ctl">匯出長度
+        <select id="expBars">
+          <option value="4">4 小節</option>
+          <option value="8" selected>8 小節</option>
+          <option value="16">16 小節</option>
+          <option value="32">32 小節</option>
+        </select>
+      </div>
+      <button id="expMusic">⬇ 匯出 WAV</button>
+      <button id="saveBgm">⭐ 儲存目前組合</button>
+    </div>
+    <div class="catTitle">⭐ 已儲存音樂</div>
+    <div id="savedBgmList" class="savedList"></div>
+    <p class="hint">同一組「風格 + 種子 + 速度」永遠生成相同的音樂 — 找到喜歡的組合點 <code>⭐ 儲存</code>，之後一鍵載入；匯出的 WAV 小節長度剛好，可在遊戲中無縫循環。</p>
+  </div>
+
+</div>
+<footer>純前端、無外部依賴 — 直接用瀏覽器開啟即可使用</footer>
+
+<script>
+'use strict';
+/* ============================================================
+   共用工具
+============================================================ */
+const $ = s => document.querySelector(s);
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const m2f = m => 440 * Math.pow(2, (m - 69) / 12);
+
+/* ============================================================
+   Audio 核心
+============================================================ */
+let actx = null, master = null, analyser = null;
+const noiseCache = new WeakMap();
+
+function getNoise(ctx){
+  let b = noiseCache.get(ctx);
+  if(!b){
+    b = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const d = b.getChannelData(0);
+    // 固定種子：每個 context 的噪音內容一致，收藏的音效才能在試聽/匯出間完全重現
+    const r = mulberry32(0x51EDC0DE);
+    for(let i = 0; i < d.length; i++) d[i] = r() * 2 - 1;
+    noiseCache.set(ctx, b);
+  }
+  return b;
+}
+function noiseSrc(ctx){
+  const s = ctx.createBufferSource();
+  s.buffer = getNoise(ctx); s.loop = true;
+  return s;
+}
+function getCtx(){
+  if(!actx){
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    master = actx.createGain();
+    master.gain.value = +$('#masterVol').value;
+    const comp = actx.createDynamicsCompressor();
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 512;
+    master.connect(comp); comp.connect(analyser); analyser.connect(actx.destination);
+    startViz();
+  }
+  if(actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function makeOfflineChain(ctx){
+  const g = ctx.createGain();
+  g.gain.value = +$('#masterVol').value;
+  const comp = ctx.createDynamicsCompressor();
+  g.connect(comp); comp.connect(ctx.destination);
+  return g;
+}
+
+/* ---- 基本合成元件 ---- */
+function tone(ctx, out, o2){
+  const {t, f, f1, dur, wave='sine', vol=0.3, att=0.004, rel, fType, fFreq, fQ} = o2;
+  const end = rel || dur;
+  const o = ctx.createOscillator();
+  o.type = wave;
+  o.frequency.setValueAtTime(Math.max(1, f), t);
+  if(f1) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + att);
+  g.gain.exponentialRampToValueAtTime(0.0008, t + end);
+  o.connect(g);
+  let last = g;
+  if(fType){
+    const fl = ctx.createBiquadFilter();
+    fl.type = fType; fl.frequency.value = fFreq || 1200; fl.Q.value = fQ || 1;
+    g.connect(fl); last = fl;
+  }
+  last.connect(out);
+  o.start(t); o.stop(t + end + 0.06);
+}
+function noiseHit(ctx, out, o2){
+  const {t, dur, vol=0.4, att=0.002, fType='lowpass', f0=2000, f1, q=1} = o2;
+  const s = noiseSrc(ctx);
+  const fl = ctx.createBiquadFilter();
+  fl.type = fType; fl.Q.value = q;
+  fl.frequency.setValueAtTime(Math.max(20, f0), t);
+  if(f1) fl.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + att);
+  g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  s.connect(fl); fl.connect(g); g.connect(out);
+  s.start(t); s.stop(t + dur + 0.05);
+}
+
+/* ============================================================
+   音效庫  p = {pitch, dur, vol, rng}，回傳總長(秒)
+============================================================ */
+const SFX = [
+  // ⚔️ 攻擊戰鬥
+  {id:'sword_swing', name:'揮刀', ico:'🗡️', cat:'attack', fn(ctx,out,t,p){
+    const d = 0.3 * p.dur;
+    const s = noiseSrc(ctx);
+    const fl = ctx.createBiquadFilter();
+    fl.type = 'bandpass'; fl.Q.value = 2.5;
+    fl.frequency.setValueAtTime(600 * p.pitch, t);
+    fl.frequency.exponentialRampToValueAtTime(3200 * p.pitch, t + d * 0.45);
+    fl.frequency.exponentialRampToValueAtTime(500 * p.pitch, t + d);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.7 * p.vol, t + d * 0.35);
+    g.gain.exponentialRampToValueAtTime(0.001, t + d);
+    s.connect(fl); fl.connect(g); g.connect(out);
+    s.start(t); s.stop(t + d + 0.05);
+    return d;
+  }},
+  {id:'sword_hit', name:'砍中', ico:'⚔️', cat:'attack', fn(ctx,out,t,p){
+    noiseHit(ctx,out,{t, dur:0.12*p.dur, vol:0.55*p.vol, f0:5000*p.pitch, f1:800});
+    [2500,3720,5300].forEach(f =>
+      tone(ctx,out,{t, f:f*p.pitch, dur:0.18*p.dur, wave:'square', vol:0.07*p.vol, att:0.001}));
+    tone(ctx,out,{t, f:150*p.pitch, f1:50, dur:0.15*p.dur, wave:'sine', vol:0.7*p.vol, att:0.001});
+    return 0.25 * p.dur;
+  }},
+  {id:'heavy_impact', name:'重擊', ico:'🔨', cat:'attack', fn(ctx,out,t,p){
+    tone(ctx,out,{t, f:100*p.pitch, f1:28, dur:0.35*p.dur, wave:'sine', vol:0.9*p.vol, att:0.001});
+    noiseHit(ctx,out,{t, dur:0.2*p.dur, vol:0.5*p.vol, f0:900, f1:100});
+    return 0.45 * p.dur;
+  }},
+  {id:'bow_shot', name:'放箭', ico:'🏹', cat:'attack', fn(ctx,out,t,p){
+    noiseHit(ctx,out,{t, dur:0.15*p.dur, vol:0.4*p.vol, fType:'bandpass', f0:1200*p.pitch, f1:3500*p.pitch, q:2});
+    tone(ctx,out,{t, f:320*p.pitch, f1:280*p.pitch, dur:0.12, wave:'triangle', vol:0.25*p.vol, att:0.001});
+    return 0.25;
+  }},
+  {id:'explosion', name:'爆炸', ico:'💥', cat:'attack', fn(ctx,out,t,p){
+    const d = 1.1 * p.dur;
+    noiseHit(ctx,out,{t, dur:d, vol:0.85*p.vol, f0:5000*p.pitch, f1:60, att:0.01});
+    tone(ctx,out,{t, f:90*p.pitch, f1:24, dur:d*0.9, wave:'sine', vol:0.9*p.vol, att:0.002});
+    return d + 0.2;
+  }},
+
+  // ✨ 魔法技能
+  {id:'magic_cast', name:'施放魔法', ico:'✨', cat:'magic', fn(ctx,out,t,p){
+    const base = 440 * p.pitch;
+    [1,1.25,1.5,2,2.5,3,4].forEach((r,i) =>
+      tone(ctx,out,{t:t+i*0.05*p.dur, f:base*r, dur:0.3*p.dur, wave:'sine', vol:0.18*p.vol, att:0.01}));
+    noiseHit(ctx,out,{t, dur:0.6*p.dur, vol:0.1*p.vol, fType:'highpass', f0:4000, att:0.2});
+    return 0.75 * p.dur;
+  }},
+  {id:'fireball', name:'火球', ico:'🔥', cat:'magic', fn(ctx,out,t,p){
+    const d = 0.5 * p.dur;
+    noiseHit(ctx,out,{t, dur:d, vol:0.5*p.vol, f0:3000*p.pitch, f1:300, q:1.2, att:0.03});
+    tone(ctx,out,{t:t+d*0.5, f:120*p.pitch, f1:35, dur:0.4*p.dur, wave:'sine', vol:0.8*p.vol, att:0.005});
+    noiseHit(ctx,out,{t:t+d*0.5, dur:0.45*p.dur, vol:0.4*p.vol, f0:800, f1:100, att:0.01});
+    return d + 0.45 * p.dur;
+  }},
+  {id:'ice', name:'冰凍', ico:'❄️', cat:'magic', fn(ctx,out,t,p){
+    for(let i = 0; i < 6; i++){
+      tone(ctx,out,{t:t+i*0.04*p.dur, f:(1800+p.rng()*1600)*p.pitch, dur:0.15, wave:'triangle', vol:0.15*p.vol, att:0.002});
+    }
+    noiseHit(ctx,out,{t, dur:0.4*p.dur, vol:0.1*p.vol, fType:'highpass', f0:6000});
+    return 0.5 * p.dur;
+  }},
+  {id:'lightning', name:'雷電', ico:'⚡', cat:'magic', fn(ctx,out,t,p){
+    for(let i = 0; i < 5; i++){
+      noiseHit(ctx,out,{t:t+p.rng()*0.15*p.dur, dur:0.03, vol:0.5*p.vol, fType:'highpass', f0:3000});
+    }
+    tone(ctx,out,{t:t+0.05, f:900*p.pitch, f1:80, dur:0.3*p.dur, wave:'sawtooth', vol:0.4*p.vol, att:0.001});
+    noiseHit(ctx,out,{t:t+0.08, dur:0.35*p.dur, vol:0.35*p.vol, f0:2500, f1:200});
+    return 0.45 * p.dur;
+  }},
+  {id:'teleport', name:'傳送', ico:'🌀', cat:'magic', fn(ctx,out,t,p){
+    const d = 0.7 * p.dur;
+    tone(ctx,out,{t, f:180*p.pitch, f1:1800*p.pitch, dur:d, wave:'sine', vol:0.3*p.vol, att:0.02});
+    tone(ctx,out,{t:t+0.05, f:240*p.pitch, f1:2400*p.pitch, dur:d, wave:'triangle', vol:0.2*p.vol, att:0.02});
+    noiseHit(ctx,out,{t:t+d*0.4, dur:d*0.6, vol:0.15*p.vol, fType:'highpass', f0:5000, att:0.1});
+    return d + 0.2;
+  }},
+  {id:'heal', name:'治療', ico:'💚', cat:'magic', fn(ctx,out,t,p){
+    [0,4,7,12].forEach((s,i) => {
+      const tt = t + i * 0.1 * p.dur;
+      const f = 523 * p.pitch * Math.pow(2, s/12);
+      tone(ctx,out,{t:tt, f, dur:0.5*p.dur, wave:'sine', vol:0.2*p.vol, att:0.02});
+      tone(ctx,out,{t:tt, f:f*2.01, dur:0.4*p.dur, wave:'sine', vol:0.06*p.vol, att:0.02});
+    });
+    return 0.9 * p.dur;
+  }},
+
+  // 💰 道具獎勵
+  {id:'coin', name:'金幣', ico:'🪙', cat:'item', fn(ctx,out,t,p){
+    tone(ctx,out,{t, f:988*p.pitch, dur:0.09, wave:'square', vol:0.22*p.vol, att:0.001});
+    tone(ctx,out,{t:t+0.08, f:1319*p.pitch, dur:0.25*p.dur, wave:'square', vol:0.22*p.vol, att:0.001});
+    return 0.35 * p.dur;
+  }},
+  {id:'pickup', name:'撿道具', ico:'🎁', cat:'item', fn(ctx,out,t,p){
+    tone(ctx,out,{t, f:400*p.pitch, f1:900*p.pitch, dur:0.12, wave:'triangle', vol:0.3*p.vol});
+    tone(ctx,out,{t:t+0.1, f:1200*p.pitch, dur:0.15, wave:'sine', vol:0.2*p.vol});
+    return 0.3;
+  }},
+  {id:'levelup', name:'升級', ico:'🏆', cat:'item', fn(ctx,out,t,p){
+    [523,659,784,1047,1319].forEach((f,i) => {
+      const tt = t + i * 0.09 * p.dur;
+      tone(ctx,out,{t:tt, f:f*p.pitch, dur:0.35*p.dur, wave:'square', vol:0.14*p.vol, att:0.005});
+      tone(ctx,out,{t:tt+0.02, f:f*p.pitch*0.5, dur:0.3, wave:'triangle', vol:0.1*p.vol});
+    });
+    return 0.45 * p.dur + 0.4;
+  }},
+  {id:'potion', name:'喝藥水', ico:'🧪', cat:'item', fn(ctx,out,t,p){
+    for(let i = 0; i < 7; i++){
+      const tt = t + i * 0.06 * p.dur + p.rng() * 0.02;
+      tone(ctx,out,{t:tt, f:(280+p.rng()*400)*p.pitch, f1:(600+p.rng()*500)*p.pitch, dur:0.06, wave:'sine', vol:0.22*p.vol, att:0.005});
+    }
+    return 0.55 * p.dur;
+  }},
+
+  // 🏃 角色動作
+  {id:'jump', name:'跳躍', ico:'🦘', cat:'move', fn(ctx,out,t,p){
+    tone(ctx,out,{t, f:160*p.pitch, f1:450*p.pitch, dur:0.18*p.dur, wave:'square', vol:0.2*p.vol, att:0.005});
+    return 0.22 * p.dur;
+  }},
+  {id:'footstep', name:'腳步', ico:'👣', cat:'move', fn(ctx,out,t,p){
+    noiseHit(ctx,out,{t, dur:0.07*p.dur, vol:0.35*p.vol, f0:700*p.pitch, f1:150});
+    tone(ctx,out,{t, f:90*p.pitch, f1:50, dur:0.08, wave:'sine', vol:0.3*p.vol, att:0.001});
+    return 0.12;
+  }},
+  {id:'hurt', name:'受傷', ico:'💢', cat:'move', fn(ctx,out,t,p){
+    tone(ctx,out,{t, f:400*p.pitch, f1:120, dur:0.2*p.dur, wave:'sawtooth', vol:0.3*p.vol, att:0.002});
+    noiseHit(ctx,out,{t, dur:0.1*p.dur, vol:0.2*p.vol, f0:2000, f1:400});
+    return 0.25 * p.dur;
+  }},
+  {id:'monster_death', name:'怪物死亡', ico:'👾', cat:'move', fn(ctx,out,t,p){
+    tone(ctx,out,{t, f:260*p.pitch, f1:45, dur:0.6*p.dur, wave:'sawtooth', vol:0.35*p.vol, att:0.005});
+    noiseHit(ctx,out,{t, dur:0.5*p.dur, vol:0.3*p.vol, f0:1200, f1:100, q:1.5});
+    return 0.65 * p.dur;
+  }},
+  {id:'door', name:'開門/寶箱', ico:'🚪', cat:'move', fn(ctx,out,t,p){
+    tone(ctx,out,{t, f:110*p.pitch, f1:60, dur:0.1, wave:'sine', vol:0.5*p.vol, att:0.001});
+    noiseHit(ctx,out,{t:t+0.12, dur:0.05, vol:0.3*p.vol, f0:1500});
+    tone(ctx,out,{t:t+0.12, f:220*p.pitch, f1:160*p.pitch, dur:0.08, wave:'triangle', vol:0.2*p.vol});
+    return 0.3;
+  }},
+
+  // 🖱️ 介面
+  {id:'ui_click', name:'點擊', ico:'🖱️', cat:'ui', fn(ctx,out,t,p){
+    noiseHit(ctx,out,{t, dur:0.02, vol:0.12*p.vol, fType:'highpass', f0:2000});
+    tone(ctx,out,{t, f:1300*p.pitch, dur:0.05, wave:'sine', vol:0.2*p.vol, att:0.001});
+    return 0.08;
+  }},
+  {id:'ui_confirm', name:'確認', ico:'✅', cat:'ui', fn(ctx,out,t,p){
+    tone(ctx,out,{t, f:660*p.pitch, dur:0.08, wave:'sine', vol:0.22*p.vol});
+    tone(ctx,out,{t:t+0.09, f:990*p.pitch, dur:0.18*p.dur, wave:'sine', vol:0.22*p.vol});
+    return 0.3 * p.dur;
+  }},
+  {id:'ui_cancel', name:'取消', ico:'❌', cat:'ui', fn(ctx,out,t,p){
+    tone(ctx,out,{t, f:440*p.pitch, dur:0.08, wave:'sine', vol:0.22*p.vol});
+    tone(ctx,out,{t:t+0.09, f:233*p.pitch, dur:0.18*p.dur, wave:'sine', vol:0.22*p.vol});
+    return 0.3 * p.dur;
+  }},
+  {id:'alert', name:'警告', ico:'⚠️', cat:'ui', fn(ctx,out,t,p){
+    tone(ctx,out,{t, f:880*p.pitch, dur:0.14, wave:'sawtooth', vol:0.15*p.vol, fType:'lowpass', fFreq:3000});
+    tone(ctx,out,{t:t+0.2, f:880*p.pitch, dur:0.14, wave:'sawtooth', vol:0.15*p.vol, fType:'lowpass', fFreq:3000});
+    return 0.4;
+  }},
+];
+const CATS = {attack:'⚔️ 攻擊戰鬥', magic:'✨ 魔法技能', item:'💰 道具獎勵', move:'🏃 角色動作', ui:'🖱️ 介面 UI'};
+
+/* 音效快照 = 滑桿基準值 + 隨機種子；同一份快照永遠重現同一個聲音 */
+function currentSfxSnap(){
+  return {
+    pitch: +$('#sfxPitch').value,
+    dur:   +$('#sfxDur').value,
+    vari:  +$('#sfxVar').value,
+    vol:   +$('#sfxVol').value,
+    seed:  (Math.random() * 1e9) | 0,
+  };
+}
+function materialize(snap){
+  const r = mulberry32(snap.seed);
+  const jit = () => 1 + (r() * 2 - 1) * snap.vari;
+  return { pitch: snap.pitch * jit(), dur: snap.dur * jit(), vol: snap.vol, rng: r };
+}
+const lastPlay = {}; // 每個音效最後一次播放的快照
+function playSnap(def, snap){
+  const ctx = getCtx();
+  def.fn(ctx, master, ctx.currentTime + 0.03, materialize(snap));
+}
+function playSfx(def, card){
+  const snap = currentSfxSnap();
+  lastPlay[def.id] = snap;
+  playSnap(def, snap);
+  if(card){
+    card.classList.add('flash');
+    setTimeout(() => card.classList.remove('flash'), 180);
+  }
+}
+async function renderSfxWav(def, snap, name){
+  const cap = 3 * Math.max(0.3, snap.dur * (1 + snap.vari)) + 1; // 保守上限
+  const octx = new OfflineAudioContext(2, Math.ceil(44100 * cap), 44100);
+  const out = makeOfflineChain(octx);
+  const len = def.fn(octx, out, 0.02, materialize(snap));
+  const buf = await octx.startRendering();
+  downloadWav(trimBuffer(buf, len + 0.55), name);
+}
+function exportSfx(def){
+  // 匯出「最後聽到的那個版本」；沒播過就以目前參數抽一次
+  const snap = lastPlay[def.id] || currentSfxSnap();
+  return renderSfxWav(def, snap, 'sfx_' + def.id + '.wav');
+}
+function trimBuffer(buf, seconds){
+  const len = Math.min(buf.length, Math.ceil(seconds * buf.sampleRate));
+  const octx = new OfflineAudioContext(buf.numberOfChannels, len, buf.sampleRate);
+  const cut = octx.createBuffer(buf.numberOfChannels, len, buf.sampleRate);
+  for(let c = 0; c < buf.numberOfChannels; c++){
+    cut.getChannelData(c).set(buf.getChannelData(c).subarray(0, len));
+  }
+  return cut;
+}
+
+/* ============================================================
+   BGM 引擎
+============================================================ */
+const SCALES = {
+  major:    [0,2,4,5,7,9,11],
+  minor:    [0,2,3,5,7,8,10],
+  dorian:   [0,2,3,5,7,9,10],
+  phrygian: [0,1,3,5,7,8,10],
+};
+const MOODS = {
+  battle:  {label:'⚔️ 戰鬥',   tempo:160, root:45, scale:'minor',    prog:[0,5,3,6], drums:'drive',  bass:'run',   arpWave:'square',   leadWave:'sawtooth', arpDensity:0.85, leadDensity:0.6,  layers:{drums:1,bass:1,arp:1,pad:0,lead:1}},
+  boss:    {label:'🐉 魔王戰', tempo:174, root:43, scale:'phrygian', prog:[0,1,0,6], drums:'heavy',  bass:'pulse', arpWave:'sawtooth', leadWave:'sawtooth', arpDensity:0.9,  leadDensity:0.5,  layers:{drums:1,bass:1,arp:1,pad:1,lead:1}},
+  town:    {label:'🏘️ 城鎮',   tempo:104, root:48, scale:'major',    prog:[0,3,4,0], drums:'light',  bass:'walk',  arpWave:'triangle', leadWave:'triangle', arpDensity:0.5,  leadDensity:0.65, layers:{drums:1,bass:1,arp:0,pad:1,lead:1}},
+  dungeon: {label:'🕯️ 地下城', tempo:80,  root:41, scale:'minor',    prog:[0,0,5,6], drums:'sparse', bass:'drone', arpWave:'sine',     leadWave:'sine',     arpDensity:0.4,  leadDensity:0.3,  layers:{drums:1,bass:1,arp:1,pad:1,lead:0}},
+  peace:   {label:'🌾 平原',   tempo:88,  root:50, scale:'major',    prog:[0,5,3,4], drums:'none',   bass:'soft',  arpWave:'triangle', leadWave:'sine',     arpDensity:0.4,  leadDensity:0.55, layers:{drums:0,bass:1,arp:0,pad:1,lead:1}},
+  forest:  {label:'🌲 神秘森林',tempo:72, root:47, scale:'dorian',   prog:[0,3,1,4], drums:'sparse', bass:'drone', arpWave:'sine',     leadWave:'triangle', arpDensity:0.55, leadDensity:0.4,  layers:{drums:1,bass:1,arp:1,pad:1,lead:1}},
+};
+const DRUMPATS = {
+  drive: {k:[1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0], s:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1], h:[1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1]},
+  heavy: {k:[1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,1], s:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], h:[1,0,1,0,1,0,1,0,1,0,1,0,1,0,2,0]},
+  light: {k:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], s:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], h:[0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0]},
+  sparse:{k:[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0], s:[0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], h:[0,0,0,0,2,0,0,0,0,0,0,0,2,0,0,0]},
+  none:  {k:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], s:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], h:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+};
+
+/* ---- 樂器 ---- */
+function kick(ctx, out, t, v){
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.frequency.setValueAtTime(160, t);
+  o.frequency.exponentialRampToValueAtTime(45, t + 0.11);
+  g.gain.setValueAtTime(v, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  o.connect(g); g.connect(out);
+  o.start(t); o.stop(t + 0.3);
+}
+function snare(ctx, out, t, v){
+  const s = noiseSrc(ctx);
+  const fl = ctx.createBiquadFilter();
+  fl.type = 'bandpass'; fl.frequency.value = 1800; fl.Q.value = 0.8;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(v, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+  s.connect(fl); fl.connect(g); g.connect(out);
+  s.start(t); s.stop(t + 0.16);
+  const o = ctx.createOscillator();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(210, t);
+  o.frequency.exponentialRampToValueAtTime(120, t + 0.08);
+  const g2 = ctx.createGain();
+  g2.gain.setValueAtTime(v * 0.7, t);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+  o.connect(g2); g2.connect(out);
+  o.start(t); o.stop(t + 0.1);
+}
+function hat(ctx, out, t, v, open){
+  const s = noiseSrc(ctx);
+  const fl = ctx.createBiquadFilter();
+  fl.type = 'highpass'; fl.frequency.value = 7200;
+  const g = ctx.createGain();
+  const d = open ? 0.22 : 0.05;
+  g.gain.setValueAtTime(v, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + d);
+  s.connect(fl); fl.connect(g); g.connect(out);
+  s.start(t); s.stop(t + d + 0.02);
+}
+function bassN(ctx, out, t, f, d, wave, v){
+  const o = ctx.createOscillator();
+  o.type = wave; o.frequency.value = f;
+  const fl = ctx.createBiquadFilter();
+  fl.type = 'lowpass'; fl.frequency.value = 480;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(v, t + 0.01);
+  g.gain.setValueAtTime(v, t + d * 0.75);
+  g.gain.linearRampToValueAtTime(0, t + d);
+  o.connect(fl); fl.connect(g); g.connect(out);
+  o.start(t); o.stop(t + d + 0.02);
+}
+function pluck(ctx, out, t, f, d, wave, v){
+  const o = ctx.createOscillator();
+  o.type = wave; o.frequency.value = f;
+  const fl = ctx.createBiquadFilter();
+  fl.type = 'lowpass';
+  fl.frequency.setValueAtTime(Math.min(9000, f * 6), t);
+  fl.frequency.exponentialRampToValueAtTime(Math.max(200, f), t + d);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(v, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + d);
+  o.connect(fl); fl.connect(g); g.connect(out);
+  o.start(t); o.stop(t + d + 0.02);
+}
+function pad(ctx, out, t, f, d){
+  [f * 0.997, f * 1.003].forEach(ff => {
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth'; o.frequency.value = ff;
+    const fl = ctx.createBiquadFilter();
+    fl.type = 'lowpass'; fl.frequency.value = 800;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.045, t + d * 0.35);
+    g.gain.setValueAtTime(0.045, t + d * 0.8);
+    g.gain.linearRampToValueAtTime(0, t + d * 1.05);
+    o.connect(fl); fl.connect(g); g.connect(out);
+    o.start(t); o.stop(t + d * 1.1);
+  });
+}
+function lead(ctx, out, t, f, d, wave, v){
+  const o = ctx.createOscillator();
+  o.type = wave; o.frequency.value = f;
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 5.5;
+  const lg = ctx.createGain();
+  lg.gain.value = f * 0.008;
+  lfo.connect(lg); lg.connect(o.frequency);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(v, t + 0.02);
+  g.gain.setValueAtTime(v * 0.8, t + d * 0.7);
+  g.gain.linearRampToValueAtTime(0, t + d);
+  o.connect(g); g.connect(out);
+  o.start(t); lfo.start(t);
+  o.stop(t + d + 0.02); lfo.stop(t + d + 0.02);
+}
+
+/* ---- 每小節排程（即時播放與離線匯出共用，種子決定一切） ---- */
+function scheduleBar(ctx, out, t, bar, S){
+  const rng = mulberry32((S.seed * 9301 + bar * 49297) | 0);
+  const beat = 60 / S.tempo, step = beat / 4, barDur = beat * 4;
+  const sc = S.scale;
+  const deg = S.prog[bar % S.prog.length];
+  const chord = [0,2,4].map(k => {
+    const idx = deg + k;
+    return S.root + sc[idx % 7] + 12 * Math.floor(idx / 7);
+  });
+
+  if(S.layers.drums){
+    const P = DRUMPATS[S.drumPat] || DRUMPATS.none;
+    for(let i = 0; i < 16; i++){
+      const tt = t + i * step;
+      if(P.k[i]) kick(ctx, out, tt, 0.85);
+      if(P.s[i]) snare(ctx, out, tt, 0.4);
+      if(P.h[i] && rng() < 0.95) hat(ctx, out, tt, i % 4 === 0 ? 0.22 : 0.13, P.h[i] === 2);
+    }
+  }
+
+  if(S.layers.bass){
+    const rootM = chord[0] - 12;
+    const st = S.bassStyle;
+    if(st === 'drone'){
+      bassN(ctx, out, t, m2f(rootM - 12), barDur * 1.02, 'sawtooth', 0.16);
+      bassN(ctx, out, t, m2f(rootM - 5), barDur * 1.02, 'sine', 0.08);
+    } else if(st === 'walk'){
+      const seq = [rootM, chord[1] - 12, chord[2] - 12, rootM + (rng() < 0.5 ? 2 : -1)];
+      seq.forEach((m,i) => bassN(ctx, out, t + i * beat, m2f(m), beat * 0.9, 'triangle', 0.22));
+    } else if(st === 'soft'){
+      bassN(ctx, out, t, m2f(rootM), beat * 1.9, 'triangle', 0.2);
+      bassN(ctx, out, t + 2 * beat, m2f(rootM), beat * 1.9, 'triangle', 0.2);
+    } else { // run / pulse
+      for(let i = 0; i < 8; i++){
+        let m = rootM;
+        if(st === 'run' && (i === 3 || i === 7)) m = rng() < 0.5 ? chord[1] - 12 : rootM + 7;
+        bassN(ctx, out, t + i * beat / 2, m2f(m), beat / 2 * (st === 'pulse' ? 0.5 : 0.85), 'sawtooth', 0.2);
+      }
+    }
+  }
+
+  if(S.layers.pad){
+    chord.forEach(m => pad(ctx, out, t, m2f(m - 12), barDur));
+  }
+
+  if(S.layers.arp){
+    const notes = [chord[0], chord[1], chord[2], chord[0] + 12, chord[1] + 12, chord[2] + 12];
+    for(let i = 0; i < 16; i++){
+      if(rng() < S.arpDensity){
+        const n = notes[i % notes.length];
+        pluck(ctx, out, t + i * step, m2f(n + 12), step * 0.9, S.arpWave, 0.08);
+      }
+    }
+  }
+
+  if(S.layers.lead){
+    let cur = (S.state.lead === undefined) ? deg + 7 : S.state.lead;
+    for(let i = 0; i < 8; i++){
+      if(rng() < S.leadDensity){
+        cur += [-2,-1,-1,0,1,1,2,3][Math.floor(rng() * 8)];
+        cur = Math.max(3, Math.min(14, cur));
+        const m = S.root + 12 + sc[cur % 7] + 12 * Math.floor(cur / 7);
+        const len = (rng() < 0.3 ? 2 : 1) * beat / 2;
+        lead(ctx, out, t + i * beat / 2, m2f(m), len * 0.95, S.leadWave, 0.11);
+        if(rng() < 0.3) i++; // 偶爾休止，讓旋律呼吸
+      }
+    }
+    S.state.lead = cur;
+  }
+}
+
+let curMood = 'battle';
+const liveState = {};
+function currentSettings(state){
+  const m = MOODS[curMood];
+  return {
+    tempo: +$('#tempo').value,
+    root: m.root,
+    scale: SCALES[m.scale],
+    prog: m.prog,
+    drumPat: m.drums,
+    bassStyle: m.bass,
+    arpWave: m.arpWave,
+    leadWave: m.leadWave,
+    arpDensity: m.arpDensity,
+    leadDensity: m.leadDensity,
+    seed: (+$('#seed').value) | 0,
+    layers: {
+      drums: $('#lyDrums').checked,
+      bass:  $('#lyBass').checked,
+      arp:   $('#lyArp').checked,
+      pad:   $('#lyPad').checked,
+      lead:  $('#lyLead').checked,
+    },
+    state: state || liveState,
+  };
+}
+
+/* ---- 即時播放（前瞻排程器） ---- */
+let playing = false, timer = null, barIdx = 0, nextT = 0, musicBus = null;
+function playMusic(){
+  const ctx = getCtx();
+  stopMusic(false);
+  playing = true;
+  delete liveState.lead;
+  musicBus = ctx.createGain();
+  musicBus.connect(master);
+  barIdx = 0;
+  nextT = ctx.currentTime + 0.1;
+  timer = setInterval(() => {
+    const S = currentSettings();
+    while(nextT < actx.currentTime + 0.45){
+      scheduleBar(actx, musicBus, nextT, barIdx, S);
+      nextT += 4 * 60 / S.tempo;
+      barIdx++;
+    }
+  }, 120);
+  $('#playBtn').textContent = '⏹ 停止';
+  $('#playBtn').classList.add('on');
+}
+function stopMusic(updateUI){
+  if(timer){ clearInterval(timer); timer = null; }
+  if(musicBus){
+    const b = musicBus;
+    b.gain.setTargetAtTime(0, actx.currentTime, 0.06);
+    setTimeout(() => b.disconnect(), 500);
+    musicBus = null;
+  }
+  playing = false;
+  if(updateUI !== false){
+    $('#playBtn').textContent = '▶ 播放';
+    $('#playBtn').classList.remove('on');
+  }
+}
+async function exportMusic(){
+  const btn = $('#expMusic');
+  btn.disabled = true; btn.textContent = '⏳ 轉檔中…';
+  try{
+    const bars = +$('#expBars').value;
+    const S = currentSettings({});
+    const beat = 60 / S.tempo;
+    const dur = bars * 4 * beat + 1.5;
+    const octx = new OfflineAudioContext(2, Math.ceil(44100 * dur), 44100);
+    const out = makeOfflineChain(octx);
+    for(let b = 0; b < bars; b++) scheduleBar(octx, out, 0.05 + b * 4 * beat, b, S);
+    const buf = await octx.startRendering();
+    downloadWav(buf, 'bgm_' + curMood + '_seed' + S.seed + '_' + S.tempo + 'bpm.wav');
+  } finally {
+    btn.disabled = false; btn.textContent = '⬇ 匯出 WAV';
+  }
+}
+
+/* ============================================================
+   WAV 匯出
+============================================================ */
+function encodeWav(buffer){
+  const nCh = buffer.numberOfChannels, sr = buffer.sampleRate, len = buffer.length;
+  const bytes = 44 + len * nCh * 2;
+  const ab = new ArrayBuffer(bytes);
+  const v = new DataView(ab);
+  const ws = (o, s) => { for(let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0, 'RIFF'); v.setUint32(4, bytes - 8, true); ws(8, 'WAVE');
+  ws(12, 'fmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, nCh, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * nCh * 2, true);
+  v.setUint16(32, nCh * 2, true); v.setUint16(34, 16, true);
+  ws(36, 'data'); v.setUint32(40, len * nCh * 2, true);
+  const chs = [];
+  for(let c = 0; c < nCh; c++) chs.push(buffer.getChannelData(c));
+  let o = 44;
+  for(let i = 0; i < len; i++){
+    for(let c = 0; c < nCh; c++){
+      const s = Math.max(-1, Math.min(1, chs[c][i]));
+      v.setInt16(o, s < 0 ? s * 32768 : s * 32767, true);
+      o += 2;
+    }
+  }
+  return ab;
+}
+function downloadWav(buffer, name){
+  const blob = new Blob([encodeWav(buffer)], {type:'audio/wav'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* ============================================================
+   視覺化
+============================================================ */
+function startViz(){
+  const cv = $('#viz'), cx = cv.getContext('2d');
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  (function draw(){
+    requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(data);
+    cx.clearRect(0, 0, cv.width, cv.height);
+    const n = 72, w = cv.width / n;
+    for(let i = 0; i < n; i++){
+      const h = Math.max(2, data[i] / 255 * cv.height);
+      cx.fillStyle = 'hsl(' + (188 + i / n * 130) + ',90%,60%)';
+      cx.fillRect(i * w + 1, cv.height - h, w - 2, h);
+    }
+  })();
+}
+
+/* ============================================================
+   UI 綁定
+============================================================ */
+function bindSlider(id, fmt){
+  const el = $('#' + id), lab = $('#' + id + 'V');
+  const upd = () => { lab.textContent = fmt ? fmt(+el.value) : (+el.value).toFixed(2); };
+  el.addEventListener('input', upd);
+  upd();
+}
+bindSlider('masterVol');
+bindSlider('sfxPitch');
+bindSlider('sfxDur');
+bindSlider('sfxVar');
+bindSlider('sfxVol');
+bindSlider('tempo', v => String(v));
+
+$('#masterVol').addEventListener('input', () => {
+  if(master) master.gain.setTargetAtTime(+$('#masterVol').value, actx.currentTime, 0.02);
+});
+$('#sfxReset').addEventListener('click', () => {
+  [['sfxPitch',1],['sfxDur',1],['sfxVar',0.08],['sfxVol',0.8]].forEach(([id,v]) => {
+    $('#' + id).value = v;
+    $('#' + id).dispatchEvent(new Event('input'));
+  });
+});
+
+// 音效卡片
+(function buildSfx(){
+  const box = $('#sfxList');
+  Object.keys(CATS).forEach(cat => {
+    const title = document.createElement('div');
+    title.className = 'catTitle';
+    title.textContent = CATS[cat];
+    box.appendChild(title);
+    const grid = document.createElement('div');
+    grid.className = 'sfxGrid';
+    SFX.filter(s => s.cat === cat).forEach(def => {
+      const card = document.createElement('div');
+      card.className = 'sfxCard';
+      const play = document.createElement('div');
+      play.className = 'play';
+      play.innerHTML = '<span class="ico">' + def.ico + '</span><span>' + def.name + '</span>';
+      play.addEventListener('click', () => playSfx(def, card));
+      const st = document.createElement('button');
+      st.className = 'st'; st.textContent = '⭐'; st.title = '儲存剛剛聽到的聲音';
+      st.addEventListener('click', e => { e.stopPropagation(); saveSfxPreset(def); });
+      const dl = document.createElement('button');
+      dl.className = 'dl'; dl.textContent = '⬇'; dl.title = '匯出 WAV（最後聽到的版本）';
+      dl.addEventListener('click', e => { e.stopPropagation(); exportSfx(def); });
+      card.appendChild(play); card.appendChild(st); card.appendChild(dl);
+      grid.appendChild(card);
+    });
+    box.appendChild(grid);
+  });
+})();
+
+// 風格按鈕
+function selectMood(key, applyDefaults){
+  curMood = key;
+  document.querySelectorAll('#moodRow button').forEach(x =>
+    x.classList.toggle('on', x.dataset.mood === key));
+  if(applyDefaults !== false){
+    const m = MOODS[key];
+    $('#tempo').value = m.tempo;
+    $('#tempo').dispatchEvent(new Event('input'));
+    $('#lyDrums').checked = !!m.layers.drums;
+    $('#lyBass').checked  = !!m.layers.bass;
+    $('#lyArp').checked   = !!m.layers.arp;
+    $('#lyPad').checked   = !!m.layers.pad;
+    $('#lyLead').checked  = !!m.layers.lead;
+  }
+  delete liveState.lead;
+}
+(function buildMoods(){
+  const row = $('#moodRow');
+  Object.keys(MOODS).forEach(key => {
+    const b = document.createElement('button');
+    b.className = 'mood' + (key === curMood ? ' on' : '');
+    b.dataset.mood = key;
+    b.textContent = MOODS[key].label;
+    b.addEventListener('click', () => selectMood(key));
+    row.appendChild(b);
+  });
+})();
+
+$('#playBtn').addEventListener('click', () => { playing ? stopMusic() : playMusic(); });
+$('#dice').addEventListener('click', () => {
+  $('#seed').value = (Math.random() * 100000) | 0;
+  delete liveState.lead;
+});
+$('#expMusic').addEventListener('click', exportMusic);
+
+/* ============================================================
+   ⭐ 收藏（localStorage 永久保存）
+============================================================ */
+function loadStore(k){ try{ return JSON.parse(localStorage.getItem(k)) || []; } catch(e){ return []; } }
+function saveStore(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+let savedSfx = loadStore('gag_sfx_presets');
+let savedBgm = loadStore('gag_bgm_presets');
+const fnSafe = s => s.replace(/[^\w一-鿿-]+/g, '_');
+function iconBtn(txt, title, fn){
+  const b = document.createElement('button');
+  b.textContent = txt; b.title = title;
+  b.addEventListener('click', fn);
+  return b;
+}
+function savedRow(ico, name, meta, onPlay){
+  const item = document.createElement('div');
+  item.className = 'savedItem';
+  const nm = document.createElement('div');
+  nm.className = 'nm';
+  nm.innerHTML = '<span>' + ico + '</span><span class="tx"></span>';
+  nm.querySelector('.tx').textContent = name;
+  nm.title = '點擊試聽';
+  nm.addEventListener('click', onPlay);
+  const mt = document.createElement('span');
+  mt.className = 'meta';
+  mt.textContent = meta;
+  item.appendChild(nm); item.appendChild(mt);
+  return item;
+}
+
+/* ---- 音效收藏 ---- */
+function saveSfxPreset(def){
+  if(!lastPlay[def.id]) playSfx(def); // 沒播過就先播一次，存下的就是這一聲
+  const snap = lastPlay[def.id];
+  const n = savedSfx.filter(s => s.sfx === def.id).length + 1;
+  savedSfx.push(Object.assign({sfx: def.id, name: def.name + ' #' + n}, snap));
+  saveStore('gag_sfx_presets', savedSfx);
+  renderSavedSfx();
+}
+function renderSavedSfx(){
+  const box = $('#savedSfxList');
+  box.innerHTML = '';
+  if(!savedSfx.length){
+    box.innerHTML = '<div class="empty">尚無收藏 — 聽到不錯的音效就點卡片上的 ⭐</div>';
+    return;
+  }
+  savedSfx.forEach((s, i) => {
+    const def = SFX.find(d => d.id === s.sfx);
+    if(!def) return;
+    const meta = '音高×' + (+s.pitch).toFixed(2) + ' · 長度×' + (+s.dur).toFixed(2) + ' · seed ' + s.seed;
+    const item = savedRow(def.ico, s.name, meta, () => playSnap(def, s));
+    item.appendChild(iconBtn('▶', '試聽', () => playSnap(def, s)));
+    item.appendChild(iconBtn('⬇', '匯出 WAV', () => renderSfxWav(def, s, 'sfx_' + fnSafe(s.name) + '.wav')));
+    item.appendChild(iconBtn('✏', '重新命名', () => {
+      const v = prompt('新名稱', s.name);
+      if(v){ s.name = v; saveStore('gag_sfx_presets', savedSfx); renderSavedSfx(); }
+    }));
+    item.appendChild(iconBtn('🗑', '刪除', () => {
+      savedSfx.splice(i, 1); saveStore('gag_sfx_presets', savedSfx); renderSavedSfx();
+    }));
+    box.appendChild(item);
+  });
+}
+
+/* ---- 音樂收藏 ---- */
+function saveBgmPreset(){
+  const seed = (+$('#seed').value) | 0;
+  savedBgm.push({
+    name: MOODS[curMood].label + ' seed' + seed,
+    mood: curMood,
+    tempo: +$('#tempo').value,
+    seed,
+    layers: {
+      drums: $('#lyDrums').checked, bass: $('#lyBass').checked, arp: $('#lyArp').checked,
+      pad: $('#lyPad').checked, lead: $('#lyLead').checked,
+    },
+  });
+  saveStore('gag_bgm_presets', savedBgm);
+  renderSavedBgm();
+}
+function applyBgmPreset(s){
+  selectMood(s.mood, false);
+  $('#tempo').value = s.tempo;
+  $('#tempo').dispatchEvent(new Event('input'));
+  $('#seed').value = s.seed;
+  $('#lyDrums').checked = !!s.layers.drums;
+  $('#lyBass').checked  = !!s.layers.bass;
+  $('#lyArp').checked   = !!s.layers.arp;
+  $('#lyPad').checked   = !!s.layers.pad;
+  $('#lyLead').checked  = !!s.layers.lead;
+}
+function renderSavedBgm(){
+  const box = $('#savedBgmList');
+  box.innerHTML = '';
+  if(!savedBgm.length){
+    box.innerHTML = '<div class="empty">尚無收藏 — 調出喜歡的音樂就點「⭐ 儲存目前組合」</div>';
+    return;
+  }
+  savedBgm.forEach((s, i) => {
+    const meta = s.tempo + ' BPM · seed ' + s.seed;
+    const item = savedRow('🎵', s.name, meta, () => { applyBgmPreset(s); playMusic(); });
+    item.appendChild(iconBtn('▶', '載入並播放', () => { applyBgmPreset(s); playMusic(); }));
+    item.appendChild(iconBtn('⬇', '匯出 WAV', () => { applyBgmPreset(s); exportMusic(); }));
+    item.appendChild(iconBtn('✏', '重新命名', () => {
+      const v = prompt('新名稱', s.name);
+      if(v){ s.name = v; saveStore('gag_bgm_presets', savedBgm); renderSavedBgm(); }
+    }));
+    item.appendChild(iconBtn('🗑', '刪除', () => {
+      savedBgm.splice(i, 1); saveStore('gag_bgm_presets', savedBgm); renderSavedBgm();
+    }));
+    box.appendChild(item);
+  });
+}
+
+$('#saveBgm').addEventListener('click', saveBgmPreset);
+renderSavedSfx();
+renderSavedBgm();
+</script>
+</body>
+</html>
