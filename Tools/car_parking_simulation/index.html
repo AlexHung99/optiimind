@@ -369,33 +369,47 @@ function integrateSCurve(kS, L, dRamp, thetaStart, gear) {
 
 // Find hold length L (or reduced peak curvature) so the S-curve's lateral
 // displacement matches targetDy. Both relations are monotonic, so bisect.
-function solveSCurve(targetDy, kMax, dRamp, thetaStart, gear, turnSignK) {
-  const dyOf = (kPeak, L) => integrateSCurve(kPeak * turnSignK, L, dRamp, thetaStart, gear).dy;
+function solveSCurve(targetDy, kMax, dRamp0, thetaStart, gear, turnSignK) {
+  const dyOf = (kPeak, L, dR) => integrateSCurve(kPeak * turnSignK, L, dR, thetaStart, gear).dy;
   const target = Math.abs(targetDy);
   // Cap the mid-manoeuvre swing angle (= kPeak*(dRamp+L)) at ~50°: keeps the
   // path realistic and dy monotonic in L so the bisection below is valid.
   const THETA_CAP = 0.87;
-  const LCap = Math.max(0, THETA_CAP / kMax - dRamp);
-  let kPeak = kMax, L = 0, feasible = true;
-  if (Math.abs(dyOf(kMax, 0)) >= target) {
-    let lo = 1e-3, hi = kMax;
-    for (let i = 0; i < 36; i++) {
-      const mid = (lo + hi) / 2;
-      if (Math.abs(dyOf(mid, 0)) >= target) hi = mid; else lo = mid;
+  const LCap = Math.max(0, THETA_CAP / kMax - dRamp0);
+  let kPeak = kMax, L = 0, dRamp = dRamp0, feasible = true;
+  if (Math.abs(dyOf(kMax, 0, dRamp0)) >= target) {
+    // Overshoot even with no full-lock hold. Keep the wheel at FULL lock and
+    // shorten the wind distance instead of shallowing the steer — the decisive
+    // "cut deep, then counter-steer" that drivers actually use.
+    const dMin = 0.3;
+    if (Math.abs(dyOf(kMax, 0, dMin)) >= target) {
+      dRamp = dMin;
+      let lo = 1e-3, hi = kMax;
+      for (let i = 0; i < 36; i++) {
+        const mid = (lo + hi) / 2;
+        if (Math.abs(dyOf(mid, 0, dMin)) >= target) hi = mid; else lo = mid;
+      }
+      kPeak = hi;
+    } else {
+      let lo = dMin, hi = dRamp0;
+      for (let i = 0; i < 36; i++) {
+        const mid = (lo + hi) / 2;
+        if (Math.abs(dyOf(kMax, 0, mid)) >= target) hi = mid; else lo = mid;
+      }
+      dRamp = hi;
     }
-    kPeak = hi;
-  } else if (Math.abs(dyOf(kMax, LCap)) < target) {
+  } else if (Math.abs(dyOf(kMax, LCap, dRamp0)) < target) {
     feasible = false;
     L = LCap;
   } else {
     let lo = 0, hi = LCap;
     for (let i = 0; i < 36; i++) {
       const mid = (lo + hi) / 2;
-      if (Math.abs(dyOf(kMax, mid)) >= target) hi = mid; else lo = mid;
+      if (Math.abs(dyOf(kMax, mid, dRamp0)) >= target) hi = mid; else lo = mid;
     }
     L = hi;
   }
-  return { kPeak, L, feasible };
+  return { kPeak, L, dRamp, feasible };
 }
 
 // ---------- collision helpers ----------
@@ -443,7 +457,9 @@ function simulateShuffleParallel(p, geo, start, thetaStart, yFinal, xfCenter, ne
     const ego = egoCorners(p, geo, pose);
     return marginRects.some((r) => polysIntersectSAT(ego, r));
   };
-  const KLAT = 0.9, GAIN = 2.5, PHI_MAX = 0.5;
+  // PHI_MAX 0.7 (~40°): cut in deep on the first swings, then counter-steer —
+  // fewer shuffle cycles than shallow careful swings.
+  const KLAT = 1.2, GAIN = 2.5, PHI_MAX = 0.7;
   // Creeping speed: the wheel can be wound much faster relative to distance
   // travelled than at driving speed — full lock over ~0.35 m of travel.
   const slew = kMax / 0.35;
@@ -735,7 +751,7 @@ function computeParallelManeuver(p, geo) {
   const info = [];
   for (const dRamp of [1.5, 1.0, 0.6]) {
     const sol = solveSCurve(targetDy, kMax, dRamp, thetaStart, gear, turnSign1);
-    const table = integrateSCurve(sol.kPeak * turnSign1, sol.L, dRamp, thetaStart, gear);
+    const table = integrateSCurve(sol.kPeak * turnSign1, sol.L, sol.dRamp, thetaStart, gear);
     const P0 = { x: xfReverse - table.dx, y: yDrive };
     lastP0 = P0;
     const leadStart = V.sub(P0, V.scale(aisleDir, APPROACH_LEN));

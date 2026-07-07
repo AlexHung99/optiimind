@@ -138,10 +138,11 @@ th { background: #171b21; color: #9aa4b2; }
   Δ<var>y</var><sub>target</sub> = <var>y</var><sub>final</sub> − <var>y</var><sub>drive</sub>
   <span class="note">y_final 為路邊車格中心線、y_drive 為起始行駛線（貼近停放車列 0.4 m）。</span>
 </div>
-<p>因 Δ<var>y</var> 對保持段長度 <var>L</var>（及對峰值曲率 <var>k</var>）單調遞增，以<strong>二分法</strong>求解：</p>
+<p>因 Δ<var>y</var> 對保持段長度 <var>L</var>、打盤距離 d<sub>R</sub> 與峰值曲率 <var>k</var> 皆單調，以<strong>二分法</strong>求解，且優先保持<strong>方向盤打滿</strong>（切深再反向，與真實駕駛一致）：</p>
 <ul>
-  <li>若最大擺角內即可達標 → 固定 <var>L</var> = 0，二分 <var>k</var>；</li>
-  <li>否則固定 <var>k</var> = 1/R<sub>min</sub>，二分 <var>L</var>，且限制中途擺角 <var>k</var>·(d<sub>R</sub>+<var>L</var>) ≤ 50°（保證單調性與真實性）。</li>
+  <li>橫移量大 → 固定 <var>k</var> = 1/R<sub>min</sub>（打滿），二分保持段 <var>L</var>，限制中途擺角 <var>k</var>·(d<sub>R</sub>+<var>L</var>) ≤ 50°（保證單調性與真實性）；</li>
+  <li>橫移量小 → 仍保持打滿，<strong>縮短打盤距離 d<sub>R</sub></strong>（二分 d<sub>R</sub> ∈ [0.3, 1.5]）——果斷切深、立即反打，而非淺打長繞；</li>
+  <li>橫移量極小 → d<sub>R</sub> = 0.3 仍過量時才降低 <var>k</var>。</li>
 </ul>
 <p>解出後將整條 S 曲線沿 <var>x</var> 平移，使倒車終點落在「距後車 0.3 m」的深處，再前進置中（真實駕駛的先深倒、後拉正技巧）。</p>
 
