@@ -427,8 +427,9 @@ function computeParallelManeuver(p, geo) {
   const N = V.leftNormal(aisleDir); // (0, laneDir)
 
   const halfRoad = p.laneWidth / 2;
-  const yFinal = p.rowSide * (halfRoad - p.carWidth / 2 - 0.25);
-  const yDrive = p.rowSide * (halfRoad - p.carWidth / 2 - 1.3);
+  // The parallel bay sits at the kerb, outside the driving lane.
+  const yFinal = p.rowSide * (halfRoad + p.carWidth / 2 + 0.3);
+  const yDrive = p.rowSide * (halfRoad - p.carWidth / 2 - 0.5);
 
   // Rear-axle target such that the car body ends up centred in the spot box.
   const xf = -p.laneDir * ((p.wheelbase + geo.frontOverhang - geo.rearOverhang) / 2);
