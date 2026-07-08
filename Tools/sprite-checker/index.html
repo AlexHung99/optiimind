@@ -7,7 +7,7 @@
 <style>
   :root{
     --bg:#1b1d23; --panel:#23262e; --line:#343845; --fg:#e6e8ee; --dim:#9aa0ad;
-    --accent:#4da3ff; --accent2:#ffb84d;
+    --accent:#4da3ff; --accent2:#ffb84d; --good:#7be055; --bad:#ff6b6b;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -26,33 +26,48 @@
   input[type=number]{width:64px;min-width:0;flex:0 1 64px;background:#161820;color:var(--fg);
       border:1px solid var(--line);border-radius:4px;padding:3px 6px}
   input[type=range]{flex:1 1 80px;min-width:0}
+  input[type=text]{flex:1 1 80px;min-width:0;background:#161820;color:var(--fg);
+      border:1px solid var(--line);border-radius:4px;padding:3px 6px}
+  input[type=color]{width:32px;height:24px;padding:0;border:1px solid var(--line);
+      border-radius:4px;background:#161820}
   select,button{background:#161820;color:var(--fg);border:1px solid var(--line);
       border-radius:4px;padding:4px 10px;cursor:pointer}
   button:hover{border-color:var(--accent)}
   button.primary{background:var(--accent);color:#10131a;border-color:var(--accent);font-weight:600}
+  button:disabled{opacity:.45;cursor:not-allowed}
   .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0}
   .hint{font-size:12px;color:var(--dim)}
+  .warn{font-size:12px;color:var(--accent2)}
   #drop{border:2px dashed var(--line);border-radius:8px;padding:14px;text-align:center;
         color:var(--dim);cursor:pointer;transition:.15s}
   #drop.over{border-color:var(--accent);color:var(--accent)}
-  #rowBtns{display:flex;flex-wrap:wrap;gap:4px}
+  #rowBtns,#clipList{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
   #rowBtns button{padding:2px 8px;font-size:12px}
-  #rowBtns button.active{border-color:var(--accent2);color:var(--accent2)}
+  #rowBtns button.active,#clipList button.active{border-color:var(--accent2);color:var(--accent2)}
+  #clipList button{padding:2px 8px;font-size:12px}
+  #clipList .del{padding:2px 6px;color:var(--bad);border-color:var(--line)}
 
-  #sheetWrap{flex:1;overflow:auto;padding:12px;min-height:120px}
+  #sheetWrap{flex:1;overflow:auto;padding:12px;min-height:120px;position:relative}
   #sheet{image-rendering:pixelated;background:
-      repeating-conic-gradient(#2a2d36 0 25%,#20232b 0 50%) 0 0/16px 16px;cursor:crosshair}
+      repeating-conic-gradient(#2a2d36 0 25%,#20232b 0 50%) 0 0/16px 16px;
+      cursor:crosshair;display:block}
+  #scrubWrap{display:flex;align-items:center;gap:8px;padding:6px 12px;
+      border-top:1px solid var(--line);background:var(--panel)}
+  #scrub{flex:1}
   #previewWrap{border-top:1px solid var(--line);background:var(--panel);
-      display:flex;align-items:center;gap:16px;padding:12px;overflow-x:auto}
+      display:flex;align-items:flex-start;gap:16px;padding:12px;overflow-x:auto}
   #preview{image-rendering:pixelated;flex:none}
   #frameInfo{white-space:pre;font:12px/1.6 Consolas,monospace;color:var(--dim)}
+  #jitter{width:100%;height:96px;background:#161820;border:1px solid var(--line);border-radius:4px;display:block}
   .bg-checker{background:repeating-conic-gradient(#666 0 25%,#999 0 50%) 0 0/16px 16px}
   .bg-dark{background:#111}
   .bg-light{background:#eee}
   .bg-green{background:#3a7d44}
+  .bg-magenta{background:#c400c4}
   kbd{background:#161820;border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:11px}
+  .stat{font:12px/1.5 Consolas,monospace}
+  .ok{color:var(--good)} .no{color:var(--bad)}
 
-  /* 窄螢幕：改為直向堆疊，避免橫向捲軸 */
   @media (max-width:720px){
     html,body{height:auto}
     body{flex-direction:column}
@@ -91,16 +106,27 @@
       <input type="number" id="offX" value="0"><input type="number" id="offY" value="0"></label>
     <label><span class="k">間距 X / Y</span>
       <input type="number" id="spX" min="0" value="0"><input type="number" id="spY" min="0" value="0"></label>
+    <div class="row">
+      <button id="detect">🔍 自動偵測切割</button>
+      <button id="applyDetect" disabled>套用建議</button>
+    </div>
+    <div class="hint" id="detectInfo"></div>
     <div class="hint" id="gridInfo"></div>
+    <div class="warn" id="warnInfo"></div>
   </fieldset>
 
   <fieldset>
     <legend>3. 動畫範圍</legend>
     <label><span class="k">起始格</span><input type="number" id="start" min="0" value="0"></label>
     <label><span class="k">格數</span><input type="number" id="count" min="1" value="7"></label>
-    <div class="hint">在左圖點格子＝設起始格；<kbd>Shift</kbd>+點＝設結束格</div>
+    <div class="hint">左圖點格子＝設起始格；<kbd>Shift</kbd>+點＝設結束格</div>
     <div class="hint" style="margin-top:6px">快速選整列（自動略過空白格）：</div>
     <div id="rowBtns"></div>
+    <div class="row" style="margin-top:8px">
+      <input type="text" id="clipName" placeholder="片段名稱，如 walk">
+      <button id="saveClip">＋ 存為片段</button>
+    </div>
+    <div id="clipList"></div>
   </fieldset>
 
   <fieldset>
@@ -108,6 +134,13 @@
     <label><span class="k">FPS</span>
       <input type="range" id="fpsR" min="1" max="60" value="10">
       <input type="number" id="fps" min="1" max="60" value="10"></label>
+    <label><span class="k">播放模式</span>
+      <select id="playMode">
+        <option value="loop">循環</option>
+        <option value="pingpong">來回</option>
+        <option value="once">單次</option>
+      </select>
+      <label style="margin:0"><input type="checkbox" id="reverse"> 反向</label></label>
     <div class="row">
       <button id="play" class="primary">⏸ 暫停</button>
       <button id="prev">⏮ 上一格</button>
@@ -128,8 +161,17 @@
       <input type="range" id="ayR" min="0" max="100" value="50">
       <input type="number" id="ay" min="0" max="100" value="50"></label>
     <div class="row">
-      <label><input type="checkbox" id="showAnchor" checked> 顯示錨點十字</label>
-      <label><input type="checkbox" id="onion"> 洋蔥皮疊圖</label>
+      <label style="margin:0"><input type="checkbox" id="showAnchor" checked> 錨點十字</label>
+      <label style="margin:0"><input type="checkbox" id="showCenters" checked> 內容中心</label>
+    </div>
+    <div class="row">
+      <label style="margin:0"><input type="checkbox" id="onion"> 洋蔥皮</label>
+      <label style="margin:0"><input type="checkbox" id="autoTrim"> 內容對齊播放</label>
+    </div>
+    <div class="row">
+      <label style="margin:0"><input type="checkbox" id="pixelGrid"> 像素格線</label>
+      <label style="margin:0"><span class="k" style="width:auto">格線色</span>
+        <input type="color" id="gridColor" value="#4da3ff"></label>
     </div>
     <label><span class="k">預覽背景</span>
       <select id="bg">
@@ -137,19 +179,55 @@
         <option value="dark">深色</option>
         <option value="light">淺色</option>
         <option value="green">綠幕</option>
+        <option value="magenta">洋紅</option>
       </select></label>
-    <div class="hint">錨點十字固定不動，若角色相對十字晃動，代表各格中心位置不一致。洋蔥皮可一次疊看整段動畫的對齊情況。</div>
+    <div class="row" style="margin-top:6px">
+      <button id="refBtn">載入參考圖</button>
+      <label style="margin:0"><input type="checkbox" id="showRef"> 疊層</label>
+      <input type="file" id="refFile" accept="image/*" hidden>
+    </div>
+    <label><span class="k">參考圖透明</span>
+      <input type="range" id="refOpR" min="0" max="100" value="50">
+      <span class="hint" id="refOpV">50%</span></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>6. 對齊分析</legend>
+    <canvas id="jitter" width="300" height="96"></canvas>
+    <div class="stat" id="jitterStat" style="margin-top:6px">載入圖片後顯示各格中心相對錨點的偏移量。</div>
+    <div class="hint">紅＝X 偏移、藍＝Y 偏移（像素）。理想動畫各格中心應貼近 0，偏移大代表中心不一致需修正。</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>7. 匯出 / 分享</legend>
+    <div class="row">
+      <button id="expGif">匯出 GIF</button>
+      <button id="expApng">匯出 APNG</button>
+    </div>
+    <div class="row">
+      <button id="expZip">切片 ZIP</button>
+      <button id="expJson">atlas JSON</button>
+    </div>
+    <div class="row">
+      <button id="shareBtn">複製分享連結</button>
+      <button id="resetBtn">重設設定</button>
+    </div>
+    <div class="hint" id="expInfo">匯出範圍＝目前動畫範圍。分享連結含所有參數（不含圖片；遠端圖可用 ?img= 帶入）。</div>
   </fieldset>
 </aside>
 
 <main>
-  <div id="sheetWrap">
-    <div class="row" style="margin-bottom:8px">
-      <span class="hint">原圖檢視縮放</span>
-      <input type="range" id="sheetZoomR" min="0.25" max="6" step="0.25" value="1" style="width:160px">
-      <span class="hint" id="sheetZoomV">1x</span>
-    </div>
-    <canvas id="sheet" width="0" height="0"></canvas>
+  <div class="row" style="margin:8px 12px 0">
+    <span class="hint">原圖檢視縮放</span>
+    <input type="range" id="sheetZoomR" min="0.25" max="8" step="0.25" value="1" style="width:160px">
+    <span class="hint" id="sheetZoomV">1x</span>
+    <span class="hint">｜滾輪縮放、拖曳平移</span>
+  </div>
+  <div id="sheetWrap"><canvas id="sheet" width="0" height="0"></canvas></div>
+  <div id="scrubWrap">
+    <button id="playMini" class="primary" style="padding:2px 10px">⏸</button>
+    <input type="range" id="scrub" min="0" max="0" value="0">
+    <span class="hint" id="scrubLabel">0 / 0</span>
   </div>
   <div id="previewWrap">
     <canvas id="preview" class="bg-checker" width="128" height="128"></canvas>
@@ -160,22 +238,34 @@
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
+const clamp = (v,a,b)=> Math.min(b, Math.max(a, v));
 
-const state = {
-  img:null, mode:'grid',
-  cols:7, rows:11, fw:32, fh:32,
+/* ============================================================
+   狀態
+   ============================================================ */
+const DEFAULTS = {
+  mode:'grid', cols:7, rows:11, fw:32, fh:32,
   offX:0, offY:0, spX:0, spY:0,
   start:0, count:7, fps:10,
-  playing:true, idx:0,
   zoom:4, ax:50, ay:50,
-  showAnchor:true, onion:false,
-  sheetZoom:1
+  showAnchor:true, showCenters:true, onion:false, autoTrim:false,
+  pixelGrid:false, gridColor:'#4da3ff', bg:'checker',
+  playMode:'loop', reverse:false, refOpacity:0.5, showRef:false, sheetZoom:1
 };
-let emptyMap = [];        // 每格是否為全透明
-let emptyKey = '';
-let lastTick = 0, acc = 0;
+const SAVE_KEYS = Object.keys(DEFAULTS);
+const state = Object.assign({}, DEFAULTS, {
+  img:null, refImg:null, idx:0, playing:true, pdir:1
+});
+let emptyMap = [];     // 每格是否全透明
+let bboxMap = [];      // 每格 {x,y,w,h,cx,cy}（frame-local px）或 null
+let dataKey = '';
+let detected = null;   // 自動偵測建議
+let clips = [];
+let lastTick = 0, acc = 0, needDraw = true;
 
-/* ---------- 格線計算 ---------- */
+/* ============================================================
+   格線計算
+   ============================================================ */
 function grid(){
   const s = state, img = s.img;
   if(!img) return {fw:1,fh:1,cols:1,rows:1,total:0};
@@ -198,32 +288,118 @@ function frameRect(i,g){
   return {x:state.offX + c*(g.fw+state.spX), y:state.offY + r*(g.fh+state.spY), w:g.fw, h:g.fh};
 }
 
-/* ---------- 空白格偵測 ---------- */
-function buildEmptyMap(){
+/* ============================================================
+   讀像素：空白偵測 + 每格內容外框/中心
+   ============================================================ */
+let srcCanvas=null, srcCtx=null;
+function ensureSrc(){
+  const s = state; if(!s.img) return false;
+  if(!srcCanvas || srcCanvas._w!==s.img.width || srcCanvas._h!==s.img.height){
+    srcCanvas = document.createElement('canvas');
+    srcCanvas.width = s.img.width; srcCanvas.height = s.img.height;
+    srcCanvas._w = s.img.width; srcCanvas._h = s.img.height;
+    srcCtx = srcCanvas.getContext('2d',{willReadFrequently:true});
+  }
+  srcCtx.clearRect(0,0,srcCanvas.width,srcCanvas.height);
+  srcCtx.drawImage(s.img,0,0);
+  return true;
+}
+function buildFrameData(){
   const s = state, g = grid();
   const key = [s.img && s.img.src.length, s.mode, g.fw, g.fh, g.cols, g.rows,
                s.offX, s.offY, s.spX, s.spY].join('|');
-  if(key === emptyKey) return;
-  emptyKey = key;
-  emptyMap = new Array(g.total).fill(false);
+  if(key === dataKey) return;
+  dataKey = key;
+  emptyMap = new Array(g.total).fill(true);
+  bboxMap  = new Array(g.total).fill(null);
   if(!s.img) return;
   try{
-    const cv = document.createElement('canvas');
-    cv.width = s.img.width; cv.height = s.img.height;
-    const cx = cv.getContext('2d', {willReadFrequently:true});
-    cx.drawImage(s.img, 0, 0);
+    if(!ensureSrc()) return;
+    const full = srcCtx.getImageData(0,0,srcCanvas.width,srcCanvas.height).data;
+    const W = srcCanvas.width;
     for(let i=0;i<g.total;i++){
       const r = frameRect(i,g);
-      if(r.x+r.w > cv.width || r.y+r.h > cv.height){ emptyMap[i]=true; continue; }
-      const d = cx.getImageData(r.x, r.y, r.w, r.h).data;
-      let empty = true;
-      for(let p=3;p<d.length;p+=8){ if(d[p] > 8){ empty=false; break; } }
-      emptyMap[i] = empty;
+      if(r.x<0||r.y<0||r.x+r.w>srcCanvas.width||r.y+r.h>srcCanvas.height) continue;
+      let minx=1e9,miny=1e9,maxx=-1,maxy=-1;
+      for(let yy=0;yy<r.h;yy++){
+        const rowBase = ((r.y+yy)*W + r.x)*4 + 3;
+        for(let xx=0;xx<r.w;xx++){
+          if(full[rowBase + xx*4] > 8){
+            if(xx<minx)minx=xx; if(xx>maxx)maxx=xx;
+            if(yy<miny)miny=yy; if(yy>maxy)maxy=yy;
+          }
+        }
+      }
+      if(maxx<0){ emptyMap[i]=true; bboxMap[i]=null; }
+      else{
+        emptyMap[i]=false;
+        bboxMap[i]={x:minx,y:miny,w:maxx-minx+1,h:maxy-miny+1,
+                    cx:(minx+maxx+1)/2, cy:(miny+maxy+1)/2};
+      }
     }
-  }catch(e){ /* 跨網域圖片無法讀取像素時略過偵測 */ }
+  }catch(e){ /* 跨網域圖片無法讀像素 */ }
 }
 
-/* ---------- 原圖 + 格線 ---------- */
+/* ============================================================
+   自動偵測切割（透明間隙 / 內容外框）
+   ============================================================ */
+function autoDetect(){
+  const s = state; if(!s.img || !ensureSrc()) return null;
+  const W=srcCanvas.width, H=srcCanvas.height;
+  const data = srcCtx.getImageData(0,0,W,H).data;
+  const colOp = new Uint8Array(W), rowOp = new Uint8Array(H);
+  for(let y=0;y<H;y++){
+    const base=y*W*4+3;
+    for(let x=0;x<W;x++){
+      if(data[base+x*4]>8){ colOp[x]=1; rowOp[y]=1; }
+    }
+  }
+  // 內容外框（去除四周透明邊）
+  let x0=0; while(x0<W && !colOp[x0]) x0++;
+  let x1=W-1; while(x1>=0 && !colOp[x1]) x1--;
+  let y0=0; while(y0<H && !rowOp[y0]) y0++;
+  let y1=H-1; while(y1>=0 && !rowOp[y1]) y1--;
+  if(x1<x0||y1<y0) return null;
+  // 依透明欄/列切成 band（合併過窄的間隙以免拆到精靈內部）
+  function bands(op, a, b){
+    const runs=[]; let st=-1;
+    for(let i=a;i<=b;i++){
+      if(op[i]){ if(st<0)st=i; }
+      else if(st>=0){ runs.push([st,i-1]); st=-1; }
+    }
+    if(st>=0) runs.push([st,b]);
+    if(!runs.length) return runs;
+    // 估最小間隙門檻：以最大 band 尺寸的 10% 為界，合併過小的空隙
+    let maxLen=0; for(const r of runs) maxLen=Math.max(maxLen,r[1]-r[0]+1);
+    const gapThr = Math.max(1, Math.round(maxLen*0.12));
+    const merged=[runs[0].slice()];
+    for(let i=1;i<runs.length;i++){
+      const prev=merged[merged.length-1];
+      if(runs[i][0]-prev[1]-1 < gapThr) prev[1]=runs[i][1];
+      else merged.push(runs[i].slice());
+    }
+    return merged;
+  }
+  const cb = bands(colOp,x0,x1), rb = bands(rowOp,y0,y1);
+  if(!cb.length || !rb.length) return null;
+  const cols=cb.length, rows=rb.length;
+  // 依均分推算格寬/高、位移、間距（用中位數 band 寬與間隙）
+  const median = arr => { const a=arr.slice().sort((p,q)=>p-q); return a[a.length>>1]; };
+  const cw = median(cb.map(r=>r[1]-r[0]+1)), rh = median(rb.map(r=>r[1]-r[0]+1));
+  // 用「內容起點間距(pitch)」推算欄列，套用後才不會逐格累積偏移
+  const pitchX = cb.length>1 ? Math.round(median(cb.slice(1).map((r,i)=>r[0]-cb[i][0]))) : cw;
+  const pitchY = rb.length>1 ? Math.round(median(rb.slice(1).map((r,i)=>r[0]-rb[i][0]))) : rh;
+  const spX = Math.max(0, pitchX - cw);
+  const spY = Math.max(0, pitchY - rh);
+  return {mode:'size', fw:cw, fh:rh, cols, rows,
+          offX:cb[0][0], offY:rb[0][0], spX, spY,
+          bbox:{x:x0,y:y0,w:x1-x0+1,h:y1-y0+1}};
+}
+
+/* ============================================================
+   原圖 + 格線繪製
+   ============================================================ */
+const sheetWrap = $('sheetWrap');
 const sheet = $('sheet'), sctx = sheet.getContext('2d');
 function drawSheet(){
   const s = state;
@@ -233,6 +409,7 @@ function drawSheet(){
   sheet.style.width  = (s.img.width  * s.sheetZoom) + 'px';
   sheet.style.height = (s.img.height * s.sheetZoom) + 'px';
   sctx.imageSmoothingEnabled = false;
+  sctx.clearRect(0,0,sheet.width,sheet.height);
   sctx.drawImage(s.img, 0, 0);
 
   const end = s.start + s.count - 1;
@@ -242,16 +419,57 @@ function drawSheet(){
       sctx.fillStyle = 'rgba(77,163,255,.18)';
       sctx.fillRect(r.x, r.y, r.w, r.h);
     }
-    sctx.strokeStyle = emptyMap[i] ? 'rgba(255,255,255,.12)' : 'rgba(77,163,255,.45)';
+    sctx.strokeStyle = emptyMap[i] ? 'rgba(255,255,255,.12)' : hexA(s.gridColor,.5);
     sctx.lineWidth = 1;
     sctx.strokeRect(r.x+.5, r.y+.5, r.w-1, r.h-1);
+    // 內容中心點
+    if(s.showCenters && bboxMap[i]){
+      const b=bboxMap[i];
+      sctx.fillStyle = 'rgba(123,224,85,.9)';
+      sctx.fillRect(r.x+b.cx-1, r.y+b.cy-1, 2, 2);
+    }
+  }
+  // 像素格線（高倍時）
+  if(s.pixelGrid && s.sheetZoom>=6){
+    sctx.strokeStyle = 'rgba(255,255,255,.08)'; sctx.lineWidth=1;
+    sctx.beginPath();
+    for(let x=0;x<=sheet.width;x++){ sctx.moveTo(x+.5,0); sctx.lineTo(x+.5,sheet.height); }
+    for(let y=0;y<=sheet.height;y++){ sctx.moveTo(0,y+.5); sctx.lineTo(sheet.width,y+.5); }
+    sctx.stroke();
   }
   // 目前播放格
   const cur = frameRect(s.start + s.idx, g);
   sctx.strokeStyle = '#ffb84d'; sctx.lineWidth = 2;
   sctx.strokeRect(cur.x+1, cur.y+1, cur.w-2, cur.h-2);
 }
-sheet.addEventListener('click', e=>{
+function markSheetCurrent(){ drawSheet(); }
+
+function hexA(hex,a){
+  const m=/^#?([0-9a-f]{6})$/i.exec(hex); if(!m) return 'rgba(77,163,255,'+a+')';
+  const n=parseInt(m[1],16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+
+/* 原圖：滑鼠拖曳平移 + 點擊選格 + 滾輪縮放 */
+let downPt=null, panned=false;
+sheet.addEventListener('mousedown', e=>{
+  downPt={x:e.clientX,y:e.clientY,sl:sheetWrap.scrollLeft,st:sheetWrap.scrollTop,shift:e.shiftKey};
+  panned=false;
+});
+window.addEventListener('mousemove', e=>{
+  if(!downPt) return;
+  const dx=e.clientX-downPt.x, dy=e.clientY-downPt.y;
+  if(Math.abs(dx)+Math.abs(dy)>4){
+    panned=true;
+    sheetWrap.scrollLeft = downPt.sl - dx;
+    sheetWrap.scrollTop  = downPt.st - dy;
+  }
+});
+window.addEventListener('mouseup', e=>{
+  if(downPt && !panned) selectFrameAt(e, downPt.shift);
+  downPt=null;
+});
+function selectFrameAt(e, shift){
   const s = state; if(!s.img) return;
   const g = grid(), rc = sheet.getBoundingClientRect();
   const px = (e.clientX - rc.left) / rc.width  * s.img.width;
@@ -260,14 +478,40 @@ sheet.addEventListener('click', e=>{
   const r = Math.floor((py - s.offY) / (g.fh + s.spY));
   if(c<0||r<0||c>=g.cols||r>=g.rows) return;
   const i = r*g.cols + c;
-  if(e.shiftKey && i >= s.start){ s.count = i - s.start + 1; }
+  if(shift && i >= s.start){ s.count = i - s.start + 1; }
   else { s.start = i; s.count = Math.min(s.count, g.total - i); }
-  s.idx = 0;
+  s.idx = 0; s.pdir = 1;
   syncInputs(); refresh();
-});
+}
+sheetWrap.addEventListener('wheel', e=>{
+  if(!state.img) return;
+  e.preventDefault();
+  const rc = sheet.getBoundingClientRect();
+  const imgX = (e.clientX-rc.left)/state.sheetZoom;
+  const imgY = (e.clientY-rc.top)/state.sheetZoom;
+  const nz = clamp(state.sheetZoom * (e.deltaY<0?1.25:0.8), 0.25, 8);
+  state.sheetZoom = Math.round(nz*100)/100;
+  $('sheetZoomR').value = state.sheetZoom;
+  $('sheetZoomV').textContent = state.sheetZoom + 'x';
+  drawSheet();
+  // 讓游標下的像素維持在原位置
+  sheetWrap.scrollLeft = imgX*state.sheetZoom - (e.clientX-sheetWrap.getBoundingClientRect().left);
+  sheetWrap.scrollTop  = imgY*state.sheetZoom - (e.clientY-sheetWrap.getBoundingClientRect().top);
+  saveSoon();
+},{passive:false});
 
-/* ---------- 動畫預覽 ---------- */
+/* ============================================================
+   動畫預覽
+   ============================================================ */
 const pv = $('preview'), pctx = pv.getContext('2d');
+function frameShift(absIdx, W, H){
+  const s = state;
+  if(!s.autoTrim) return {dx:0,dy:0};
+  const b = bboxMap[absIdx]; if(!b) return {dx:0,dy:0};
+  const g = grid();
+  const z = W/g.fw;
+  return {dx: s.ax/100*W - b.cx*z, dy: s.ay/100*H - b.cy*z};
+}
 function drawPreview(){
   const s = state; if(!s.img) return;
   const g = grid(), z = s.zoom;
@@ -276,17 +520,34 @@ function drawPreview(){
   pctx.imageSmoothingEnabled = false;
   pctx.clearRect(0,0,W,H);
 
+  // 參考圖疊層（底層）
+  if(s.showRef && s.refImg){
+    pctx.globalAlpha = s.refOpacity;
+    pctx.drawImage(s.refImg, 0,0, s.refImg.width, s.refImg.height, 0,0, W, H);
+    pctx.globalAlpha = 1;
+  }
+  // 洋蔥皮
   if(s.onion){
     pctx.globalAlpha = Math.max(.08, .5 / s.count);
     for(let k=0;k<s.count;k++){
-      const r = frameRect(s.start+k, g);
-      pctx.drawImage(s.img, r.x, r.y, r.w, r.h, 0, 0, W, H);
+      const ai = s.start+k, r = frameRect(ai, g), sh = frameShift(ai,W,H);
+      pctx.drawImage(s.img, r.x, r.y, r.w, r.h, sh.dx, sh.dy, W, H);
     }
     pctx.globalAlpha = 1;
   }
-  const r = frameRect(s.start + s.idx, g);
-  pctx.drawImage(s.img, r.x, r.y, r.w, r.h, 0, 0, W, H);
+  const ai = s.start + s.idx, r = frameRect(ai, g), sh = frameShift(ai,W,H);
+  pctx.drawImage(s.img, r.x, r.y, r.w, r.h, sh.dx, sh.dy, W, H);
 
+  // 內容中心
+  if(s.showCenters && bboxMap[ai]){
+    const b=bboxMap[ai];
+    const cx=b.cx*z+sh.dx, cy=b.cy*z+sh.dy;
+    pctx.strokeStyle='rgba(123,224,85,.95)'; pctx.lineWidth=1;
+    pctx.strokeRect(b.x*z+sh.dx+.5, b.y*z+sh.dy+.5, b.w*z-1, b.h*z-1);
+    pctx.fillStyle='rgba(123,224,85,.95)';
+    pctx.beginPath(); pctx.arc(cx,cy,2.5,0,7); pctx.fill();
+  }
+  // 錨點十字
   if(s.showAnchor){
     const axp = s.ax/100*W, ayp = s.ay/100*H;
     pctx.strokeStyle = 'rgba(255,80,80,.9)'; pctx.lineWidth = 1;
@@ -294,34 +555,141 @@ function drawPreview(){
     pctx.moveTo(axp+.5, 0); pctx.lineTo(axp+.5, H);
     pctx.moveTo(0, ayp+.5); pctx.lineTo(W, ayp+.5);
     pctx.stroke();
-    pctx.strokeStyle = 'rgba(255,80,80,.9)';
     pctx.strokeRect(axp-4.5, ayp-4.5, 9, 9);
   }
-  const gi = grid();
-  $('frameInfo').textContent =
-    `格 ${s.start + s.idx}（範圍 ${s.start} ~ ${s.start+s.count-1}，第 ${s.idx+1}/${s.count} 張）\n` +
-    `來源座標 x=${r.x} y=${r.y}  尺寸 ${r.w}×${r.h}px\n` +
-    `切割：${gi.cols} 欄 × ${gi.rows} 列，共 ${gi.total} 格` +
-    (emptyMap[s.start+s.idx] ? '\n⚠ 此格偵測為空白' : '');
+  updateFrameInfo(ai, r, g);
 }
+function updateFrameInfo(ai, r, g){
+  const s = state, b = bboxMap[ai];
+  let devTxt = '';
+  if(b){
+    const dx = (b.cx - s.ax/100*g.fw), dy = (b.cy - s.ay/100*g.fh);
+    devTxt = `\n內容中心 (${b.cx.toFixed(1)}, ${b.cy.toFixed(1)})  偏移錨點 Δ=(${dx>=0?'+':''}${dx.toFixed(1)}, ${dy>=0?'+':''}${dy.toFixed(1)})px`;
+  }
+  $('frameInfo').textContent =
+    `格 ${ai}（範圍 ${s.start} ~ ${s.start+s.count-1}，第 ${s.idx+1}/${s.count} 張）\n` +
+    `來源座標 x=${r.x} y=${r.y}  尺寸 ${r.w}×${r.h}px\n` +
+    `切割：${g.cols} 欄 × ${g.rows} 列，共 ${g.total} 格` +
+    (emptyMap[ai] ? '\n⚠ 此格偵測為空白' : devTxt);
+}
+
+/* ============================================================
+   對齊分析（抖動圖）
+   ============================================================ */
+const jit = $('jitter'), jctx = jit.getContext('2d');
+function drawJitter(){
+  const s = state;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = jit.clientWidth || 300, cssH = 96;
+  if(jit.width !== cssW*dpr){ jit.width=cssW*dpr; jit.height=cssH*dpr; }
+  jctx.setTransform(dpr,0,0,dpr,0,0);
+  jctx.clearRect(0,0,cssW,cssH);
+  if(!s.img || s.count<1){ $('jitterStat').textContent='載入圖片後顯示各格中心相對錨點的偏移量。'; return; }
+  const g = grid();
+  const dxs=[], dys=[];
+  for(let k=0;k<s.count;k++){
+    const b = bboxMap[s.start+k];
+    dxs.push(b? b.cx - s.ax/100*g.fw : null);
+    dys.push(b? b.cy - s.ay/100*g.fh : null);
+  }
+  let mx=1; dxs.concat(dys).forEach(v=>{ if(v!=null) mx=Math.max(mx,Math.abs(v)); });
+  mx = Math.ceil(mx);
+  const midY = cssH/2, scaleY=(cssH/2-8)/mx;
+  // 零線 + 格線
+  jctx.strokeStyle='rgba(255,255,255,.15)'; jctx.lineWidth=1;
+  jctx.beginPath(); jctx.moveTo(0,midY+.5); jctx.lineTo(cssW,midY+.5); jctx.stroke();
+  jctx.fillStyle='rgba(255,255,255,.4)'; jctx.font='10px Consolas';
+  jctx.fillText('+'+mx, 2, 10); jctx.fillText('-'+mx, 2, cssH-2); jctx.fillText('0', 2, midY-2);
+  const n=s.count, step = n>1 ? (cssW-16)/(n-1) : 0, x0=8;
+  const plot=(arr,color)=>{
+    jctx.strokeStyle=color; jctx.lineWidth=1.5; jctx.beginPath(); let started=false;
+    for(let i=0;i<n;i++){
+      if(arr[i]==null){ started=false; continue; }
+      const x=x0+i*step, y=midY-arr[i]*scaleY;
+      if(!started){ jctx.moveTo(x,y); started=true; } else jctx.lineTo(x,y);
+      jctx.fillStyle=color; jctx.fillRect(x-1.5,y-1.5,3,3);
+    }
+    jctx.stroke();
+  };
+  plot(dxs,'#ff6b6b'); plot(dys,'#4da3ff');
+  // 目前格標記
+  const cx=x0+s.idx*step;
+  jctx.strokeStyle='rgba(255,184,77,.8)'; jctx.beginPath(); jctx.moveTo(cx,0); jctx.lineTo(cx,cssH); jctx.stroke();
+  const maxDx=Math.max(...dxs.filter(v=>v!=null).map(Math.abs), 0);
+  const maxDy=Math.max(...dys.filter(v=>v!=null).map(Math.abs), 0);
+  const ok = maxDx<=1 && maxDy<=1;
+  $('jitterStat').innerHTML =
+    `最大偏移 X=<b>${maxDx.toFixed(1)}</b>px、Y=<b>${maxDy.toFixed(1)}</b>px　` +
+    (ok? '<span class="ok">✔ 對齊良好</span>' : '<span class="no">‼ 中心不一致，建議修正或開「內容對齊播放」比對</span>');
+}
+
+/* ============================================================
+   播放迴圈
+   ============================================================ */
+function nextIndex(){
+  const s = state, n = s.count;
+  if(n<=1){ return 0; }
+  if(s.playMode==='pingpong'){
+    let i = s.idx + s.pdir;
+    if(i>=n-1){ i=n-1; s.pdir=-1; }
+    else if(i<=0){ i=0; s.pdir=1; }
+    return i;
+  }
+  const d = s.reverse ? -1 : 1;
+  let i = s.idx + d;
+  if(i>=n){ if(s.playMode==='once'){ setPlaying(false); return n-1; } return 0; }
+  if(i<0){ if(s.playMode==='once'){ setPlaying(false); return 0; } return n-1; }
+  return i;
+}
+function render(){
+  if(!state.img) return;
+  drawPreview(); markSheetCurrent(); updateScrub(); drawJitter();
+  needDraw = false;
+}
+window.__render = render;
+let running = false;
 function loop(t){
   const s = state;
-  if(s.playing && s.img && s.count > 0){
+  if(s.playing && s.img && s.count>0){
     acc += (t - lastTick);
     const dur = 1000 / s.fps;
     if(acc >= dur){
-      const steps = Math.floor(acc / dur);
-      acc -= steps * dur;
-      s.idx = (s.idx + steps) % s.count;
-      drawPreview(); drawSheet();
+      let guard=0;
+      while(acc >= dur && guard++ < 240){ acc -= dur; s.idx = nextIndex(); }
+      needDraw = true;
     }
   }
+  if(needDraw && s.img) render();
   lastTick = t;
+  // 只有播放中且有圖才持續排程；否則休眠（改動由控制項直接 render）
+  if(s.playing && s.img && s.count>0) requestAnimationFrame(loop);
+  else running = false;
+}
+function startLoop(){
+  if(running) return;
+  running = true; lastTick = performance.now();
   requestAnimationFrame(loop);
 }
-requestAnimationFrame(t=>{ lastTick = t; requestAnimationFrame(loop); });
 
-/* ---------- 整列快速選擇 ---------- */
+/* ============================================================
+   scrubber
+   ============================================================ */
+const scrub = $('scrub');
+function updateScrub(){
+  const s = state;
+  scrub.max = Math.max(0, s.count-1);
+  scrub.value = s.idx;
+  $('scrubLabel').textContent = `${s.idx+1} / ${s.count}`;
+}
+scrub.addEventListener('input', ()=>{
+  setPlaying(false);
+  state.idx = clamp(+scrub.value, 0, state.count-1);
+  render();
+});
+
+/* ============================================================
+   整列快速選擇 + 片段
+   ============================================================ */
 function buildRowBtns(){
   const box = $('rowBtns'); box.innerHTML = '';
   if(!state.img) return;
@@ -330,11 +698,11 @@ function buildRowBtns(){
     const b = document.createElement('button');
     b.textContent = '列 ' + r;
     b.onclick = ()=>{
-      buildEmptyMap();
+      buildFrameData();
       const s = state, startI = r*g.cols;
       let n = 0;
       while(n < g.cols && !emptyMap[startI+n]) n++;
-      s.start = startI; s.count = Math.max(1, n || g.cols); s.idx = 0;
+      s.start = startI; s.count = Math.max(1, n || g.cols); s.idx = 0; s.pdir=1;
       box.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
       b.classList.add('active');
       syncInputs(); refresh();
@@ -342,53 +710,126 @@ function buildRowBtns(){
     box.appendChild(b);
   }
 }
+function renderClips(){
+  const box = $('clipList'); box.innerHTML='';
+  clips.forEach((c,idx)=>{
+    const b=document.createElement('button'); b.textContent=c.name;
+    b.title=`格 ${c.start}~${c.start+c.count-1}｜${c.fps}fps`;
+    b.onclick=()=>{ applyState(c.state); state.start=c.start; state.count=c.count;
+      state.idx=0; state.pdir=1; syncInputs(); refresh();
+      box.querySelectorAll('button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); };
+    const d=document.createElement('button'); d.textContent='×'; d.className='del'; d.title='刪除';
+    d.onclick=ev=>{ ev.stopPropagation(); clips.splice(idx,1); saveClips(); renderClips(); };
+    box.appendChild(b); box.appendChild(d);
+  });
+}
+$('saveClip').onclick = ()=>{
+  if(!state.img) return;
+  const name = ($('clipName').value.trim()) || ('片段'+(clips.length+1));
+  const snap={}; SAVE_KEYS.forEach(k=>snap[k]=state[k]);
+  clips.push({name, start:state.start, count:state.count, fps:state.fps, state:snap});
+  $('clipName').value='';
+  saveClips(); renderClips();
+};
 
-/* ---------- 載入圖片 ---------- */
-function loadFile(f){
+/* ============================================================
+   載入圖片
+   ============================================================ */
+function loadFile(f, isRef){
   if(!f || !f.type.startsWith('image/')) return;
   const rd = new FileReader();
-  rd.onload = ()=> loadImageURL(rd.result, f.name);
+  rd.onload = ()=> isRef ? loadRef(rd.result) : loadImageURL(rd.result, f.name);
   rd.readAsDataURL(f);
 }
 function loadImageURL(url, name){
   const img = new Image();
   img.onload = ()=>{
-    state.img = img; state.idx = 0; emptyKey = '';
+    state.img = img; state.idx = 0; state.pdir=1; dataKey='';
     $('imgInfo').textContent = `${name||'圖片'}：${img.width} × ${img.height} px`;
-    clampAll(); buildEmptyMap(); buildRowBtns(); syncInputs(); refresh();
+    clampAll(); buildFrameData(); buildRowBtns(); syncInputs(); refresh();
+    if(state.playing) startLoop();
   };
-  img.onerror = ()=> $('imgInfo').textContent = '圖片載入失敗';
+  img.onerror = ()=> $('imgInfo').textContent = '圖片載入失敗（可能跨網域）';
+  img.crossOrigin = 'anonymous';
   img.src = url;
 }
-window.loadImageURL = loadImageURL; // 方便外部/測試呼叫
+function loadRef(url){
+  const img=new Image();
+  img.onload=()=>{ state.refImg=img; state.showRef=true; $('showRef').checked=true; needDraw=true; };
+  img.src=url;
+}
+window.loadImageURL = loadImageURL;
 
 const drop = $('drop');
 drop.onclick = ()=> $('file').click();
-$('file').onchange = e=> loadFile(e.target.files[0]);
+$('file').onchange = e=> loadFile(e.target.files[0], false);
+$('refBtn').onclick = ()=> $('refFile').click();
+$('refFile').onchange = e=> loadFile(e.target.files[0], true);
 ['dragover','dragleave','drop'].forEach(ev=>{
   document.addEventListener(ev, e=>{
     e.preventDefault();
     drop.classList.toggle('over', ev==='dragover');
-    if(ev==='drop' && e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+    if(ev==='drop' && e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0], false);
   });
 });
 document.addEventListener('paste', e=>{
   for(const it of e.clipboardData.items)
-    if(it.type.startsWith('image/')){ loadFile(it.getAsFile()); break; }
+    if(it.type.startsWith('image/')){ loadFile(it.getAsFile(), false); break; }
 });
 
-/* ---------- 輸入綁定 ---------- */
+/* ============================================================
+   自動偵測 UI
+   ============================================================ */
+$('detect').onclick = ()=>{
+  if(!state.img){ return; }
+  detected = autoDetect();
+  if(!detected){ $('detectInfo').textContent='偵測不到明顯的透明間隙，無法自動切割（試試手動或裁掉背景）。'; $('applyDetect').disabled=true; return; }
+  $('detectInfo').innerHTML = `建議：<b>${detected.cols}</b> 欄 × <b>${detected.rows}</b> 列，`+
+     `格 <b>${detected.fw}×${detected.fh}</b>px，位移 (${detected.offX},${detected.offY})，間距 (${detected.spX},${detected.spY})`;
+  $('applyDetect').disabled=false;
+};
+$('applyDetect').onclick = ()=>{
+  if(!detected) return;
+  Object.assign(state, {mode:detected.mode, fw:detected.fw, fh:detected.fh,
+    cols:detected.cols, rows:detected.rows, offX:detected.offX, offY:detected.offY,
+    spX:detected.spX, spY:detected.spY, start:0, count:Math.min(state.count, detected.cols), idx:0});
+  document.querySelector('input[name=mode][value=size]').checked=true;
+  $('gridInputs').style.display='none'; $('sizeInputs').style.display='';
+  syncInputs(); buildRowBtns(); refresh();
+};
+
+/* ============================================================
+   輸入綁定
+   ============================================================ */
 function clampAll(){
   const s = state, g = grid();
   s.start = Math.min(Math.max(0, s.start), Math.max(0, g.total-1));
   s.count = Math.min(Math.max(1, s.count), g.total - s.start);
   if(s.idx >= s.count) s.idx = 0;
 }
+function checkWarnings(g){
+  const s = state; if(!s.img){ $('warnInfo').textContent=''; return; }
+  const msgs=[];
+  if(s.mode==='grid'){
+    const remW = s.img.width  - s.offX - s.cols*g.fw - (s.cols-1)*s.spX;
+    const remH = s.img.height - s.offY - s.rows*g.fh - (s.rows-1)*s.spY;
+    if(remW>0 || remH>0) msgs.push(`⚠ 無法整除，剩餘 ${remW}×${remH}px（欄列數或位移可能不對）`);
+  }
+  // 內容碰格線邊緣（可能被裁切）
+  let clip=0;
+  for(let i=0;i<g.total;i++){ const b=bboxMap[i]; if(b && (b.x<=0||b.y<=0||b.x+b.w>=g.fw||b.y+b.h>=g.fh)) clip++; }
+  if(clip) msgs.push(`⚠ ${clip} 格內容碰到格線邊緣，可能被裁切`);
+  $('warnInfo').textContent = msgs.join('　');
+}
 function refresh(){
-  clampAll(); buildEmptyMap(); drawSheet(); drawPreview();
+  clampAll(); buildFrameData();
   const g = grid();
+  drawSheet();
   $('gridInfo').textContent = state.img ?
     `每格 ${g.fw} × ${g.fh} px｜${g.cols} 欄 × ${g.rows} 列 = ${g.total} 格` : '';
+  checkWarnings(g);
+  render();
+  saveSoon();
 }
 function syncInputs(){
   const s = state;
@@ -398,13 +839,24 @@ function syncInputs(){
   $('fps').value=$('fpsR').value=s.fps;
   $('zoom').value=$('zoomR').value=s.zoom;
   $('ax').value=$('axR').value=s.ax; $('ay').value=$('ayR').value=s.ay;
+  $('showAnchor').checked=s.showAnchor; $('showCenters').checked=s.showCenters;
+  $('onion').checked=s.onion; $('autoTrim').checked=s.autoTrim;
+  $('pixelGrid').checked=s.pixelGrid; $('gridColor').value=s.gridColor;
+  $('playMode').value=s.playMode; $('reverse').checked=s.reverse;
+  $('bg').value=s.bg; pv.className='bg-'+s.bg;
+  $('refOpR').value=Math.round(s.refOpacity*100); $('refOpV').textContent=Math.round(s.refOpacity*100)+'%';
+  $('showRef').checked=s.showRef;
+  $('sheetZoomR').value=s.sheetZoom; $('sheetZoomV').textContent=s.sheetZoom+'x';
+  document.querySelector(`input[name=mode][value=${s.mode}]`).checked=true;
+  $('gridInputs').style.display = s.mode==='grid' ? '' : 'none';
+  $('sizeInputs').style.display = s.mode==='size' ? '' : 'none';
 }
 function bindNum(id, key, rebuild){
   $(id).addEventListener('input', ()=>{
     const v = parseInt($(id).value, 10);
     if(isNaN(v)) return;
     state[key] = v;
-    if(rebuild){ state.idx = 0; buildRowBtns(); }
+    if(rebuild){ state.idx = 0; state.pdir=1; buildRowBtns(); }
     refresh();
   });
 }
@@ -414,14 +866,14 @@ bindNum('offX','offX',true); bindNum('offY','offY',true);
 bindNum('spX','spX',true);   bindNum('spY','spY',true);
 bindNum('start','start');    bindNum('count','count');
 
-function bindPair(rId, nId, key, min, max){
+function bindPair(rId, nId, key, min, max, after){
   const set = v=>{
-    v = Math.min(max, Math.max(min, v||min));
-    state[key] = v; $(rId).value = $(nId).value = v;
-    drawPreview();
+    v = clamp(v||min, min, max);
+    state[key] = v; $(rId).value = v; if($(nId)) $(nId).value = v;
+    if(after) after(); render(); saveSoon();
   };
   $(rId).addEventListener('input', ()=> set(+$(rId).value));
-  $(nId).addEventListener('input', ()=> set(+$(nId).value));
+  if($(nId)) $(nId).addEventListener('input', ()=> set(+$(nId).value));
 }
 bindPair('fpsR','fps','fps',1,60);
 bindPair('zoomR','zoom','zoom',1,16);
@@ -433,33 +885,35 @@ document.querySelectorAll('input[name=mode]').forEach(r=>{
     state.mode = r.value;
     $('gridInputs').style.display = state.mode==='grid' ? '' : 'none';
     $('sizeInputs').style.display = state.mode==='size' ? '' : 'none';
-    // 切換模式時把目前計算值帶入另一組欄位，避免跳動
     const g = grid();
     if(state.mode==='size'){ state.fw = g.fw; state.fh = g.fh; }
     else { state.cols = g.cols; state.rows = g.rows; }
     syncInputs(); buildRowBtns(); refresh();
   });
 });
+const toggles = {showAnchor:'showAnchor', showCenters:'showCenters', onion:'onion',
+  autoTrim:'autoTrim', pixelGrid:'pixelGrid', reverse:'reverse', showRef:'showRef'};
+Object.entries(toggles).forEach(([id,key])=>{
+  $(id).onchange = e=>{ state[key]=e.target.checked; if(id==='pixelGrid')drawSheet(); render(); saveSoon(); };
+});
+$('gridColor').oninput = e=>{ state.gridColor=e.target.value; drawSheet(); render(); saveSoon(); };
+$('playMode').onchange = e=>{ state.playMode=e.target.value; state.pdir=1; saveSoon(); };
+$('bg').onchange = e=>{ state.bg=e.target.value; pv.className='bg-'+e.target.value; saveSoon(); };
+$('refOpR').oninput = e=>{ state.refOpacity=+e.target.value/100; $('refOpV').textContent=e.target.value+'%'; render(); saveSoon(); };
+$('sheetZoomR').oninput = e=>{ state.sheetZoom=+e.target.value; $('sheetZoomV').textContent=state.sheetZoom+'x'; drawSheet(); saveSoon(); };
 
-$('showAnchor').onchange = e=>{ state.showAnchor = e.target.checked; drawPreview(); };
-$('onion').onchange      = e=>{ state.onion = e.target.checked; drawPreview(); };
-$('bg').onchange = e=>{ pv.className = 'bg-' + e.target.value; };
-$('sheetZoomR').oninput = e=>{
-  state.sheetZoom = +e.target.value;
-  $('sheetZoomV').textContent = state.sheetZoom + 'x';
-  drawSheet();
-};
-
-const playBtn = $('play');
+const playBtn = $('play'), playMini = $('playMini');
 function setPlaying(p){
   state.playing = p; acc = 0;
   playBtn.textContent = p ? '⏸ 暫停' : '▶ 播放';
+  playMini.textContent = p ? '⏸' : '▶';
+  if(p) startLoop();
 }
-playBtn.onclick = ()=> setPlaying(!state.playing);
+playBtn.onclick = playMini.onclick = ()=> setPlaying(!state.playing);
 function step(d){
   setPlaying(false);
   state.idx = (state.idx + d + state.count) % state.count;
-  drawPreview(); drawSheet();
+  render();
 }
 $('prev').onclick = ()=> step(-1);
 $('next').onclick = ()=> step(1);
@@ -470,9 +924,271 @@ document.addEventListener('keydown', e=>{
   else if(e.code === 'ArrowRight') step(1);
 });
 
-// 支援 ?img=網址 直接載入
+/* ============================================================
+   持久化 + 分享連結
+   ============================================================ */
+let saveTimer=null;
+function saveSoon(){ clearTimeout(saveTimer); saveTimer=setTimeout(saveSettings,300); }
+function saveSettings(){
+  try{ const o={}; SAVE_KEYS.forEach(k=>o[k]=state[k]);
+    localStorage.setItem('spritecheck.settings', JSON.stringify(o)); }catch(e){}
+}
+function saveClips(){ try{ localStorage.setItem('spritecheck.clips', JSON.stringify(clips)); }catch(e){} }
+function applyState(o){
+  SAVE_KEYS.forEach(k=>{ if(o[k]!==undefined){
+    const dv=DEFAULTS[k];
+    state[k] = typeof dv==='boolean' ? (o[k]===true||o[k]==='1'||o[k]===1)
+             : typeof dv==='number'  ? +o[k] : o[k];
+  }});
+}
+function loadPersisted(){
+  const params = new URLSearchParams(location.search);
+  let applied=false;
+  if(params.has('cfg')){
+    try{ applyState(JSON.parse(atob(params.get('cfg')))); applied=true; }catch(e){}
+  }
+  if(!applied){
+    try{ const raw=localStorage.getItem('spritecheck.settings'); if(raw){ applyState(JSON.parse(raw)); } }catch(e){}
+  }
+  try{ const c=localStorage.getItem('spritecheck.clips'); if(c) clips=JSON.parse(c)||[]; }catch(e){}
+}
+$('shareBtn').onclick = ()=>{
+  const o={}; SAVE_KEYS.forEach(k=>o[k]=state[k]);
+  const url = location.origin+location.pathname+'?cfg='+btoa(JSON.stringify(o))
+    + (state.img && /^https?:/.test(state.img.src) ? '&img='+encodeURIComponent(state.img.src) : '');
+  navigator.clipboard?.writeText(url).then(
+    ()=>flash('shareBtn','✔ 已複製'), ()=>prompt('複製此連結：', url));
+  history.replaceState(null,'',url);
+};
+$('resetBtn').onclick = ()=>{
+  applyState(DEFAULTS); syncInputs(); buildRowBtns(); refresh();
+  try{ localStorage.removeItem('spritecheck.settings'); }catch(e){}
+  flash('resetBtn','✔ 已重設');
+};
+function flash(id,txt){ const b=$(id),o=b.textContent; b.textContent=txt; setTimeout(()=>b.textContent=o,1200); }
+
+/* ============================================================
+   匯出：位元組工具
+   ============================================================ */
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}return t;})();
+function crc32(bytes,crc){ crc=(crc===undefined?0xFFFFFFFF:crc); for(let i=0;i<bytes.length;i++)crc=CRC_TABLE[(crc^bytes[i])&0xFF]^(crc>>>8); return crc>>>0; }
+function adler32(b){ let a=1,s=0; for(let i=0;i<b.length;i++){ a=(a+b[i])%65521; s=(s+a)%65521; } return ((s<<16)|a)>>>0; }
+function concat(arrs){ let n=0; for(const a of arrs)n+=a.length; const out=new Uint8Array(n); let o=0; for(const a of arrs){ out.set(a,o); o+=a.length; } return out; }
+const u32be=n=>new Uint8Array([(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255]);
+const u32le=n=>new Uint8Array([n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255]);
+const u16le=n=>new Uint8Array([n&255,(n>>>8)&255]);
+function download(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),3000); }
+
+function zlibStore(data){
+  const blocks=[]; let pos=0;
+  do{
+    const len=Math.min(65535, data.length-pos);
+    const final = (pos+len>=data.length)?1:0;
+    const b=new Uint8Array(5+len);
+    b[0]=final; b[1]=len&255; b[2]=(len>>8)&255; b[3]=(~len)&255; b[4]=((~len)>>8)&255;
+    b.set(data.subarray(pos,pos+len),5);
+    blocks.push(b); pos+=len;
+  }while(pos<data.length);
+  const body=concat(blocks);
+  return concat([new Uint8Array([0x78,0x01]), body, u32be(adler32(data))]);
+}
+function pngRaw(rgba,w,h){
+  const raw=new Uint8Array(h*(w*4+1)); let p=0;
+  for(let y=0;y<h;y++){ raw[p++]=0; const rb=y*w*4;
+    for(let x=0;x<w*4;x++) raw[p++]=rgba[rb+x];
+  }
+  return raw;
+}
+function pngChunk(type,data){
+  const tb=new Uint8Array([type.charCodeAt(0),type.charCodeAt(1),type.charCodeAt(2),type.charCodeAt(3)]);
+  const crc=(crc32(concat([tb,data]))^0xFFFFFFFF)>>>0;
+  return concat([u32be(data.length), tb, data, u32be(crc)]);
+}
+const PNG_SIG=new Uint8Array([137,80,78,71,13,10,26,10]);
+function buildPNG(rgba,w,h){
+  const ihdr=concat([u32be(w),u32be(h),new Uint8Array([8,6,0,0,0])]);
+  return new Blob([concat([PNG_SIG, pngChunk('IHDR',ihdr),
+    pngChunk('IDAT',zlibStore(pngRaw(rgba,w,h))), pngChunk('IEND',new Uint8Array(0))])],{type:'image/png'});
+}
+function buildAPNG(frames,w,h,fps){
+  const ihdr=concat([u32be(w),u32be(h),new Uint8Array([8,6,0,0,0])]);
+  const parts=[PNG_SIG, pngChunk('IHDR',ihdr),
+    pngChunk('acTL', concat([u32be(frames.length), u32be(0)]))];
+  const num=Math.max(1,Math.round(1000/fps)), den=1000;
+  let seq=0;
+  frames.forEach((rgba,f)=>{
+    const fctl=concat([u32be(seq++), u32be(w),u32be(h),u32be(0),u32be(0),
+      new Uint8Array([(num>>8)&255,num&255,(den>>8)&255,den&255, 1, 0])]); // dispose=background, blend=source
+    parts.push(pngChunk('fcTL',fctl));
+    const comp=zlibStore(pngRaw(rgba,w,h));
+    parts.push(f===0 ? pngChunk('IDAT',comp) : pngChunk('fdAT', concat([u32be(seq++),comp])));
+  });
+  parts.push(pngChunk('IEND',new Uint8Array(0)));
+  return new Blob([concat(parts)],{type:'image/png'});
+}
+
+/* GIF：中位切割量化 + LZW */
+function quantize(samples, maxColors){
+  if(!samples.length) return [[0,0,0]];
+  let boxes=[{px:samples}];
+  const rangeOf=px=>{
+    let mn=[255,255,255], mx=[0,0,0];
+    for(const p of px) for(let c=0;c<3;c++){ if(p[c]<mn[c])mn[c]=p[c]; if(p[c]>mx[c])mx[c]=p[c]; }
+    let axis=0,r=-1; for(let c=0;c<3;c++){ const d=mx[c]-mn[c]; if(d>r){r=d;axis=c;} }
+    return {axis,range:r};
+  };
+  while(boxes.length<maxColors){
+    let idx=-1,best=-1,axis=0;
+    for(let i=0;i<boxes.length;i++){ if(boxes[i].px.length<2)continue;
+      const r=rangeOf(boxes[i].px); if(r.range>best){best=r.range;idx=i;axis=r.axis;} }
+    if(idx<0) break;
+    const b=boxes[idx]; b.px.sort((p,q)=>p[axis]-q[axis]);
+    const mid=b.px.length>>1;
+    boxes.splice(idx,1,{px:b.px.slice(0,mid)},{px:b.px.slice(mid)});
+  }
+  return boxes.map(b=>{ let r=0,g=0,bl=0; for(const p of b.px){r+=p[0];g+=p[1];bl+=p[2];}
+    const n=b.px.length||1; return [Math.round(r/n),Math.round(g/n),Math.round(bl/n)]; });
+}
+function lzwEncode(indices, minCodeSize){
+  const out=[]; let cur=0, curBits=0;
+  const put=(code,bits)=>{ cur |= code<<curBits; curBits+=bits;
+    while(curBits>=8){ out.push(cur&255); cur>>=8; curBits-=8; } };
+  const clear=1<<minCodeSize, eoi=clear+1;
+  let dict, next, size;
+  const reset=()=>{ dict=new Map(); next=eoi+1; size=minCodeSize+1; };
+  reset(); put(clear,size);
+  let prefix=indices[0];
+  for(let i=1;i<indices.length;i++){
+    const k=indices[i], key=prefix*257+k+1;
+    if(dict.has(key)){ prefix=dict.get(key); }
+    else{
+      put(prefix,size);
+      if(next<4096){ dict.set(key,next++); if(next>(1<<size) && size<12) size++; }
+      else{ put(clear,size); reset(); }
+      prefix=k;
+    }
+  }
+  put(prefix,size); put(eoi,size);
+  if(curBits>0) out.push(cur&255);
+  // 切成 <=255 的 sub-block
+  const res=[]; for(let i=0;i<out.length;i+=255){ const n=Math.min(255,out.length-i);
+    res.push(n); for(let j=0;j<n;j++)res.push(out[i+j]); }
+  res.push(0);
+  return new Uint8Array(res);
+}
+function buildGIF(frames,w,h,fps){
+  // 收集顏色樣本
+  const samp=[]; const stride=Math.max(1, Math.floor(frames.length*w*h/20000));
+  let cnt=0;
+  for(const fr of frames) for(let i=0;i<w*h;i++){ if(fr[i*4+3]>=128){ if((cnt++%stride)===0) samp.push([fr[i*4],fr[i*4+1],fr[i*4+2]]); } }
+  let pal=quantize(samp,255);
+  const bits=Math.max(2, Math.ceil(Math.log2(pal.length+1)));
+  const tableSize=1<<bits, transIndex=pal.length;
+  // 建立最近色快取
+  const cache=new Map();
+  const nearest=(r,g,b)=>{ const key=(r<<16)|(g<<8)|b; let v=cache.get(key); if(v!==undefined)return v;
+    let bi=0,bd=1e9; for(let i=0;i<pal.length;i++){ const p=pal[i],dr=r-p[0],dg=g-p[1],db=b-p[2],d=dr*dr+dg*dg+db*db; if(d<bd){bd=d;bi=i;} }
+    cache.set(key,bi); return bi; };
+  const gct=new Uint8Array(tableSize*3);
+  for(let i=0;i<pal.length;i++){ gct[i*3]=pal[i][0]; gct[i*3+1]=pal[i][1]; gct[i*3+2]=pal[i][2]; }
+  const delay=Math.max(2, Math.round(100/fps));
+  const parts=[];
+  parts.push(new Uint8Array([71,73,70,56,57,97])); // GIF89a
+  parts.push(concat([u16le(w),u16le(h), new Uint8Array([0xF0|(bits-1), 0, 0]), gct]));
+  parts.push(new Uint8Array([0x21,0xFF,0x0B,78,69,84,83,67,65,80,69,50,46,48, 3,1,0,0, 0])); // NETSCAPE loop
+  for(const fr of frames){
+    parts.push(new Uint8Array([0x21,0xF9,0x04, 0x09, delay&255,(delay>>8)&255, transIndex, 0])); // GCE disposal=2 transp
+    parts.push(concat([new Uint8Array([0x2C]), u16le(0),u16le(0),u16le(w),u16le(h), new Uint8Array([0])]));
+    const idxArr=new Uint8Array(w*h);
+    for(let i=0;i<w*h;i++){ idxArr[i]= fr[i*4+3]<128 ? transIndex : nearest(fr[i*4],fr[i*4+1],fr[i*4+2]); }
+    parts.push(new Uint8Array([bits]));
+    parts.push(lzwEncode(idxArr,bits));
+  }
+  parts.push(new Uint8Array([0x3B]));
+  return new Blob([concat(parts)],{type:'image/gif'});
+}
+
+/* 取得每格 RGBA */
+function frameRGBA(absIdx){
+  const g=grid(), r=frameRect(absIdx,g);
+  ensureSrc();
+  const d=srcCtx.getImageData(r.x,r.y,r.w,r.h);
+  return {data:d.data, w:r.w, h:r.h};
+}
+function rangeFrames(){
+  const s=state, arr=[];
+  for(let k=0;k<s.count;k++) arr.push(frameRGBA(s.start+k));
+  return arr;
+}
+
+$('expGif').onclick = ()=>{
+  if(!state.img) return; flash('expGif','…');
+  setTimeout(()=>{ const g=grid(); const fr=rangeFrames();
+    try{ download(buildGIF(fr.map(f=>f.data), g.fw, g.fh, state.fps), 'sprite-anim.gif'); flash('expGif','匯出 GIF'); }
+    catch(e){ alert('GIF 匯出失敗：'+e.message); flash('expGif','匯出 GIF'); } }, 20);
+};
+$('expApng').onclick = ()=>{
+  if(!state.img) return; flash('expApng','…');
+  setTimeout(()=>{ const g=grid(); const fr=rangeFrames();
+    download(buildAPNG(fr.map(f=>f.data), g.fw, g.fh, state.fps), 'sprite-anim.png'); flash('expApng','匯出 APNG'); }, 20);
+};
+$('expZip').onclick = ()=>{
+  if(!state.img) return; flash('expZip','…');
+  setTimeout(()=>{
+    const s=state, files=[];
+    for(let k=0;k<s.count;k++){ const f=frameRGBA(s.start+k);
+      const blob=buildPNG(f.data,f.w,f.h); files.push({name:`frame_${String(k).padStart(3,'0')}.png`, blobData:blob}); }
+    // buildPNG 回傳 Blob → 需 arrayBuffer；改為同步組 zip
+    Promise.all(files.map(f=>f.blobData.arrayBuffer())).then(bufs=>{
+      const entries=files.map((f,i)=>({name:f.name, data:new Uint8Array(bufs[i])}));
+      download(buildZip(entries),'sprite-frames.zip'); flash('expZip','切片 ZIP');
+    });
+  },20);
+};
+function buildZip(files){
+  const enc=new TextEncoder(); const locals=[],central=[]; let offset=0;
+  for(const f of files){
+    const nb=enc.encode(f.name);
+    const crc=(crc32(f.data)^0xFFFFFFFF)>>>0, size=f.data.length;
+    const local=concat([u32le(0x04034b50),u16le(20),u16le(0),u16le(0),u16le(0),u16le(0),
+      u32le(crc),u32le(size),u32le(size),u16le(nb.length),u16le(0), nb, f.data]);
+    locals.push(local);
+    central.push(concat([u32le(0x02014b50),u16le(20),u16le(20),u16le(0),u16le(0),u16le(0),u16le(0),
+      u32le(crc),u32le(size),u32le(size),u16le(nb.length),u16le(0),u16le(0),u16le(0),u16le(0),
+      u32le(0),u32le(offset), nb]));
+    offset+=local.length;
+  }
+  const lb=concat(locals), cb=concat(central);
+  const end=concat([u32le(0x06054b50),u16le(0),u16le(0),u16le(files.length),u16le(files.length),
+    u32le(cb.length),u32le(lb.length),u16le(0)]);
+  return new Blob([lb,cb,end],{type:'application/zip'});
+}
+$('expJson').onclick = ()=>{
+  if(!state.img) return;
+  const s=state, g=grid(), frames=[];
+  for(let i=0;i<g.total;i++){ const r=frameRect(i,g), b=bboxMap[i];
+    frames.push({index:i, x:r.x, y:r.y, w:r.w, h:r.h, empty:!!emptyMap[i],
+      content: b?{x:r.x+b.x,y:r.y+b.y,w:b.w,h:b.h,cx:+(r.x+b.cx).toFixed(1),cy:+(r.y+b.cy).toFixed(1)}:null}); }
+  const atlas={image:(s.img.src.length<300?s.img.src:'(embedded)'),
+    sheet:{w:s.img.width,h:s.img.height}, frameWidth:g.fw, frameHeight:g.fh,
+    cols:g.cols, rows:g.rows, offset:{x:s.offX,y:s.offY}, spacing:{x:s.spX,y:s.spY},
+    anchor:{x:s.ax/100,y:s.ay/100},
+    animation:{start:s.start,count:s.count,fps:s.fps,mode:s.playMode},
+    frames};
+  download(new Blob([JSON.stringify(atlas,null,2)],{type:'application/json'}),'sprite-atlas.json');
+};
+
+/* ============================================================
+   啟動
+   ============================================================ */
+loadPersisted();
+syncInputs(); renderClips();
+setPlaying(true);
 const q = new URLSearchParams(location.search).get('img');
 if(q) loadImageURL(q, q.split('/').pop());
+else refresh();
+window.__spritecheck = {state, grid, autoDetect, buildGIF, buildAPNG, buildZip, buildPNG, rangeFrames,
+  bboxMapRef:()=>bboxMap, nextIndex, clipsRef:()=>clips};
 </script>
 </body>
 </html>
