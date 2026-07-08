@@ -367,6 +367,23 @@ function integrateSCurve(kS, L, dRamp, thetaStart, gear) {
   return { S, ds, xs, ys, ths, ks, dx: x, dy: y };
 }
 
+// One-sided wind: curvature ramps 0 -> kS over dR, holds Lh, ramps back to 0.
+// Net heading change = gear * kS * (dR + Lh).
+function integrateWind(kS, Lh, dR, thetaStart, gear) {
+  const S = 2 * dR + Lh;
+  const ds = 0.02;
+  const kappaAt = (s) => (s < dR ? (kS * s) / dR : s < dR + Lh ? kS : s < S ? kS * (1 - (s - dR - Lh) / dR) : 0);
+  const xs = [0], ys = [0], ths = [thetaStart], ks = [0];
+  let x = 0, y = 0, th = thetaStart;
+  for (let s = ds; s <= S + 1e-9; s += ds) {
+    th += gear * kappaAt(s - ds / 2) * ds;
+    x += gear * Math.cos(th) * ds;
+    y += gear * Math.sin(th) * ds;
+    xs.push(x); ys.push(y); ths.push(th); ks.push(kappaAt(s));
+  }
+  return { S, ds, xs, ys, ths, ks, dx: x, dy: y };
+}
+
 // Find hold length L (or reduced peak curvature) so the S-curve's lateral
 // displacement matches targetDy. Both relations are monotonic, so bisect.
 function solveSCurve(targetDy, kMax, dRamp0, thetaStart, gear, turnSignK) {
@@ -445,6 +462,46 @@ function wrapAngle(a) {
   while (a > Math.PI) a -= 2 * Math.PI;
   while (a < -Math.PI) a += 2 * Math.PI;
   return a;
+}
+
+// "Deep dive" two-move plan: reverse in steeply, overshooting past the parked
+// line toward the kerb (the bay is wider than the car), tail near the rear
+// car — then a single full-lock forward arc swings the nose in and lands
+// exactly aligned. One gear change instead of many shuffle cycles.
+function buildDeepDive(p, geo, thetaStart, aisleDir, yDrive, yFinal, kMax, tS, neighbors) {
+  const R = 1 / kMax;
+  const dR = 0.6;
+  const uFrontLim = p.spotDepth / 2 - (p.wheelbase + geo.frontOverhang) - 0.15;
+  const finalPos = { x: uFrontLim * p.laneDir, y: yFinal };
+  const lnf = V.leftNormal(V.fromAngle(thetaStart));
+  const C = V.add(finalPos, V.scale(lnf, R * tS));
+  // Overshoot toward the kerb is bounded by the bay's spare width.
+  const maxOver = Math.max(0, p.spotWidth / 2 - p.carWidth / 2 - 0.05);
+  const phiCap = Math.acos(Math.max(-1, Math.min(1, 1 - maxOver / R)));
+  for (let phi1 = Math.min(0.7, phiCap); phi1 >= 0.1; phi1 -= 0.05) {
+    const thDive = thetaStart - tS * phi1;
+    const hDive = V.fromAngle(thDive);
+    const Pstart = V.sub(C, V.scale(V.leftNormal(hDive), R * tS)); // forward-arc start
+    const dEff = Math.min(dR, phi1 / kMax);
+    const Lh = Math.max(0, phi1 / kMax - dEff);
+    const wind = integrateWind(kMax * tS, Lh, dEff, thetaStart, -1);
+    const dyPerM = -Math.sin(thDive); // per metre of straight reverse at the dive angle
+    if (Math.abs(dyPerM) < 1e-4) continue;
+    const d1 = (Pstart.y - yDrive - wind.dy) / dyPerM;
+    if (d1 < -0.01) continue; // the wind alone already overshoots: steeper than needed
+    const d1c = Math.max(0, d1);
+    const windEnd = V.add(Pstart, V.scale(hDive, d1c));
+    const P0 = { x: windEnd.x - wind.dx, y: windEnd.y - wind.dy };
+    const segs = [
+      makeStraight(V.sub(P0, V.scale(aisleDir, APPROACH_LEN)), thetaStart, APPROACH_LEN, 1),
+      makeTableSegment(P0, wind, -1),
+    ];
+    if (d1c > 0.01) segs.push(makeStraight(windEnd, thDive, d1c, -1));
+    segs.push(makeArc(C, R, tS, 1, thDive, R * phi1));
+    const path = buildPath(segs);
+    if (!findFirstCollision(path, p, geo, neighbors)) return { path, phi1 };
+  }
+  return null;
 }
 
 // Multi-attempt parallel parking: feedback-steered rollout that reverses into
@@ -768,6 +825,17 @@ function computeParallelManeuver(p, geo) {
   const debugSingleShot = collision ? { s: collision.s, idx: collision.neighborIndex, pose: path.poseAt(collision.s) } : null;
   let debugShuffle = null;
   let shuffleFailed = false;
+  // Prefer the driver's two-move technique before resorting to shuffling:
+  // dive in deep past the parked line, then one forward arc to align.
+  if (collision || !feasible) {
+    const dive = buildDeepDive(p, geo, thetaStart, aisleDir, yDrive, yFinal, kMax, turnSign1, neighbors);
+    if (dive) {
+      path = dive.path;
+      collision = null;
+      feasible = true;
+      info.push(`車位較短，採「深切（${(dive.phi1 * 57.3).toFixed(0)}°）＋前進回正」二段式入庫，僅 1 次換檔。`);
+    }
+  }
   if (collision || !feasible) {
     const shuffle = simulateShuffleParallel(p, geo, lastP0, thetaStart, yFinal, xf, neighbors, kMax);
     debugShuffle = shuffle;
