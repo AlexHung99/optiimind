@@ -746,15 +746,23 @@ function computeParallelManeuver(p, geo) {
     // Two plan shapes per starting position: a pure S-curve (small lateral
     // offsets), or "cut early, run the diagonal, tuck in" — wind to the entry
     // angle, hold a straight diagonal run, then wind back straight — which
-    // covers any offset the road width allows.
-    const buildNormal = (ya, dRamp) => {
+    // covers any offset the road width allows. The reverse-phase end anchor
+    // uSEnd is also searched: ending toward the FRONT of the bay means the
+    // turn starts earlier and the tail never sweeps into the rear stall;
+    // centring then just continues in reverse (no extra gear change).
+    const uCenterN = -((p.wheelbase + geo.frontOverhang - geo.rearOverhang) / 2);
+    const uFrontMax = p.spotDepth / 2 - (p.wheelbase + geo.frontOverhang) - 0.15;
+    const uSEndCandidates = [uFrontMax, (uFrontMax + uCenterN) / 2, uCenterN, uCenterN - dForward]
+      .filter((u, i, a) => a.indexOf(u) === i && u >= uCenterN - dForward - 1e-9);
+    const buildNormal = (ya, dRamp, uSEnd) => {
       const yD = p.rowSide * ya;
       const target = yFinal - yD;
+      const xEnd = uSEnd * p.laneDir;
       const sol = solveSCurve(target, kMax, dRamp, thetaStart, gear, turnSign1);
       let segs;
       if (sol.feasible) {
         const table = integrateSCurve(sol.kPeak * turnSign1, sol.L, sol.dRamp, thetaStart, gear);
-        const P0 = { x: xfReverse - table.dx, y: yD };
+        const P0 = { x: xEnd - table.dx, y: yD };
         segs = [makeStraight(V.sub(P0, V.scale(aisleDir, APPROACH_LEN)), thetaStart, APPROACH_LEN, 1), makeTableSegment(P0, table, gear)];
       } else {
         const thMax = state.thetaCap || 0.87;
@@ -766,7 +774,7 @@ function computeParallelManeuver(p, geo) {
         const windOut = integrateWind(-kMax * turnSign1, Lh, dRe, thDive, -1);
         const dyPerM = -Math.sin(thDive);
         const D = Math.max(0, (target - windIn.dy - windOut.dy) / dyPerM);
-        const sEnd = { x: xfReverse, y: yD + target };
+        const sEnd = { x: xEnd, y: yD + target };
         const windOutStart = { x: sEnd.x - windOut.dx, y: sEnd.y - windOut.dy };
         const diagStart = V.add(windOutStart, V.scale(hDive, D));
         const P0 = { x: diagStart.x - windIn.dx, y: diagStart.y - windIn.dy };
@@ -777,20 +785,28 @@ function computeParallelManeuver(p, geo) {
         if (D > 0.01) segs.push(makeStraight(diagStart, thDive, D, -1));
         segs.push(makeTableSegment(windOutStart, windOut, -1));
       }
-      if (dForward > 0.01) segs.push(makeStraight({ x: xfReverse, y: yFinal }, thetaStart, dForward, 1));
+      // Centre the car: continue reversing if the S ended forward of centre,
+      // otherwise pull forward.
+      const dC = uSEnd - uCenterN;
+      const endPos = { x: xEnd, y: yFinal };
+      if (dC > 0.02) segs.push(makeStraight(endPos, thetaStart, dC, -1));
+      else if (dC < -0.02) segs.push(makeStraight(endPos, thetaStart, -dC, 1));
       return buildPath(segs);
     };
 
     let nominal = null, found = false;
     for (const ya of yCandidates) {
-      for (const dRamp of [1.5, 0.6]) {
-        const cand = buildNormal(ya, dRamp);
-        const col = findFirstCollision(cand, p, geo, neighbors);
-        if (!col) {
-          path = cand; collision = null; feasible = true; usedYa = ya; found = true;
-          break;
+      for (const uSEnd of uSEndCandidates) {
+        for (const dRamp of [1.5, 0.6]) {
+          const cand = buildNormal(ya, dRamp, uSEnd);
+          const col = findFirstCollision(cand, p, geo, neighbors);
+          if (!col) {
+            path = cand; collision = null; feasible = true; usedYa = ya; found = true;
+            break;
+          }
+          if (!nominal) nominal = { path: cand, col, ya };
         }
-        if (!nominal) nominal = { path: cand, col, ya };
+        if (found) break;
       }
       if (found) break;
     }
