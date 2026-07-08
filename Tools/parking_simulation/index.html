@@ -688,18 +688,20 @@ function computeParallelManeuver(p, geo) {
   // The parallel bay sits at the kerb, outside the driving lane; the car parks
   // centred in the bay, whose lateral size is the spot-width parameter.
   const yFinal = p.rowSide * (halfRoad + p.spotWidth / 2);
-  // Start the manoeuvre hugging the parked row (0.4 m side gap) — the closer
-  // the start, the smaller the swing and the front-corner sweep.
-  const yHug = Math.abs(yFinal) - p.carWidth - 0.4;
-  const yMaxInLane = halfRoad - p.carWidth / 2 - 0.1;
-  const yDrive = p.rowSide * Math.min(yHug, yMaxInLane);
+  // Candidate starting lateral positions, from hugging the parked row (small
+  // swing) progressively out across the road width to the far side (bigger
+  // entry angle, cutting in earlier) — use whatever the lane offers to find a
+  // plan that actually fits.
+  const yHugAbs = Math.min(Math.abs(yFinal) - p.carWidth - 0.4, halfRoad - p.carWidth / 2 - 0.1);
+  const yFarAbs = -(halfRoad - p.carWidth / 2 - 0.2);
+  const yCandidates = [];
+  for (let ya = yHugAbs; ya >= yFarAbs - 1e-9; ya -= 0.45) yCandidates.push(ya);
 
   // Rear-axle target such that the car body ends up centred in the spot box.
   const xf = -p.laneDir * ((p.wheelbase + geo.frontOverhang - geo.rearOverhang) / 2);
   const turnSign1 = p.rowSide * p.laneDir;
 
   const kMax = 1 / p.turnRadius;
-  const targetDy = yFinal - yDrive;
 
   // Worst case: the neighbouring stalls are fully occupied — the blocking
   // rectangles span the entire stall (full spot width, flush with the bay
@@ -716,33 +718,57 @@ function computeParallelManeuver(p, geo) {
   const xfReverse = xf - p.laneDir * dForward;
 
   // Parking style is user-selected; a collision does not trigger any fallback
-  // — playback simply stops at the impact point.
-  let feasible = true, path = null, collision = null;
+  // — playback simply stops at the impact point. The starting lateral
+  // position is searched across the road width (hug the row first, then move
+  // out toward the far side for a bigger, earlier cut).
+  let feasible = true, path = null, collision = null, usedYa = yHugAbs;
   const info = [];
   if (p.parkStyle === "deep") {
     // 深切停車: dive past the parked line, one forward arc to align.
-    const dive = buildDeepDive(p, geo, thetaStart, aisleDir, yDrive, yFinal, kMax, turnSign1, neighbors);
-    path = dive.path;
-    collision = dive.collision;
+    let chosen = null, nominal = null;
+    for (const ya of yCandidates) {
+      const dive = buildDeepDive(p, geo, thetaStart, aisleDir, p.rowSide * ya, yFinal, kMax, turnSign1, neighbors);
+      if (!dive.collision) { chosen = { dive, ya }; break; }
+      if (!nominal) nominal = { dive, ya };
+    }
+    const pick = chosen || nominal;
+    path = pick.dive.path;
+    collision = pick.dive.collision;
+    usedYa = pick.ya;
     if (!collision) {
-      info.push(`深切（${(dive.phi1 * 57.3).toFixed(0)}°）＋前進回正：${dive.moves} 段移動、${dive.moves - 1} 次換檔，停於車格中央。`);
+      info.push(`深切（${(pick.dive.phi1 * 57.3).toFixed(0)}°）＋前進回正：${pick.dive.moves} 段移動、${pick.dive.moves - 1} 次換檔，停於車格中央。`);
     }
   } else {
     // 一般停車: single-shot S-curve with rate-limited steering. Start with a
     // leisurely wind; if the swing would clip a neighbour, wind faster —
     // like a driver working a tighter gap — before giving up.
-    for (const dRamp of [1.5, 1.0, 0.6]) {
-      const sol = solveSCurve(targetDy, kMax, dRamp, thetaStart, gear, turnSign1);
-      const table = integrateSCurve(sol.kPeak * turnSign1, sol.L, sol.dRamp, thetaStart, gear);
-      const P0 = { x: xfReverse - table.dx, y: yDrive };
-      const leadStart = V.sub(P0, V.scale(aisleDir, APPROACH_LEN));
-      const segs = [makeStraight(leadStart, thetaStart, APPROACH_LEN, 1), makeTableSegment(P0, table, gear)];
-      if (dForward > 0.01) segs.push(makeStraight({ x: xfReverse, y: yFinal }, thetaStart, dForward, 1));
-      path = buildPath(segs);
-      feasible = sol.feasible;
-      collision = findFirstCollision(path, p, geo, neighbors);
-      if (!collision) break;
+    let nominal = null, found = false;
+    for (const ya of yCandidates) {
+      const yD = p.rowSide * ya;
+      for (const dRamp of [1.5, 1.0, 0.6]) {
+        const sol = solveSCurve(yFinal - yD, kMax, dRamp, thetaStart, gear, turnSign1);
+        const table = integrateSCurve(sol.kPeak * turnSign1, sol.L, sol.dRamp, thetaStart, gear);
+        const P0 = { x: xfReverse - table.dx, y: yD };
+        const leadStart = V.sub(P0, V.scale(aisleDir, APPROACH_LEN));
+        const segs = [makeStraight(leadStart, thetaStart, APPROACH_LEN, 1), makeTableSegment(P0, table, gear)];
+        if (dForward > 0.01) segs.push(makeStraight({ x: xfReverse, y: yFinal }, thetaStart, dForward, 1));
+        const cand = buildPath(segs);
+        const col = findFirstCollision(cand, p, geo, neighbors);
+        if (!col) {
+          path = cand; collision = null; feasible = sol.feasible; usedYa = ya; found = true;
+          break;
+        }
+        if (!nominal) nominal = { path: cand, col, feasible: sol.feasible, ya };
+      }
+      if (found) break;
     }
+    if (!found) {
+      path = nominal.path; collision = nominal.col; feasible = nominal.feasible; usedYa = nominal.ya;
+    }
+  }
+  if (!collision && usedYa < yHugAbs - 0.01) {
+    const side = usedYa < -0.05 ? "借用對向側" : "移向車道中間";
+    info.push(`已利用車道寬度：起始位置外移 ${(yHugAbs - usedYa).toFixed(1)} m（${side}），提早切入。`);
   }
 
   const warnings = [];

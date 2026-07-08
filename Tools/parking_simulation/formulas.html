@@ -136,7 +136,11 @@ th { background: #171b21; color: #9aa4b2; }
 <p>軌跡由第 2 節微分方程以 Δs = 0.02 m 數值積分（中點法）求得。橫向位移目標：</p>
 <div class="formula">
   Δ<var>y</var><sub>target</sub> = <var>y</var><sub>final</sub> − <var>y</var><sub>drive</sub>
-  <span class="note">y_final 為路邊車格中心線、y_drive 為起始行駛線（貼近停放車列 0.4 m）。</span>
+  <span class="note">y_final 為路邊車格中心線；y_drive 為起始行駛線，於整個路寬內搜尋（見下）。</span>
+</div>
+<div class="formula">
+  起始位置搜尋：y<sub>drive</sub> ∈ [貼近車列 0.4 m, …, 對向路緣]，步距 0.45 m
+  <span class="note">利用車道寬度調整切入方式：先嘗試貼近停放車列（擺幅最小），行不通就逐步外移到車道中間、甚至借用對向側——起始越遠、切入角越大、越早開始切，能停進更短的車位。取第一個不碰撞的方案，並在面板顯示外移量。</span>
 </div>
 <p>因 Δ<var>y</var> 對保持段長度 <var>L</var>、打盤距離 d<sub>R</sub> 與峰值曲率 <var>k</var> 皆單調，以<strong>二分法</strong>求解，且優先保持<strong>方向盤打滿</strong>（切深再反向，與真實駕駛一致）：</p>
 <ul>
