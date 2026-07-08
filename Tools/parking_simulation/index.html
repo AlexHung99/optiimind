@@ -202,6 +202,13 @@ html, body {
             <button data-entry="forward" class="seg">前進入庫</button>
           </div>
         </div>
+        <div class="field" id="parkStyleField" style="display:none">
+          <label>停車方式</label>
+          <div class="segmented">
+            <button data-park="normal" class="seg active">一般停車</button>
+            <button data-park="deep" class="seg">深切停車</button>
+          </div>
+        </div>
       </section>
 
       <section class="group">
@@ -458,11 +465,6 @@ function polysIntersectSAT(A, B) {
   return true;
 }
 
-function wrapAngle(a) {
-  while (a > Math.PI) a -= 2 * Math.PI;
-  while (a < -Math.PI) a += 2 * Math.PI;
-  return a;
-}
 
 // "Deep dive" two-move plan: reverse in steeply, overshooting past the parked
 // line toward the kerb (the bay is wider than the car), tail near the rear
@@ -477,163 +479,59 @@ function buildDeepDive(p, geo, thetaStart, aisleDir, yDrive, yFinal, kMax, tS, n
   // Overshoot toward the kerb is bounded by the bay's spare width.
   const maxOver = Math.max(0, p.spotWidth / 2 - p.carWidth / 2 - 0.05);
   const phiCap = Math.acos(Math.max(-1, Math.min(1, 1 - maxOver / R)));
-  // Prefer ending the forward arc already centred; fall back to ending snug
-  // behind the front stall and backing up straight to centre (wheel straight).
-  for (const uEnd of [uCenter, uFrontLim]) {
+  const lnf = V.leftNormal(V.fromAngle(thetaStart));
+
+  const attempt = (uEnd, phi1, force) => {
     const finalPos = { x: uEnd * p.laneDir, y: yFinal };
-    const lnf = V.leftNormal(V.fromAngle(thetaStart));
     const C = V.add(finalPos, V.scale(lnf, R * tS));
-    for (let phi1 = Math.min(0.7, phiCap); phi1 >= 0.1; phi1 -= 0.05) {
-      const thDive = thetaStart - tS * phi1;
-      const hDive = V.fromAngle(thDive);
-      const Pstart = V.sub(C, V.scale(V.leftNormal(hDive), R * tS)); // forward-arc start
-      const dEff = Math.min(dR, phi1 / kMax);
-      const Lh = Math.max(0, phi1 / kMax - dEff);
-      const wind = integrateWind(kMax * tS, Lh, dEff, thetaStart, -1);
-      const dyPerM = -Math.sin(thDive); // per metre of straight reverse at the dive angle
-      if (Math.abs(dyPerM) < 1e-4) continue;
-      const d1 = (Pstart.y - yDrive - wind.dy) / dyPerM;
-      if (d1 < -0.01) continue; // the wind alone already overshoots: steeper than needed
-      const d1c = Math.max(0, d1);
-      const windEnd = V.add(Pstart, V.scale(hDive, d1c));
-      const P0 = { x: windEnd.x - wind.dx, y: windEnd.y - wind.dy };
-      const segs = [
-        makeStraight(V.sub(P0, V.scale(aisleDir, APPROACH_LEN)), thetaStart, APPROACH_LEN, 1),
-        makeTableSegment(P0, wind, -1),
-      ];
-      if (d1c > 0.01) segs.push(makeStraight(windEnd, thDive, d1c, -1));
-      segs.push(makeArc(C, R, tS, 1, thDive, R * phi1));
-      const dCentre = (uEnd - uCenter);
-      if (dCentre > 0.02) segs.push(makeStraight(finalPos, thetaStart, dCentre, -1));
-      // Wheel straightened in place at the end.
-      const parkedPos = { x: uCenter * p.laneDir, y: yFinal };
-      segs.push(makeStraight(parkedPos, thetaStart, 0.02, 1));
-      const path = buildPath(segs);
-      if (!findFirstCollision(path, p, geo, neighbors)) {
-        return { path, phi1, moves: dCentre > 0.02 ? 3 : 2 };
-      }
-    }
-  }
-  return null;
-}
-
-// Multi-attempt parallel parking: feedback-steered rollout that reverses into
-// the gap, stops just short of a neighbour, swaps gear to realign, and repeats
-// — like a driver working a tight spot — until aligned and centred.
-function simulateShuffleParallel(p, geo, start, thetaStart, yFinal, xfCenter, neighbors, kMax) {
-  const ds = 0.02;
-  const marginRects = neighbors.map((n) => rectCorners(n.cx, n.cy, n.hl + 0.05, n.hw + 0.05, 0));
-  const hitAt = (pose) => {
-    const ego = egoCorners(p, geo, pose);
-    return marginRects.some((r) => polysIntersectSAT(ego, r));
+    const thDive = thetaStart - tS * phi1;
+    const hDive = V.fromAngle(thDive);
+    const Pstart = V.sub(C, V.scale(V.leftNormal(hDive), R * tS)); // forward-arc start
+    const dEff = Math.min(dR, phi1 / kMax);
+    const Lh = Math.max(0, phi1 / kMax - dEff);
+    const wind = integrateWind(kMax * tS, Lh, dEff, thetaStart, -1);
+    const dyPerM = -Math.sin(thDive); // per metre of straight reverse at the dive angle
+    if (Math.abs(dyPerM) < 1e-4) return null;
+    const d1 = (Pstart.y - yDrive - wind.dy) / dyPerM;
+    if (d1 < -0.01 && !force) return null; // wind alone overshoots: steeper than needed
+    const d1c = Math.max(0, d1);
+    const windEnd = V.add(Pstart, V.scale(hDive, d1c));
+    const P0 = { x: windEnd.x - wind.dx, y: windEnd.y - wind.dy };
+    const segs = [
+      makeStraight(V.sub(P0, V.scale(aisleDir, APPROACH_LEN)), thetaStart, APPROACH_LEN, 1),
+      makeTableSegment(P0, wind, -1),
+    ];
+    if (d1c > 0.01) segs.push(makeStraight(windEnd, thDive, d1c, -1));
+    segs.push(makeArc(C, R, tS, 1, thDive, R * phi1));
+    const dCentre = uEnd - uCenter;
+    if (dCentre > 0.02) segs.push(makeStraight(finalPos, thetaStart, dCentre, -1));
+    // Wheel straightened in place at the end.
+    const parkedPos = { x: uCenter * p.laneDir, y: yFinal };
+    segs.push(makeStraight(parkedPos, thetaStart, 0.02, 1));
+    return { path: buildPath(segs), phi1, moves: dCentre > 0.02 ? 3 : 2 };
   };
-  // PHI_MAX 0.7 (~40°): cut in deep on the first swings, then counter-steer —
-  // fewer shuffle cycles than shallow careful swings.
-  const KLAT = 1.2, GAIN = 2.5, PHI_MAX = 0.7;
-  // Creeping speed: the wheel can be wound much faster relative to distance
-  // travelled than at driving speed — full lock over ~0.35 m of travel.
-  const slew = kMax / 0.35;
-  // Rear-axle x window (in downstream coords) anchoring the shuffle to the bay:
-  // reverse never backs the tail past the rear car, forward never wanders
-  // beyond the front car — forcing the sideways creep into the gap.
-  const uMin = -p.spotDepth / 2 + geo.rearOverhang + 0.06;
-  const uMaxLane = p.spotDepth / 2 + p.carLength;
-  // Parked = aligned and the whole body between the two cars (centring is
-  // cosmetic; any position fully inside the gap is legally parked).
-  const uFrontLim = p.spotDepth / 2 - (p.wheelbase + geo.frontOverhang) - 0.05;
-  const uTarget = (uMin + uFrontLim) / 2;
-  let x = start.x, y = start.y, th = thetaStart, kappa = 0, gear = -1;
-  const segsOut = [];
-  let parked = false, stuck = 0, phases = 0;
 
-  for (let phase = 0; phase < 64 && !parked; phase++) {
-    const phi0 = wrapAngle(th - thetaStart);
-    const aligned0 = Math.abs(phi0) < 0.05 && Math.abs(y - yFinal) < 0.15;
-    // Phase intent: reverse phases approach the kerb; forward phases only
-    // straighten the car (short move, wheel toward the kerb); once aligned,
-    // straight moves centre the car in the gap.
-    let mode;
-    if (aligned0 && phase > 0) {
-      mode = "center";
-      gear = uTarget - x * p.laneDir > 0 ? 1 : -1;
-    } else if (phase === 0 || gear > 0) {
-      mode = "approach";
-      gear = -1;
-    } else {
-      mode = "straighten";
-      gear = 1;
+  // Prefer ending the forward arc already centred; fall back to ending snug
+  // behind the front stall and backing up straight to centre. If every angle
+  // collides, return the deepest attempt with its impact point — no fallback,
+  // playback stops at the collision.
+  let nominal = null;
+  for (const uEnd of [uCenter, uFrontLim]) {
+    for (let phi1 = Math.max(0.15, Math.min(0.7, phiCap)); phi1 >= 0.1; phi1 -= 0.05) {
+      const cand = attempt(uEnd, phi1, false);
+      if (!cand) continue;
+      const col = findFirstCollision(cand.path, p, geo, neighbors);
+      if (!col) return { ...cand, collision: null };
+      if (!nominal) nominal = { ...cand, collision: col };
     }
-    const maxTravel = mode === "straighten" ? 3.5 : 16;
-    // At the gear change the driver winds the wheel to the new target while
-    // stationary, so none of the short runway is wasted turning the wheel.
-    let preWind = true;
-
-    // Approach phases: reverse straight until the tail clears the front car's
-    // rear corner, wind toward the kerb up to a swing angle scaled by the
-    // remaining lateral error, then unwind to straight — the swing happens in
-    // the gap mouth, not beside the front car. If the wind is blocked, unwind
-    // immediately instead of ending the phase.
-    const tS = p.rowSide * p.laneDir;
-    const phiSwing = Math.min(PHI_MAX, Math.max(0.12, Math.atan(KLAT * Math.abs(y - yFinal))));
-    const uWind = p.spotDepth / 2 + geo.rearOverhang + 0.1; // start winding here
-    let subState = x * p.laneDir > uWind ? 0 : 1; // 0 straight-back, 1 wind, 2 unwind
-    // Spend at most half the remaining reverse runway winding, so there is
-    // always room to unwind while still reversing (the unwind half also gains
-    // lateral ground; giving the angle back while going forward loses it).
-    const windBudget = Math.max(0.3, (Math.min(x * p.laneDir, uWind) - uMin) / 2);
-    let windTravel = 0;
-    const xs = [x], ys = [y], ths = [th], ks = [kappa];
-    let travel = 0;
-    while (travel < maxTravel) {
-      const phi = wrapAngle(th - thetaStart);
-      const eY = y - yFinal;
-      const u = x * p.laneDir;
-      const eU = uTarget - u;
-      const aligned = Math.abs(phi) < 0.05 && Math.abs(eY) < 0.15;
-      const inside = u >= uMin - 0.001 && u <= uFrontLim + 0.001;
-      // Aim for the middle of the gap; accept anywhere inside on late phases.
-      const centred = Math.abs(u - uTarget) < 0.3 || phase >= 40;
-      if (aligned && inside && centred) { parked = true; break; }
-      if (mode === "center" && travel > 0.02 && gear !== (eU > 0 ? 1 : -1)) break;
-      if (mode !== "center" && aligned && travel > 0.02) break;
-      if (gear < 0 && u <= uMin && travel > 0.02) break;
-      if (gear > 0 && u >= Math.min(uWind + 0.8, uMaxLane) && travel > 0.02) break;
-      let kCmd;
-      if (mode === "approach") {
-        if (subState === 0 && u <= uWind) subState = 1;
-        const swung = -phi * tS; // >0 once swung toward the kerb
-        if (subState === 1 && (swung >= phiSwing || windTravel >= windBudget)) subState = 2;
-        if (subState === 1) windTravel += ds;
-        if (subState === 2 && Math.abs(phi) < 0.012 && travel > 0.02) break;
-        kCmd = subState === 0 ? -GAIN * gear * phi : subState === 1 ? kMax * tS : -kMax * tS;
-        kCmd = Math.max(-kMax, Math.min(kMax, kCmd));
-      } else {
-        const phiDes = mode === "straighten"
-          ? 0
-          : Math.max(-PHI_MAX, Math.min(PHI_MAX, (gear > 0 ? -1 : 1) * p.laneDir * Math.atan(KLAT * eY)));
-        kCmd = Math.max(-kMax, Math.min(kMax, (gear > 0 ? 1 : -1) * GAIN * (phiDes - phi)));
-      }
-      const kNew = preWind ? kCmd : kappa + Math.max(-slew * ds, Math.min(slew * ds, kCmd - kappa));
-      const thNew = th + gear * kNew * ds;
-      const xNew = x + gear * Math.cos(thNew) * ds;
-      const yNew = y + gear * Math.sin(thNew) * ds;
-      if (hitAt({ pos: { x: xNew, y: yNew }, theta: thNew })) {
-        if (mode === "approach" && subState <= 1) { subState = 2; continue; }
-        break;
-      }
-      preWind = false;
-      kappa = kNew; th = thNew; x = xNew; y = yNew; travel += ds;
-      xs.push(x); ys.push(y); ths.push(th); ks.push(kappa);
-    }
-    if (travel > 0.05 || parked) stuck = 0; else stuck++;
-    if (xs.length > 1) {
-      segsOut.push(makeTableSegment({ x: 0, y: 0 }, { S: travel, ds, xs, ys, ths, ks }, gear));
-      phases++;
-    }
-    if (stuck >= 2) break;
   }
-  return { segs: segsOut, parked, phases, endPose: { x, y, th }, stuck };
+  if (!nominal) {
+    const cand = attempt(uCenter, Math.max(0.2, Math.min(0.7, phiCap)), true);
+    nominal = { ...cand, collision: findFirstCollision(cand.path, p, geo, neighbors) };
+  }
+  return nominal;
 }
+
 
 function findFirstCollision(path, p, geo, neighbors) {
   const step = 0.12;
@@ -817,68 +715,39 @@ function computeParallelManeuver(p, geo) {
   const dForward = Math.max(0, p.spotDepth / 2 - p.carLength / 2 - 0.3);
   const xfReverse = xf - p.laneDir * dForward;
 
-  // Rate-limited steering: the wheel is wound on over dRamp metres of travel
-  // instead of snapping to full lock while stationary. Start with a leisurely
-  // wind; if the swing would clip a neighbour, wind faster — like a driver
-  // working a tighter gap — before giving up and warning.
-  let feasible = true, path = null, collision = null, lastP0 = null;
+  // Parking style is user-selected; a collision does not trigger any fallback
+  // — playback simply stops at the impact point.
+  let feasible = true, path = null, collision = null;
   const info = [];
-  for (const dRamp of [1.5, 1.0, 0.6]) {
-    const sol = solveSCurve(targetDy, kMax, dRamp, thetaStart, gear, turnSign1);
-    const table = integrateSCurve(sol.kPeak * turnSign1, sol.L, sol.dRamp, thetaStart, gear);
-    const P0 = { x: xfReverse - table.dx, y: yDrive };
-    lastP0 = P0;
-    const leadStart = V.sub(P0, V.scale(aisleDir, APPROACH_LEN));
-    const segs = [makeStraight(leadStart, thetaStart, APPROACH_LEN, 1), makeTableSegment(P0, table, gear)];
-    if (dForward > 0.01) segs.push(makeStraight({ x: xfReverse, y: yFinal }, thetaStart, dForward, 1));
-    path = buildPath(segs);
-    feasible = sol.feasible;
-    collision = findFirstCollision(path, p, geo, neighbors);
-    if (!collision) break;
-  }
-
-  // Single-shot would clip a neighbour: fall back to a multi-attempt shuffle,
-  // stopping short of the neighbours and swapping gear to work the car in.
-  const debugSingleShot = collision ? { s: collision.s, idx: collision.neighborIndex, pose: path.poseAt(collision.s) } : null;
-  let debugShuffle = null;
-  let shuffleFailed = false;
-  // Prefer the driver's two-move technique before resorting to shuffling:
-  // dive in deep past the parked line, then one forward arc to align.
-  if (collision || !feasible) {
+  if (p.parkStyle === "deep") {
+    // 深切停車: dive past the parked line, one forward arc to align.
     const dive = buildDeepDive(p, geo, thetaStart, aisleDir, yDrive, yFinal, kMax, turnSign1, neighbors);
-    if (dive) {
-      path = dive.path;
-      collision = null;
-      feasible = true;
-      info.push(`車位較短，採「深切（${(dive.phi1 * 57.3).toFixed(0)}°）＋前進回正」入庫（${dive.moves} 段移動、${dive.moves - 1} 次換檔），停於車格中央。`);
+    path = dive.path;
+    collision = dive.collision;
+    if (!collision) {
+      info.push(`深切（${(dive.phi1 * 57.3).toFixed(0)}°）＋前進回正：${dive.moves} 段移動、${dive.moves - 1} 次換檔，停於車格中央。`);
     }
-  }
-  if (collision || !feasible) {
-    const shuffle = simulateShuffleParallel(p, geo, lastP0, thetaStart, yFinal, xf, neighbors, kMax);
-    debugShuffle = shuffle;
-    if (shuffle.segs.length) {
-      const leadStart = V.sub(lastP0, V.scale(aisleDir, APPROACH_LEN));
-      const shuffleSegs = [makeStraight(leadStart, thetaStart, APPROACH_LEN, 1), ...shuffle.segs];
-      // Wheel straightened in place once parked.
-      if (shuffle.parked) {
-        shuffleSegs.push(makeStraight({ x: shuffle.endPose.x, y: shuffle.endPose.y }, shuffle.endPose.th, 0.02, 1));
-      }
-      path = buildPath(shuffleSegs);
-      collision = null;
-      if (shuffle.parked) {
-        feasible = true;
-        if (shuffle.phases > 1) info.push(`車位較短，經 ${shuffle.phases} 段移動（${shuffle.phases - 1} 次換檔前後修正）後停入。`);
-      } else {
-        feasible = false;
-        shuffleFailed = true;
-      }
+  } else {
+    // 一般停車: single-shot S-curve with rate-limited steering. Start with a
+    // leisurely wind; if the swing would clip a neighbour, wind faster —
+    // like a driver working a tighter gap — before giving up.
+    for (const dRamp of [1.5, 1.0, 0.6]) {
+      const sol = solveSCurve(targetDy, kMax, dRamp, thetaStart, gear, turnSign1);
+      const table = integrateSCurve(sol.kPeak * turnSign1, sol.L, sol.dRamp, thetaStart, gear);
+      const P0 = { x: xfReverse - table.dx, y: yDrive };
+      const leadStart = V.sub(P0, V.scale(aisleDir, APPROACH_LEN));
+      const segs = [makeStraight(leadStart, thetaStart, APPROACH_LEN, 1), makeTableSegment(P0, table, gear)];
+      if (dForward > 0.01) segs.push(makeStraight({ x: xfReverse, y: yFinal }, thetaStart, dForward, 1));
+      path = buildPath(segs);
+      feasible = sol.feasible;
+      collision = findFirstCollision(path, p, geo, neighbors);
+      if (!collision) break;
     }
   }
 
   const warnings = [];
-  if (shuffleFailed) warnings.push("車位過短：模擬駕駛多次前後修正後仍無法完全停正，畫面顯示嘗試過程。");
-  else if (!feasible) warnings.push("車道過寬或迴轉半徑過大，單次倒車無法貼到路邊位置。");
-  if (collision) warnings.push("此參數下會擦撞到相鄰停放車輛（紅框標示），實際需要更長的車位或多段前後修正。");
+  if (!feasible) warnings.push("車道過寬或迴轉半徑過大，單次倒車無法貼到路邊位置。");
+  if (collision) warnings.push("此參數會擦撞到鄰格車輛（紅框標示），播放將停於撞擊點。可改用另一種停車方式或加大車位。");
   if (p.spotDepth < p.carLength * 1.15) warnings.push("平行停車格深度偏短，建議至少為車長的 1.2 倍以上。");
   if (p.spotWidth < p.carWidth + 0.2) warnings.push("路邊車格寬度不足，車身可能超出車格。");
 
@@ -891,8 +760,6 @@ function computeParallelManeuver(p, geo) {
     info,
     neighbors,
     collision,
-    debugSingleShot,
-    debugShuffle,
     finalPose: { pos: { x: xf, y: yFinal }, theta: thetaStart },
   };
 }
@@ -910,6 +777,7 @@ function computeManeuver(p) {
 const state = {
   vehicleType: "car",
   simMode: "in", // "in" = 駛入, "out" = 停妥後駛出
+  parkStyle: "normal", // 平行停車方式: "normal" = 一般, "deep" = 深切
   spotType: "perp",
   angleDeg: 45,
   laneDir: 1,
@@ -1371,6 +1239,7 @@ function setupUI() {
       document.getElementById("angleField").style.display = state.spotType === "angle" ? "block" : "none";
       const entryField = document.getElementById("entryModeField");
       entryField.style.display = state.spotType === "parallel" ? "none" : "block";
+      document.getElementById("parkStyleField").style.display = state.spotType === "parallel" ? "block" : "none";
       if (state.spotType === "parallel") state.entryMode = "reverse";
       recompute();
       fitCamera();
@@ -1380,6 +1249,12 @@ function setupUI() {
   bindSegmented('[data-vehicle]', "vehicleType", (btn) => {
     state.vehicleType = btn.dataset.vehicle;
     document.getElementById("vehicleNote").style.display = state.vehicleType === "trike" ? "block" : "none";
+  });
+
+  bindSegmented('[data-park]', "parkStyle", (btn) => {
+    state.parkStyle = btn.dataset.park;
+    recompute();
+    fitCamera();
   });
 
   bindSegmented('[data-sim]', "simMode", (btn) => {
