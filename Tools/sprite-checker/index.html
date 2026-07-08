@@ -93,7 +93,9 @@
     <div class="row">
       <label><input type="radio" name="mode" value="grid" checked> 依欄列數</label>
       <label><input type="radio" name="mode" value="size"> 依格子尺寸</label>
+      <label><input type="radio" name="mode" value="auto"> 自動內容</label>
     </div>
+    <div class="hint">自動內容：忽略多餘空白，依透明間隙逐列掃描、切出每格實際內容（適合間距/邊界不一的圖，各格可不同寬）。</div>
     <div id="gridInputs">
       <label><span class="k">欄數 (cols)</span><input type="number" id="cols" min="1" value="7"></label>
       <label><span class="k">列數 (rows)</span><input type="number" id="rows" min="1" value="11"></label>
@@ -102,10 +104,12 @@
       <label><span class="k">格寬 (px)</span><input type="number" id="fw" min="1" value="32"></label>
       <label><span class="k">格高 (px)</span><input type="number" id="fh" min="1" value="32"></label>
     </div>
-    <label><span class="k">位移 X / Y</span>
-      <input type="number" id="offX" value="0"><input type="number" id="offY" value="0"></label>
-    <label><span class="k">間距 X / Y</span>
-      <input type="number" id="spX" min="0" value="0"><input type="number" id="spY" min="0" value="0"></label>
+    <div id="uniformInputs">
+      <label><span class="k">位移 X / Y</span>
+        <input type="number" id="offX" value="0"><input type="number" id="offY" value="0"></label>
+      <label><span class="k">間距 X / Y</span>
+        <input type="number" id="spX" min="0" value="0"><input type="number" id="spY" min="0" value="0"></label>
+    </div>
     <div class="row">
       <button id="detect">🔍 自動偵測切割</button>
       <button id="applyDetect" disabled>套用建議</button>
@@ -260,6 +264,9 @@ let emptyMap = [];     // 每格是否全透明
 let bboxMap = [];      // 每格 {x,y,w,h,cx,cy}（frame-local px）或 null
 let dataKey = '';
 let detected = null;   // 自動偵測建議
+let autoRects = null;  // 自動內容模式：每格實際矩形 [{x,y,w,h},...]（row-major）
+let autoRows = null;   // 自動內容模式：每列 {start,count}
+let autoMeta = {fw:1, fh:1, cols:1};  // 自動內容模式：最大格寬/高、最大列格數
 let clips = [];
 let lastTick = 0, acc = 0, needDraw = true;
 
@@ -269,6 +276,11 @@ let lastTick = 0, acc = 0, needDraw = true;
 function grid(){
   const s = state, img = s.img;
   if(!img) return {fw:1,fh:1,cols:1,rows:1,total:0};
+  if(s.mode === 'auto'){
+    ensureAuto();
+    return {fw:autoMeta.fw, fh:autoMeta.fh, cols:autoMeta.cols,
+            rows:autoRows.length, total:autoRects.length, auto:true};
+  }
   let fw,fh,cols,rows;
   if(s.mode === 'grid'){
     cols = Math.max(1, s.cols); rows = Math.max(1, s.rows);
@@ -283,6 +295,9 @@ function grid(){
   return {fw,fh,cols,rows,total:cols*rows};
 }
 function frameRect(i,g){
+  if(state.mode === 'auto' && autoRects && autoRects.length){
+    return autoRects[clamp(i, 0, autoRects.length-1)];
+  }
   g = g || grid();
   const c = i % g.cols, r = Math.floor(i / g.cols);
   return {x:state.offX + c*(g.fw+state.spX), y:state.offY + r*(g.fh+state.spY), w:g.fw, h:g.fh};
@@ -307,7 +322,7 @@ function ensureSrc(){
 function buildFrameData(){
   const s = state, g = grid();
   const key = [s.img && s.img.src.length, s.mode, g.fw, g.fh, g.cols, g.rows,
-               s.offX, s.offY, s.spX, s.spY].join('|');
+               s.offX, s.offY, s.spX, s.spY, autoRects?autoRects.length:0].join('|');
   if(key === dataKey) return;
   dataKey = key;
   emptyMap = new Array(g.total).fill(true);
@@ -397,6 +412,71 @@ function autoDetect(){
 }
 
 /* ============================================================
+   自動內容切割（非等距）：逐列掃透明間隙，切出每格實際內容
+   ============================================================ */
+function autoSlice(){
+  const s = state; if(!s.img || !ensureSrc()) return null;
+  const W=srcCanvas.width, H=srcCanvas.height;
+  const data = srcCtx.getImageData(0,0,W,H).data;
+  // band 掃描（與 autoDetect 相同的合併門檻：小於最大 band 12% 的空隙視為同一格內部）
+  function bands(op, len){
+    const runs=[]; let st=-1;
+    for(let i=0;i<len;i++){
+      if(op[i]){ if(st<0)st=i; }
+      else if(st>=0){ runs.push([st,i-1]); st=-1; }
+    }
+    if(st>=0) runs.push([st,len-1]);
+    if(runs.length<2) return runs;
+    let maxLen=0; for(const r of runs) maxLen=Math.max(maxLen,r[1]-r[0]+1);
+    const gapThr = Math.max(1, Math.round(maxLen*0.12));
+    const merged=[runs[0].slice()];
+    for(let i=1;i<runs.length;i++){
+      const prev=merged[merged.length-1];
+      if(runs[i][0]-prev[1]-1 < gapThr) prev[1]=runs[i][1];
+      else merged.push(runs[i].slice());
+    }
+    return merged;
+  }
+  // 列 band
+  const rowOp = new Uint8Array(H);
+  for(let y=0;y<H;y++){
+    const base=y*W*4+3;
+    for(let x=0;x<W;x++){ if(data[base+x*4]>8){ rowOp[y]=1; break; } }
+  }
+  const rb = bands(rowOp, H);
+  if(!rb.length) return null;
+  const rects=[], rows=[];
+  for(const [ry0,ry1] of rb){
+    // 該列範圍內的欄 band（每格可不同寬）
+    const colOp = new Uint8Array(W);
+    for(let y=ry0;y<=ry1;y++){
+      const base=y*W*4+3;
+      for(let x=0;x<W;x++){ if(data[base+x*4]>8) colOp[x]=1; }
+    }
+    const cb = bands(colOp, W);
+    rows.push({start:rects.length, count:cb.length});
+    for(const [cx0,cx1] of cb)
+      rects.push({x:cx0, y:ry0, w:cx1-cx0+1, h:ry1-ry0+1});
+  }
+  return {rects, rows};
+}
+function ensureAuto(){
+  if(state.mode!=='auto' || !state.img || autoRects) return;
+  const r = autoSlice();
+  if(r && r.rects.length){ autoRects=r.rects; autoRows=r.rows; }
+  else { // 找不到透明間隙 → 整張當 1 格
+    autoRects=[{x:0,y:0,w:state.img.width,h:state.img.height}];
+    autoRows=[{start:0,count:1}];
+  }
+  let fw=1,fh=1,cols=1;
+  for(const rc of autoRects){ fw=Math.max(fw,rc.w); fh=Math.max(fh,rc.h); }
+  for(const rw of autoRows) cols=Math.max(cols,rw.count);
+  autoMeta={fw,fh,cols};
+  if(autoRects.length<=1)
+    $('detectInfo').textContent='未找到透明間隙，自動內容切割僅得 1 格（此模式需要透明背景）。';
+}
+
+/* ============================================================
    原圖 + 格線繪製
    ============================================================ */
 const sheetWrap = $('sheetWrap');
@@ -474,10 +554,17 @@ function selectFrameAt(e, shift){
   const g = grid(), rc = sheet.getBoundingClientRect();
   const px = (e.clientX - rc.left) / rc.width  * s.img.width;
   const py = (e.clientY - rc.top)  / rc.height * s.img.height;
-  const c = Math.floor((px - s.offX) / (g.fw + s.spX));
-  const r = Math.floor((py - s.offY) / (g.fh + s.spY));
-  if(c<0||r<0||c>=g.cols||r>=g.rows) return;
-  const i = r*g.cols + c;
+  let i = -1;
+  if(s.mode === 'auto'){
+    for(let k=0;k<autoRects.length;k++){ const rc2=autoRects[k];
+      if(px>=rc2.x && px<rc2.x+rc2.w && py>=rc2.y && py<rc2.y+rc2.h){ i=k; break; } }
+    if(i<0) return;
+  }else{
+    const c = Math.floor((px - s.offX) / (g.fw + s.spX));
+    const r = Math.floor((py - s.offY) / (g.fh + s.spY));
+    if(c<0||r<0||c>=g.cols||r>=g.rows) return;
+    i = r*g.cols + c;
+  }
   if(shift && i >= s.start){ s.count = i - s.start + 1; }
   else { s.start = i; s.count = Math.min(s.count, g.total - i); }
   s.idx = 0; s.pdir = 1;
@@ -504,13 +591,18 @@ sheetWrap.addEventListener('wheel', e=>{
    動畫預覽
    ============================================================ */
 const pv = $('preview'), pctx = pv.getContext('2d');
-function frameShift(absIdx, W, H){
+function frameShift(absIdx, W, H, z){
   const s = state;
-  if(!s.autoTrim) return {dx:0,dy:0};
-  const b = bboxMap[absIdx]; if(!b) return {dx:0,dy:0};
-  const g = grid();
-  const z = W/g.fw;
-  return {dx: s.ax/100*W - b.cx*z, dy: s.ay/100*H - b.cy*z};
+  if(s.autoTrim){
+    const b = bboxMap[absIdx];
+    if(b) return {dx: s.ax/100*W - b.cx*z, dy: s.ay/100*H - b.cy*z};
+  }
+  if(s.mode === 'auto'){
+    // 各格尺寸不同 → 以錨點對齊置入畫布
+    const r = frameRect(absIdx);
+    return {dx: s.ax/100*(W - r.w*z), dy: s.ay/100*(H - r.h*z)};
+  }
+  return {dx:0,dy:0};
 }
 function drawPreview(){
   const s = state; if(!s.img) return;
@@ -530,13 +622,13 @@ function drawPreview(){
   if(s.onion){
     pctx.globalAlpha = Math.max(.08, .5 / s.count);
     for(let k=0;k<s.count;k++){
-      const ai = s.start+k, r = frameRect(ai, g), sh = frameShift(ai,W,H);
-      pctx.drawImage(s.img, r.x, r.y, r.w, r.h, sh.dx, sh.dy, W, H);
+      const ai = s.start+k, r = frameRect(ai, g), sh = frameShift(ai,W,H,z);
+      pctx.drawImage(s.img, r.x, r.y, r.w, r.h, sh.dx, sh.dy, r.w*z, r.h*z);
     }
     pctx.globalAlpha = 1;
   }
-  const ai = s.start + s.idx, r = frameRect(ai, g), sh = frameShift(ai,W,H);
-  pctx.drawImage(s.img, r.x, r.y, r.w, r.h, sh.dx, sh.dy, W, H);
+  const ai = s.start + s.idx, r = frameRect(ai, g), sh = frameShift(ai,W,H,z);
+  pctx.drawImage(s.img, r.x, r.y, r.w, r.h, sh.dx, sh.dy, r.w*z, r.h*z);
 
   // 內容中心
   if(s.showCenters && bboxMap[ai]){
@@ -563,7 +655,7 @@ function updateFrameInfo(ai, r, g){
   const s = state, b = bboxMap[ai];
   let devTxt = '';
   if(b){
-    const dx = (b.cx - s.ax/100*g.fw), dy = (b.cy - s.ay/100*g.fh);
+    const dx = (b.cx - s.ax/100*r.w), dy = (b.cy - s.ay/100*r.h);
     devTxt = `\n內容中心 (${b.cx.toFixed(1)}, ${b.cy.toFixed(1)})  偏移錨點 Δ=(${dx>=0?'+':''}${dx.toFixed(1)}, ${dy>=0?'+':''}${dy.toFixed(1)})px`;
   }
   $('frameInfo').textContent =
@@ -588,9 +680,9 @@ function drawJitter(){
   const g = grid();
   const dxs=[], dys=[];
   for(let k=0;k<s.count;k++){
-    const b = bboxMap[s.start+k];
-    dxs.push(b? b.cx - s.ax/100*g.fw : null);
-    dys.push(b? b.cy - s.ay/100*g.fh : null);
+    const b = bboxMap[s.start+k], fr = frameRect(s.start+k, g);
+    dxs.push(b? b.cx - s.ax/100*fr.w : null);
+    dys.push(b? b.cy - s.ay/100*fr.h : null);
   }
   let mx=1; dxs.concat(dys).forEach(v=>{ if(v!=null) mx=Math.max(mx,Math.abs(v)); });
   mx = Math.ceil(mx);
@@ -696,13 +788,19 @@ function buildRowBtns(){
   const g = grid();
   for(let r=0;r<g.rows;r++){
     const b = document.createElement('button');
-    b.textContent = '列 ' + r;
+    b.textContent = '列 ' + r + (g.auto ? `（${autoRows[r].count}格）` : '');
     b.onclick = ()=>{
       buildFrameData();
-      const s = state, startI = r*g.cols;
-      let n = 0;
-      while(n < g.cols && !emptyMap[startI+n]) n++;
-      s.start = startI; s.count = Math.max(1, n || g.cols); s.idx = 0; s.pdir=1;
+      const s = state;
+      if(g.auto){
+        s.start = autoRows[r].start; s.count = autoRows[r].count;
+      }else{
+        const startI = r*g.cols;
+        let n = 0;
+        while(n < g.cols && !emptyMap[startI+n]) n++;
+        s.start = startI; s.count = Math.max(1, n || g.cols);
+      }
+      s.idx = 0; s.pdir=1;
       box.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
       b.classList.add('active');
       syncInputs(); refresh();
@@ -744,7 +842,7 @@ function loadFile(f, isRef){
 function loadImageURL(url, name){
   const img = new Image();
   img.onload = ()=>{
-    state.img = img; state.idx = 0; state.pdir=1; dataKey='';
+    state.img = img; state.idx = 0; state.pdir=1; dataKey=''; autoRects=null;
     $('imgInfo').textContent = `${name||'圖片'}：${img.width} × ${img.height} px`;
     clampAll(); buildFrameData(); buildRowBtns(); syncInputs(); refresh();
     if(state.playing) startLoop();
@@ -808,7 +906,7 @@ function clampAll(){
   if(s.idx >= s.count) s.idx = 0;
 }
 function checkWarnings(g){
-  const s = state; if(!s.img){ $('warnInfo').textContent=''; return; }
+  const s = state; if(!s.img || s.mode==='auto'){ $('warnInfo').textContent=''; return; }
   const msgs=[];
   if(s.mode==='grid'){
     const remW = s.img.width  - s.offX - s.cols*g.fw - (s.cols-1)*s.spX;
@@ -825,8 +923,9 @@ function refresh(){
   clampAll(); buildFrameData();
   const g = grid();
   drawSheet();
-  $('gridInfo').textContent = state.img ?
-    `每格 ${g.fw} × ${g.fh} px｜${g.cols} 欄 × ${g.rows} 列 = ${g.total} 格` : '';
+  $('gridInfo').textContent = !state.img ? '' : g.auto ?
+    `自動內容切割：${g.rows} 列，共 ${g.total} 格（最大 ${g.fw} × ${g.fh} px，各格寬度不一）` :
+    `每格 ${g.fw} × ${g.fh} px｜${g.cols} 欄 × ${g.rows} 列 = ${g.total} 格`;
   checkWarnings(g);
   render();
   saveSoon();
@@ -850,6 +949,7 @@ function syncInputs(){
   document.querySelector(`input[name=mode][value=${s.mode}]`).checked=true;
   $('gridInputs').style.display = s.mode==='grid' ? '' : 'none';
   $('sizeInputs').style.display = s.mode==='size' ? '' : 'none';
+  $('uniformInputs').style.display = s.mode==='auto' ? 'none' : '';
 }
 function bindNum(id, key, rebuild){
   $(id).addEventListener('input', ()=>{
@@ -882,12 +982,15 @@ bindPair('ayR','ay','ay',0,100);
 
 document.querySelectorAll('input[name=mode]').forEach(r=>{
   r.addEventListener('change', ()=>{
+    // 切換前以舊模式取得目前格子，帶入另一組欄位避免跳動
+    const g = state.img ? grid() : null;
     state.mode = r.value;
-    $('gridInputs').style.display = state.mode==='grid' ? '' : 'none';
-    $('sizeInputs').style.display = state.mode==='size' ? '' : 'none';
-    const g = grid();
-    if(state.mode==='size'){ state.fw = g.fw; state.fh = g.fh; }
-    else { state.cols = g.cols; state.rows = g.rows; }
+    if(state.mode==='auto'){ autoRects=null; }
+    else if(g && !g.auto){
+      if(state.mode==='size'){ state.fw = g.fw; state.fh = g.fh; }
+      else { state.cols = g.cols; state.rows = g.rows; }
+    }
+    state.idx = 0; state.pdir = 1;
     syncInputs(); buildRowBtns(); refresh();
   });
 });
@@ -1108,37 +1211,41 @@ function buildGIF(frames,w,h,fps){
   return new Blob([concat(parts)],{type:'image/gif'});
 }
 
-/* 取得每格 RGBA */
-function frameRGBA(absIdx){
-  const g=grid(), r=frameRect(absIdx,g);
-  ensureSrc();
-  const d=srcCtx.getImageData(r.x,r.y,r.w,r.h);
-  return {data:d.data, w:r.w, h:r.h};
-}
+/* 取得動畫範圍的 RGBA（統一畫布尺寸；auto 模式各格以錨點對齊置入，
+   autoTrim 開啟時所有模式都改以內容中心對齊，匯出跟預覽一致） */
 function rangeFrames(){
-  const s=state, arr=[];
-  for(let k=0;k<s.count;k++) arr.push(frameRGBA(s.start+k));
-  return arr;
+  const s=state, g=grid();
+  const outW=g.fw, outH=g.fh;
+  const cv=document.createElement('canvas'); cv.width=outW; cv.height=outH;
+  const cx=cv.getContext('2d',{willReadFrequently:true});
+  cx.imageSmoothingEnabled=false;
+  const frames=[];
+  for(let k=0;k<s.count;k++){
+    const ai=s.start+k, r=frameRect(ai,g), sh=frameShift(ai,outW,outH,1);
+    cx.clearRect(0,0,outW,outH);
+    cx.drawImage(s.img, r.x, r.y, r.w, r.h, Math.round(sh.dx), Math.round(sh.dy), r.w, r.h);
+    frames.push(cx.getImageData(0,0,outW,outH).data);
+  }
+  return {frames, w:outW, h:outH};
 }
 
 $('expGif').onclick = ()=>{
   if(!state.img) return; flash('expGif','…');
-  setTimeout(()=>{ const g=grid(); const fr=rangeFrames();
-    try{ download(buildGIF(fr.map(f=>f.data), g.fw, g.fh, state.fps), 'sprite-anim.gif'); flash('expGif','匯出 GIF'); }
+  setTimeout(()=>{ const fr=rangeFrames();
+    try{ download(buildGIF(fr.frames, fr.w, fr.h, state.fps), 'sprite-anim.gif'); flash('expGif','匯出 GIF'); }
     catch(e){ alert('GIF 匯出失敗：'+e.message); flash('expGif','匯出 GIF'); } }, 20);
 };
 $('expApng').onclick = ()=>{
   if(!state.img) return; flash('expApng','…');
-  setTimeout(()=>{ const g=grid(); const fr=rangeFrames();
-    download(buildAPNG(fr.map(f=>f.data), g.fw, g.fh, state.fps), 'sprite-anim.png'); flash('expApng','匯出 APNG'); }, 20);
+  setTimeout(()=>{ const fr=rangeFrames();
+    download(buildAPNG(fr.frames, fr.w, fr.h, state.fps), 'sprite-anim.png'); flash('expApng','匯出 APNG'); }, 20);
 };
 $('expZip').onclick = ()=>{
   if(!state.img) return; flash('expZip','…');
   setTimeout(()=>{
-    const s=state, files=[];
-    for(let k=0;k<s.count;k++){ const f=frameRGBA(s.start+k);
-      const blob=buildPNG(f.data,f.w,f.h); files.push({name:`frame_${String(k).padStart(3,'0')}.png`, blobData:blob}); }
-    // buildPNG 回傳 Blob → 需 arrayBuffer；改為同步組 zip
+    const fr=rangeFrames();
+    const files=fr.frames.map((d,k)=>({name:`frame_${String(k).padStart(3,'0')}.png`,
+      blobData:buildPNG(d, fr.w, fr.h)}));
     Promise.all(files.map(f=>f.blobData.arrayBuffer())).then(bufs=>{
       const entries=files.map((f,i)=>({name:f.name, data:new Uint8Array(bufs[i])}));
       download(buildZip(entries),'sprite-frames.zip'); flash('expZip','切片 ZIP');
@@ -1170,6 +1277,7 @@ $('expJson').onclick = ()=>{
     frames.push({index:i, x:r.x, y:r.y, w:r.w, h:r.h, empty:!!emptyMap[i],
       content: b?{x:r.x+b.x,y:r.y+b.y,w:b.w,h:b.h,cx:+(r.x+b.cx).toFixed(1),cy:+(r.y+b.cy).toFixed(1)}:null}); }
   const atlas={image:(s.img.src.length<300?s.img.src:'(embedded)'),
+    mode:s.mode,
     sheet:{w:s.img.width,h:s.img.height}, frameWidth:g.fw, frameHeight:g.fh,
     cols:g.cols, rows:g.rows, offset:{x:s.offX,y:s.offY}, spacing:{x:s.spX,y:s.spY},
     anchor:{x:s.ax/100,y:s.ay/100},
@@ -1187,8 +1295,9 @@ setPlaying(true);
 const q = new URLSearchParams(location.search).get('img');
 if(q) loadImageURL(q, q.split('/').pop());
 else refresh();
-window.__spritecheck = {state, grid, autoDetect, buildGIF, buildAPNG, buildZip, buildPNG, rangeFrames,
-  bboxMapRef:()=>bboxMap, nextIndex, clipsRef:()=>clips};
+window.__spritecheck = {state, grid, autoDetect, autoSlice, buildGIF, buildAPNG, buildZip, buildPNG, rangeFrames,
+  bboxMapRef:()=>bboxMap, nextIndex, clipsRef:()=>clips,
+  autoRectsRef:()=>autoRects, autoRowsRef:()=>autoRows};
 </script>
 </body>
 </html>
