@@ -471,35 +471,48 @@ function wrapAngle(a) {
 function buildDeepDive(p, geo, thetaStart, aisleDir, yDrive, yFinal, kMax, tS, neighbors) {
   const R = 1 / kMax;
   const dR = 0.6;
+  const carCenterOff = (p.wheelbase + geo.frontOverhang - geo.rearOverhang) / 2;
+  const uCenter = -carCenterOff; // rear-axle u when the body is centred in the bay
   const uFrontLim = p.spotDepth / 2 - (p.wheelbase + geo.frontOverhang) - 0.15;
-  const finalPos = { x: uFrontLim * p.laneDir, y: yFinal };
-  const lnf = V.leftNormal(V.fromAngle(thetaStart));
-  const C = V.add(finalPos, V.scale(lnf, R * tS));
   // Overshoot toward the kerb is bounded by the bay's spare width.
   const maxOver = Math.max(0, p.spotWidth / 2 - p.carWidth / 2 - 0.05);
   const phiCap = Math.acos(Math.max(-1, Math.min(1, 1 - maxOver / R)));
-  for (let phi1 = Math.min(0.7, phiCap); phi1 >= 0.1; phi1 -= 0.05) {
-    const thDive = thetaStart - tS * phi1;
-    const hDive = V.fromAngle(thDive);
-    const Pstart = V.sub(C, V.scale(V.leftNormal(hDive), R * tS)); // forward-arc start
-    const dEff = Math.min(dR, phi1 / kMax);
-    const Lh = Math.max(0, phi1 / kMax - dEff);
-    const wind = integrateWind(kMax * tS, Lh, dEff, thetaStart, -1);
-    const dyPerM = -Math.sin(thDive); // per metre of straight reverse at the dive angle
-    if (Math.abs(dyPerM) < 1e-4) continue;
-    const d1 = (Pstart.y - yDrive - wind.dy) / dyPerM;
-    if (d1 < -0.01) continue; // the wind alone already overshoots: steeper than needed
-    const d1c = Math.max(0, d1);
-    const windEnd = V.add(Pstart, V.scale(hDive, d1c));
-    const P0 = { x: windEnd.x - wind.dx, y: windEnd.y - wind.dy };
-    const segs = [
-      makeStraight(V.sub(P0, V.scale(aisleDir, APPROACH_LEN)), thetaStart, APPROACH_LEN, 1),
-      makeTableSegment(P0, wind, -1),
-    ];
-    if (d1c > 0.01) segs.push(makeStraight(windEnd, thDive, d1c, -1));
-    segs.push(makeArc(C, R, tS, 1, thDive, R * phi1));
-    const path = buildPath(segs);
-    if (!findFirstCollision(path, p, geo, neighbors)) return { path, phi1 };
+  // Prefer ending the forward arc already centred; fall back to ending snug
+  // behind the front stall and backing up straight to centre (wheel straight).
+  for (const uEnd of [uCenter, uFrontLim]) {
+    const finalPos = { x: uEnd * p.laneDir, y: yFinal };
+    const lnf = V.leftNormal(V.fromAngle(thetaStart));
+    const C = V.add(finalPos, V.scale(lnf, R * tS));
+    for (let phi1 = Math.min(0.7, phiCap); phi1 >= 0.1; phi1 -= 0.05) {
+      const thDive = thetaStart - tS * phi1;
+      const hDive = V.fromAngle(thDive);
+      const Pstart = V.sub(C, V.scale(V.leftNormal(hDive), R * tS)); // forward-arc start
+      const dEff = Math.min(dR, phi1 / kMax);
+      const Lh = Math.max(0, phi1 / kMax - dEff);
+      const wind = integrateWind(kMax * tS, Lh, dEff, thetaStart, -1);
+      const dyPerM = -Math.sin(thDive); // per metre of straight reverse at the dive angle
+      if (Math.abs(dyPerM) < 1e-4) continue;
+      const d1 = (Pstart.y - yDrive - wind.dy) / dyPerM;
+      if (d1 < -0.01) continue; // the wind alone already overshoots: steeper than needed
+      const d1c = Math.max(0, d1);
+      const windEnd = V.add(Pstart, V.scale(hDive, d1c));
+      const P0 = { x: windEnd.x - wind.dx, y: windEnd.y - wind.dy };
+      const segs = [
+        makeStraight(V.sub(P0, V.scale(aisleDir, APPROACH_LEN)), thetaStart, APPROACH_LEN, 1),
+        makeTableSegment(P0, wind, -1),
+      ];
+      if (d1c > 0.01) segs.push(makeStraight(windEnd, thDive, d1c, -1));
+      segs.push(makeArc(C, R, tS, 1, thDive, R * phi1));
+      const dCentre = (uEnd - uCenter);
+      if (dCentre > 0.02) segs.push(makeStraight(finalPos, thetaStart, dCentre, -1));
+      // Wheel straightened in place at the end.
+      const parkedPos = { x: uCenter * p.laneDir, y: yFinal };
+      segs.push(makeStraight(parkedPos, thetaStart, 0.02, 1));
+      const path = buildPath(segs);
+      if (!findFirstCollision(path, p, geo, neighbors)) {
+        return { path, phi1, moves: dCentre > 0.02 ? 3 : 2 };
+      }
+    }
   }
   return null;
 }
@@ -578,7 +591,9 @@ function simulateShuffleParallel(p, geo, start, thetaStart, yFinal, xfCenter, ne
       const eU = uTarget - u;
       const aligned = Math.abs(phi) < 0.05 && Math.abs(eY) < 0.15;
       const inside = u >= uMin - 0.001 && u <= uFrontLim + 0.001;
-      if (aligned && inside) { parked = true; break; }
+      // Aim for the middle of the gap; accept anywhere inside on late phases.
+      const centred = Math.abs(u - uTarget) < 0.3 || phase >= 40;
+      if (aligned && inside && centred) { parked = true; break; }
       if (mode === "center" && travel > 0.02 && gear !== (eU > 0 ? 1 : -1)) break;
       if (mode !== "center" && aligned && travel > 0.02) break;
       if (gear < 0 && u <= uMin && travel > 0.02) break;
@@ -788,11 +803,13 @@ function computeParallelManeuver(p, geo) {
   const kMax = 1 / p.turnRadius;
   const targetDy = yFinal - yDrive;
 
-  // Parked cars occupying the kerb on both ends of the bay.
-  const nHalfL = p.carLength / 2, nHalfW = p.carWidth / 2;
+  // Worst case: the neighbouring stalls are fully occupied — the blocking
+  // rectangles span the entire stall (full spot width, flush with the bay
+  // lines), since the neighbours' parking position can't be controlled.
+  const nHalfL = p.spotDepth / 2, nHalfW = p.spotWidth / 2;
   const neighbors = [
-    { cx: -(p.spotDepth / 2 + nHalfL), cy: yFinal, hl: nHalfL, hw: nHalfW },
-    { cx: p.spotDepth / 2 + nHalfL, cy: yFinal, hl: nHalfL, hw: nHalfW },
+    { cx: -p.spotDepth, cy: yFinal, hl: nHalfL, hw: nHalfW },
+    { cx: p.spotDepth, cy: yFinal, hl: nHalfL, hw: nHalfW },
   ];
 
   // Classic technique: reverse deep toward the rear car (0.3 m margin), then
@@ -833,7 +850,7 @@ function computeParallelManeuver(p, geo) {
       path = dive.path;
       collision = null;
       feasible = true;
-      info.push(`車位較短，採「深切（${(dive.phi1 * 57.3).toFixed(0)}°）＋前進回正」二段式入庫，僅 1 次換檔。`);
+      info.push(`車位較短，採「深切（${(dive.phi1 * 57.3).toFixed(0)}°）＋前進回正」入庫（${dive.moves} 段移動、${dive.moves - 1} 次換檔），停於車格中央。`);
     }
   }
   if (collision || !feasible) {
@@ -841,7 +858,12 @@ function computeParallelManeuver(p, geo) {
     debugShuffle = shuffle;
     if (shuffle.segs.length) {
       const leadStart = V.sub(lastP0, V.scale(aisleDir, APPROACH_LEN));
-      path = buildPath([makeStraight(leadStart, thetaStart, APPROACH_LEN, 1), ...shuffle.segs]);
+      const shuffleSegs = [makeStraight(leadStart, thetaStart, APPROACH_LEN, 1), ...shuffle.segs];
+      // Wheel straightened in place once parked.
+      if (shuffle.parked) {
+        shuffleSegs.push(makeStraight({ x: shuffle.endPose.x, y: shuffle.endPose.y }, shuffle.endPose.th, 0.02, 1));
+      }
+      path = buildPath(shuffleSegs);
       collision = null;
       if (shuffle.parked) {
         feasible = true;
