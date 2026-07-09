@@ -177,10 +177,12 @@ html, body {
         <div class="field">
           <label>模擬方向</label>
           <div class="segmented">
-            <button data-sim="in" class="seg active">駛入停車格</button>
-            <button data-sim="out" class="seg">停妥後駛出</button>
+            <button data-sim="in" class="seg active">駛入</button>
+            <button data-sim="out" class="seg">駛出</button>
+            <button data-sim="manual" class="seg">手動駕駛</button>
           </div>
         </div>
+        <div class="readout" id="manualNote" style="display:none">↑ 前進　↓ 倒車　← → 方向盤<br>會碰撞的移動將被擋下（紅框提示）。</div>
         <div class="field">
           <label>車道行駛方向</label>
           <div class="segmented">
@@ -850,8 +852,9 @@ function computeManeuver(p) {
 // ---------- state ----------
 const state = {
   vehicleType: "car",
-  simMode: "in", // "in" = 駛入, "out" = 停妥後駛出
+  simMode: "in", // "in" = 駛入, "out" = 停妥後駛出, "manual" = 手動駕駛
   parkStyle: "normal", // 平行停車方式: "normal" = 一般, "deep" = 深切
+  manual: { pose: null, delta: 0, keys: {}, trail: [], hit: false, lastDir: 0 },
   spotType: "perp",
   angleDeg: 45,
   laneDir: 1,
@@ -879,9 +882,20 @@ function activePath() {
   return state.simMode === "out" && state.manoeuvre.exitPath ? state.manoeuvre.exitPath : state.manoeuvre.path;
 }
 
+// Place the manually driven car at the start of the entry manoeuvre.
+function resetManual() {
+  const start = state.manoeuvre.path.poseAt(0);
+  state.manual.pose = { pos: { x: start.pos.x, y: start.pos.y }, theta: start.theta };
+  state.manual.delta = 0;
+  state.manual.trail = [{ x: start.pos.x, y: start.pos.y }];
+  state.manual.hit = false;
+  state.manual.lastDir = 0;
+}
+
 function recompute() {
   state.manoeuvre = computeManeuver(state);
   state.traveled = 0;
+  if (state.simMode === "manual") resetManual();
   updateWarningBox();
   updateReadouts();
 }
@@ -1225,10 +1239,50 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+function drawManualTrail() {
+  const t = state.manual.trail;
+  if (t.length < 2) return;
+  ctx.strokeStyle = "#4fd47a";
+  ctx.lineWidth = Math.max(2, 0.045 * PPM);
+  ctx.beginPath();
+  const p0 = toScreen(t[0]);
+  ctx.moveTo(p0.x, p0.y);
+  for (let i = 1; i < t.length; i++) {
+    const q = toScreen(t[i]);
+    ctx.lineTo(q.x, q.y);
+  }
+  ctx.stroke();
+}
+
 function render() {
   drawBackground();
   drawSpot();
   drawNeighbors();
+  if (state.simMode === "manual" && state.manual.pose) {
+    const mp = state.manual;
+    drawManualTrail();
+    const pose = {
+      pos: mp.pose.pos,
+      theta: mp.pose.theta,
+      kappa: Math.tan(mp.delta) / state.wheelbase,
+      gear: mp.lastDir >= 0 ? 1 : -1,
+    };
+    const steer = drawCar(pose);
+    if (mp.hit) {
+      const corners = egoCorners(state, state.manoeuvre.geo, pose).map(toScreen);
+      ctx.strokeStyle = "#ff5c5c";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(corners[0].x, corners[0].y);
+      for (let i = 1; i < 4; i++) ctx.lineTo(corners[i].x, corners[i].y);
+      ctx.closePath();
+      ctx.stroke();
+    }
+    document.getElementById("hudGear").textContent = mp.lastDir > 0 ? "D" : mp.lastDir < 0 ? "R" : "N";
+    document.getElementById("hudSteer").textContent = (steer / RAD).toFixed(0) + "°";
+    document.getElementById("hudProgress").textContent = "手動";
+    return;
+  }
   drawPlannedPath();
   drawTrail();
   drawWheelTrails();
@@ -1259,6 +1313,45 @@ function tick(now) {
   if (lastTime === null) lastTime = now;
   const dt = Math.min(0.05, (now - lastTime) / 1000);
   lastTime = now;
+
+  if (state.simMode === "manual" && state.manual.pose) {
+    const mp = state.manual;
+    const maxSteer = state.manoeuvre.geo.maxSteerRad;
+    const steerRate = 1.6; // rad/s of front-wheel angle while a key is held
+    if (mp.keys.ArrowLeft) mp.delta = Math.max(-maxSteer, mp.delta - steerRate * dt);
+    if (mp.keys.ArrowRight) mp.delta = Math.min(maxSteer, mp.delta + steerRate * dt);
+    let v = 0;
+    if (mp.keys.ArrowUp) v += 1.4 * state.speed;
+    if (mp.keys.ArrowDown) v -= 1.4 * state.speed;
+    if (v !== 0) {
+      mp.lastDir = v > 0 ? 1 : -1;
+      const dsS = v * dt; // signed travel
+      const kap = Math.tan(mp.delta) / state.wheelbase;
+      const thN = mp.pose.theta + kap * dsS;
+      const cand = {
+        pos: { x: mp.pose.pos.x + Math.cos(thN) * dsS, y: mp.pose.pos.y + Math.sin(thN) * dsS },
+        theta: thN,
+      };
+      const nbs = state.manoeuvre.neighbors || [];
+      const blocked = nbs.some((n) =>
+        polysIntersectSAT(egoCorners(state, state.manoeuvre.geo, cand), rectCorners(n.cx, n.cy, n.hl, n.hw, 0))
+      );
+      if (blocked) {
+        mp.hit = true;
+      } else {
+        mp.hit = false;
+        mp.pose = cand;
+        const last = mp.trail[mp.trail.length - 1];
+        if (!last || Math.hypot(cand.pos.x - last.x, cand.pos.y - last.y) > 0.06) {
+          mp.trail.push({ x: cand.pos.x, y: cand.pos.y });
+          if (mp.trail.length > 3000) mp.trail.shift();
+        }
+      }
+    }
+    render();
+    requestAnimationFrame(tick);
+    return;
+  }
 
   if (state.playing) {
     const carSpeed = 1.4; // m/s baseline
@@ -1336,7 +1429,23 @@ function setupUI() {
     state.traveled = 0;
     state.playing = false;
     document.getElementById("btnPlay").textContent = "▶ 播放";
+    document.getElementById("manualNote").style.display = state.simMode === "manual" ? "block" : "none";
+    if (state.simMode === "manual") resetManual();
     fitCamera();
+  });
+
+  // Manual driving: arrow keys, tracked while the mode is active.
+  window.addEventListener("keydown", (e) => {
+    if (state.simMode !== "manual") return;
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      state.manual.keys[e.key] = true;
+      e.preventDefault();
+    }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      state.manual.keys[e.key] = false;
+    }
   });
 
   bindSegmented('[data-lane]', "laneDir", (btn) => {
@@ -1390,6 +1499,7 @@ function setupUI() {
     state.traveled = 0;
     state.playing = false;
     document.getElementById("btnPlay").textContent = "▶ 播放";
+    if (state.simMode === "manual") resetManual();
   });
   document.getElementById("btnStep").addEventListener("click", () => {
     state.playing = false;
