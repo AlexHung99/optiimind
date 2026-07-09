@@ -86,6 +86,16 @@
     <div id="drop">點擊選擇圖片<br>或拖放 / <kbd>Ctrl+V</kbd> 貼上</div>
     <input type="file" id="file" accept="image/*" hidden>
     <div class="hint" id="imgInfo">尚未載入圖片</div>
+    <div class="row" style="margin-top:8px">
+      <button id="bgAuto">🪄 自動去背</button>
+      <button id="bgPick">🖊 滴管選背景色</button>
+      <button id="bgRevert" disabled>還原原圖</button>
+    </div>
+    <label><span class="k">去背容差</span>
+      <input type="range" id="bgTolR" min="0" max="100" value="20">
+      <span class="hint" id="bgTolV">20</span></label>
+    <div class="row" id="bgSwatches"></div>
+    <div class="hint" id="bgInfo">非透明背景的圖（純色/棋盤格）可先去背，再用自動偵測/自動內容切割。</div>
   </fieldset>
 
   <fieldset>
@@ -267,6 +277,9 @@ let detected = null;   // 自動偵測建議
 let autoRects = null;  // 自動內容模式：每格實際矩形 [{x,y,w,h},...]（row-major）
 let autoRows = null;   // 自動內容模式：每列 {start,count}
 let autoMeta = {fw:1, fh:1, cols:1};  // 自動內容模式：最大格寬/高、最大列格數
+let origImg = null;    // 去背前的原圖（null＝目前圖未去背）
+let bgColors = [];     // 要移除的背景色 [[r,g,b],...]
+let pickMode = false;  // 滴管選色模式
 let clips = [];
 let lastTick = 0, acc = 0, needDraw = true;
 
@@ -546,7 +559,10 @@ window.addEventListener('mousemove', e=>{
   }
 });
 window.addEventListener('mouseup', e=>{
-  if(downPt && !panned) selectFrameAt(e, downPt.shift);
+  if(downPt && !panned){
+    if(pickMode) pickColorAt(e);
+    else selectFrameAt(e, downPt.shift);
+  }
   downPt=null;
 });
 function selectFrameAt(e, shift){
@@ -843,6 +859,10 @@ function loadImageURL(url, name){
   const img = new Image();
   img.onload = ()=>{
     state.img = img; state.idx = 0; state.pdir=1; dataKey=''; autoRects=null;
+    // 換新圖 → 清除去背狀態
+    origImg=null; bgColors=[]; pickMode=false;
+    $('bgSwatches').innerHTML=''; $('bgRevert').disabled=true;
+    $('bgPick').textContent='🖊 滴管選背景色'; sheet.style.cursor='crosshair';
     $('imgInfo').textContent = `${name||'圖片'}：${img.width} × ${img.height} px`;
     clampAll(); buildFrameData(); buildRowBtns(); syncInputs(); refresh();
     if(state.playing) startLoop();
@@ -853,10 +873,117 @@ function loadImageURL(url, name){
 }
 function loadRef(url){
   const img=new Image();
-  img.onload=()=>{ state.refImg=img; state.showRef=true; $('showRef').checked=true; needDraw=true; };
+  img.onload=()=>{ state.refImg=img; state.showRef=true; $('showRef').checked=true; render(); };
   img.src=url;
 }
 window.loadImageURL = loadImageURL;
+
+/* ============================================================
+   去背（背景色移除）：自動取邊框主色 / 滴管選色 / 容差 / 還原
+   ============================================================ */
+let bgTimer=null;
+function baseImage(){ return origImg || state.img; }
+function renderSwatches(){
+  const box=$('bgSwatches'); box.innerHTML='';
+  bgColors.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.style.cssText=`width:26px;height:22px;padding:0;background:rgb(${c[0]},${c[1]},${c[2]})`;
+    b.title=`rgb(${c[0]},${c[1]},${c[2]})，點擊移除此色`;
+    b.onclick=()=>{ bgColors.splice(i,1); renderSwatches(); applyBgRemoval(); };
+    box.appendChild(b);
+  });
+}
+// 掃描圖片四邊像素，聚類出佔比 >=3% 的主色（棋盤格兩色也抓得到）
+function borderBgColors(img){
+  const cv=document.createElement('canvas'); cv.width=img.width; cv.height=img.height;
+  const cx=cv.getContext('2d',{willReadFrequently:true}); cx.drawImage(img,0,0);
+  const d=cx.getImageData(0,0,img.width,img.height).data;
+  const W=img.width, H=img.height, cnt=new Map();
+  function samp(x,y){
+    const i=(y*W+x)*4;
+    if(d[i+3]<200) return;                      // 已透明的邊不算背景
+    const key=(d[i]>>4)+','+(d[i+1]>>4)+','+(d[i+2]>>4); // 量化 16 級聚類
+    const e=cnt.get(key)||{n:0,r:0,g:0,b:0};
+    e.n++; e.r+=d[i]; e.g+=d[i+1]; e.b+=d[i+2];
+    cnt.set(key,e);
+  }
+  for(let x=0;x<W;x++){ samp(x,0); samp(x,H-1); }
+  for(let y=0;y<H;y++){ samp(0,y); samp(W-1,y); }
+  const total=(W+H)*2;
+  return Array.from(cnt.values()).filter(e=>e.n>=total*0.03)
+    .sort((a,b)=>b.n-a.n).slice(0,4)
+    .map(e=>[Math.round(e.r/e.n),Math.round(e.g/e.n),Math.round(e.b/e.n)]);
+}
+function setWorkingImage(img, processed){
+  state.img=img; state.idx=0; state.pdir=1; dataKey=''; autoRects=null;
+  $('bgRevert').disabled=!processed;
+  clampAll(); buildFrameData(); buildRowBtns(); syncInputs(); refresh();
+  if(state.playing) startLoop();
+}
+function applyBgRemoval(){
+  clearTimeout(bgTimer);
+  const base=baseImage(); if(!base) return;
+  if(!bgColors.length){
+    if(origImg) setWorkingImage(origImg,false);
+    $('bgInfo').textContent='';
+    return;
+  }
+  const tol = +$('bgTolR').value/100*160;       // 0~160 RGB 歐氏距離
+  const cv=document.createElement('canvas'); cv.width=base.width; cv.height=base.height;
+  const cx=cv.getContext('2d',{willReadFrequently:true}); cx.drawImage(base,0,0);
+  const idata=cx.getImageData(0,0,cv.width,cv.height), d=idata.data;
+  let removed=0;
+  for(let i=0;i<d.length;i+=4){
+    if(d[i+3]===0) continue;
+    for(const c of bgColors){
+      const dr=d[i]-c[0], dg=d[i+1]-c[1], db=d[i+2]-c[2];
+      if(dr*dr+dg*dg+db*db <= tol*tol){ d[i+3]=0; removed++; break; }
+    }
+  }
+  cx.putImageData(idata,0,0);
+  if(!origImg) origImg=base;
+  const img=new Image();
+  img.onload=()=>{ setWorkingImage(img,true);
+    $('bgInfo').textContent=`已移除 ${bgColors.length} 色背景（容差 ${$('bgTolR').value}），共 ${removed.toLocaleString()} 像素轉為透明`; };
+  img.src=cv.toDataURL();
+}
+$('bgAuto').onclick=()=>{
+  const base=baseImage(); if(!base) return;
+  const found=borderBgColors(base);
+  if(!found.length){ $('bgInfo').textContent='偵測不到明顯背景色（圖片邊緣已是透明？改用滴管選色）。'; return; }
+  bgColors=found; renderSwatches(); applyBgRemoval();
+};
+$('bgPick').onclick=()=>{
+  if(!state.img) return;
+  pickMode=!pickMode;
+  $('bgPick').textContent = pickMode ? '點左圖選色…（再按取消）' : '🖊 滴管選背景色';
+  sheet.style.cursor = pickMode ? 'copy' : 'crosshair';
+};
+function pickColorAt(e){
+  const base=baseImage(); if(!base) return;
+  const rc=sheet.getBoundingClientRect();
+  const px=clamp(Math.floor((e.clientX-rc.left)/rc.width*base.width), 0, base.width-1);
+  const py=clamp(Math.floor((e.clientY-rc.top)/rc.height*base.height), 0, base.height-1);
+  const cv=document.createElement('canvas'); cv.width=1; cv.height=1;
+  const cx=cv.getContext('2d',{willReadFrequently:true});
+  cx.drawImage(base, px, py, 1, 1, 0, 0, 1, 1);
+  const d=cx.getImageData(0,0,1,1).data;
+  bgColors.push([d[0],d[1],d[2]]);
+  pickMode=false; $('bgPick').textContent='🖊 滴管選背景色'; sheet.style.cursor='crosshair';
+  renderSwatches(); applyBgRemoval();
+}
+$('bgTolR').oninput=()=>{
+  $('bgTolV').textContent=$('bgTolR').value;
+  clearTimeout(bgTimer);
+  bgTimer=setTimeout(()=>{ if(bgColors.length) applyBgRemoval(); },250);
+};
+$('bgRevert').onclick=()=>{
+  if(!origImg) return;
+  bgColors=[]; renderSwatches();
+  const o=origImg; origImg=null;
+  setWorkingImage(o,false);
+  $('bgInfo').textContent='已還原原圖';
+};
 
 const drop = $('drop');
 drop.onclick = ()=> $('file').click();
@@ -1297,7 +1424,8 @@ if(q) loadImageURL(q, q.split('/').pop());
 else refresh();
 window.__spritecheck = {state, grid, autoDetect, autoSlice, buildGIF, buildAPNG, buildZip, buildPNG, rangeFrames,
   bboxMapRef:()=>bboxMap, nextIndex, clipsRef:()=>clips,
-  autoRectsRef:()=>autoRects, autoRowsRef:()=>autoRows};
+  autoRectsRef:()=>autoRects, autoRowsRef:()=>autoRows,
+  borderBgColors, applyBgRemoval, bgStateRef:()=>({origImg, bgColors})};
 </script>
 </body>
 </html>
