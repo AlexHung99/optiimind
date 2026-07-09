@@ -162,9 +162,9 @@ html, body {
       <section class="group">
         <h2>停車格類型</h2>
         <div class="segmented" id="spotTypeGroup">
-          <button data-type="perp" class="seg active">垂直</button>
+          <button data-type="perp" class="seg">垂直</button>
           <button data-type="angle" class="seg">斜角</button>
-          <button data-type="parallel" class="seg">平行</button>
+          <button data-type="parallel" class="seg active">平行</button>
         </div>
         <div class="field" id="angleField" style="display:none">
           <label>傾斜角度 <span id="angleDegVal">45°</span></label>
@@ -186,25 +186,27 @@ html, body {
         <div class="field">
           <label>車道行駛方向</label>
           <div class="segmented">
-            <button data-lane="1" class="seg active">由左向右 →</button>
-            <button data-lane="-1" class="seg">由右向左 ←</button>
+            <button data-lane="1" data-vert="0" class="seg active">→</button>
+            <button data-lane="-1" data-vert="0" class="seg">←</button>
+            <button data-lane="1" data-vert="1" class="seg">↓</button>
+            <button data-lane="-1" data-vert="1" class="seg">↑</button>
           </div>
         </div>
         <div class="field">
           <label>停車格位置</label>
           <div class="segmented">
-            <button data-row="1" class="seg active">車道下方 ▽</button>
-            <button data-row="-1" class="seg">車道上方 △</button>
+            <button data-row="1" class="seg active" id="rowBtnA">車道下方 ▽</button>
+            <button data-row="-1" class="seg" id="rowBtnB">車道上方 △</button>
           </div>
         </div>
-        <div class="field" id="entryModeField">
+        <div class="field" id="entryModeField" style="display:none">
           <label>入庫方式</label>
           <div class="segmented">
             <button data-entry="reverse" class="seg active">倒車入庫</button>
             <button data-entry="forward" class="seg">前進入庫</button>
           </div>
         </div>
-        <div class="field" id="parkStyleField" style="display:none">
+        <div class="field" id="parkStyleField">
           <label>停車方式</label>
           <div class="segmented">
             <button data-park="normal" class="seg active">一般停車</button>
@@ -218,11 +220,11 @@ html, body {
         <div class="field">
           <label>車種</label>
           <div class="segmented">
-            <button data-vehicle="car" class="seg active">四輪汽車</button>
-            <button data-vehicle="trike" class="seg">三輪車 前2後1</button>
+            <button data-vehicle="car" class="seg">四輪汽車</button>
+            <button data-vehicle="trike" class="seg active">三輪車 前2後1</button>
           </div>
         </div>
-        <div class="readout" id="vehicleNote" style="display:none">前輪轉向的三輪車：車身路徑與四輪車相同，但後方僅一條中央輪跡，後內輪差較小。</div>
+        <div class="readout" id="vehicleNote">前輪轉向的三輪車：車身路徑與四輪車相同，但後方僅一條中央輪跡，後內輪差較小。</div>
         <div class="field">
           <label>車長 <span id="carLengthVal">2.47 m</span></label>
           <input type="range" id="carLength" min="0.5" max="5" step="0.01" value="2.47">
@@ -253,8 +255,8 @@ html, body {
           <input type="range" id="spotWidth" min="0.5" max="5" step="0.1" value="2.5">
         </div>
         <div class="field">
-          <label>停車格深度 <span id="spotDepthVal">6.0 m</span></label>
-          <input type="range" id="spotDepth" min="0.5" max="10" step="0.1" value="6">
+          <label>停車格深度 <span id="spotDepthVal">4.0 m</span></label>
+          <input type="range" id="spotDepth" min="0.5" max="10" step="0.1" value="4">
         </div>
         <div class="field">
           <label>車道寬度 <span id="laneWidthVal">6 m</span></label>
@@ -851,13 +853,14 @@ function computeManeuver(p) {
 
 // ---------- state ----------
 const state = {
-  vehicleType: "car",
+  vehicleType: "trike",
   simMode: "in", // "in" = 駛入, "out" = 停妥後駛出, "manual" = 手動駕駛
   parkStyle: "normal", // 平行停車方式: "normal" = 一般, "deep" = 深切
   manual: { pose: null, delta: 0, keys: {}, trail: [], hit: false, lastDir: 0 },
-  spotType: "perp",
+  spotType: "parallel",
   angleDeg: 45,
   laneDir: 1,
+  roadVert: false, // true = 車道垂直顯示（視圖旋轉 90°，幾何運算不變）
   rowSide: 1,
   entryMode: "reverse",
   carLength: 2.47,
@@ -866,7 +869,7 @@ const state = {
   track: 0.85,
   turnRadius: 3.6,
   spotWidth: 2.5,
-  spotDepth: 6,
+  spotDepth: 4,
   laneWidth: 6,
   showPath: true,
   showTrail: true,
@@ -962,7 +965,8 @@ function collectBoundsPoints() {
 function fitCamera() {
   const pts = collectBoundsPoints();
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const pt of pts) {
+  for (const raw of pts) {
+    const pt = worldToView(raw);
     minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
     minY = Math.min(minY, pt.y); maxY = Math.max(maxY, pt.y);
   }
@@ -976,8 +980,19 @@ function fitCamera() {
   camOffset = { x: rect.width / 2 - cx * PPM, y: rect.height / 2 - cy * PPM };
 }
 
+// The road can be displayed vertically: all geometry stays in road-aligned
+// world coordinates and only the view is rotated 90°.
+function viewRot() {
+  return state.roadVert ? Math.PI / 2 : 0;
+}
+
+function worldToView(p) {
+  return state.roadVert ? { x: -p.y, y: p.x } : p;
+}
+
 function toScreen(p) {
-  return { x: p.x * PPM + camOffset.x, y: p.y * PPM + camOffset.y };
+  const q = worldToView(p);
+  return { x: q.x * PPM + camOffset.x, y: q.y * PPM + camOffset.y };
 }
 
 function drawBackground() {
@@ -985,12 +1000,20 @@ function drawBackground() {
   ctx.fillStyle = "#3a3d42";
   ctx.fillRect(0, 0, rect.width, rect.height);
 
-  // aisle band
+  // aisle band (drawn as a world quad so it follows the view rotation)
   const halfLane = state.laneWidth / 2;
-  const top = toScreen({ x: -1000, y: -halfLane });
-  const bot = toScreen({ x: -1000, y: halfLane });
+  const quad = [
+    { x: -1000, y: -halfLane },
+    { x: 1000, y: -halfLane },
+    { x: 1000, y: halfLane },
+    { x: -1000, y: halfLane },
+  ].map(toScreen);
   ctx.fillStyle = "#46494f";
-  ctx.fillRect(0, top.y, rect.width, bot.y - top.y);
+  ctx.beginPath();
+  ctx.moveTo(quad[0].x, quad[0].y);
+  for (let i = 1; i < 4; i++) ctx.lineTo(quad[i].x, quad[i].y);
+  ctx.closePath();
+  ctx.fill();
 
   // lane centerline dashed
   ctx.strokeStyle = "#d8c96a";
@@ -1057,19 +1080,23 @@ function drawNeighbors() {
   const m = state.manoeuvre;
   if (!m.neighbors) return;
   m.neighbors.forEach((n, i) => {
-    const tl = toScreen({ x: n.cx - n.hl, y: n.cy - n.hw });
+    const c = toScreen({ x: n.cx, y: n.cy });
     const w = 2 * n.hl * PPM, h = 2 * n.hw * PPM;
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(viewRot());
     ctx.fillStyle = "#5a6069";
-    roundRect(ctx, tl.x, tl.y, w, h, 5);
+    roundRect(ctx, -w / 2, -h / 2, w, h, 5);
     ctx.fill();
     ctx.fillStyle = "#4a5058";
-    roundRect(ctx, tl.x + w * 0.55, tl.y + h * 0.12, w * 0.2, h * 0.76, 3);
+    roundRect(ctx, -w / 2 + w * 0.55, -h / 2 + h * 0.12, w * 0.2, h * 0.76, 3);
     ctx.fill();
     const hit = state.simMode === "in" && m.collision && m.collision.neighborIndex === i && state.traveled >= m.collision.s - 1e-6;
     ctx.strokeStyle = hit ? "#ff5c5c" : "#3a4048";
     ctx.lineWidth = hit ? 3 : 1.5;
-    roundRect(ctx, tl.x, tl.y, w, h, 5);
+    roundRect(ctx, -w / 2, -h / 2, w, h, 5);
     ctx.stroke();
+    ctx.restore();
   });
 }
 
@@ -1150,7 +1177,7 @@ function drawWheel(origin, localPos, bodyTheta, steerAngle, wheelLen, wheelWidth
   const world = V.add(origin, rotateLocal(localPos, bodyTheta));
   const screenPos = toScreen(world);
   ctx.translate(screenPos.x, screenPos.y);
-  ctx.rotate(bodyTheta + steerAngle);
+  ctx.rotate(bodyTheta + steerAngle + viewRot());
   ctx.fillStyle = "#111417";
   ctx.strokeStyle = "rgba(220,230,240,0.75)";
   ctx.lineWidth = 1;
@@ -1180,7 +1207,7 @@ function drawCar(pose) {
 
   ctx.save();
   ctx.translate(centerScreen.x, centerScreen.y);
-  ctx.rotate(theta);
+  ctx.rotate(theta + viewRot());
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   const bodyLen = p.carLength * PPM;
   const bodyWid = p.carWidth * PPM;
@@ -1191,7 +1218,7 @@ function drawCar(pose) {
   // body
   ctx.save();
   ctx.translate(centerScreen.x, centerScreen.y);
-  ctx.rotate(theta);
+  ctx.rotate(theta + viewRot());
   const grad = ctx.createLinearGradient(0, -bodyWid / 2, 0, bodyWid / 2);
   grad.addColorStop(0, "#4fa8e0");
   grad.addColorStop(0.5, "#2d78c9");
@@ -1450,6 +1477,11 @@ function setupUI() {
 
   bindSegmented('[data-lane]', "laneDir", (btn) => {
     state.laneDir = parseInt(btn.dataset.lane, 10);
+    state.roadVert = btn.dataset.vert === "1";
+    // Spot-side labels follow the view: below/above when horizontal,
+    // left/right when the road runs vertically.
+    document.getElementById("rowBtnA").textContent = state.roadVert ? "車道左方 ◁" : "車道下方 ▽";
+    document.getElementById("rowBtnB").textContent = state.roadVert ? "車道右方 ▷" : "車道上方 △";
     recompute();
     fitCamera();
   });
