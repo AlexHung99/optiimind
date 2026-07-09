@@ -177,26 +177,26 @@ html, body {
         <div class="field">
           <label>模擬方向</label>
           <div class="segmented">
-            <button data-sim="in" class="seg active">駛入</button>
+            <button data-sim="in" class="seg">駛入</button>
             <button data-sim="out" class="seg">駛出</button>
-            <button data-sim="manual" class="seg">手動駕駛</button>
+            <button data-sim="manual" class="seg active">手動駕駛</button>
           </div>
         </div>
-        <div class="readout" id="manualNote" style="display:none">↑ 前進　↓ 倒車　← → 方向盤<br>會碰撞的移動將被擋下（紅框提示）。</div>
+        <div class="readout" id="manualNote">↑ 前進　↓ 倒車　← → 方向盤<br>會碰撞的移動將被擋下（紅框提示）。</div>
         <div class="field">
           <label>車道行駛方向</label>
           <div class="segmented">
-            <button data-lane="1" data-vert="0" class="seg active">→</button>
+            <button data-lane="1" data-vert="0" class="seg">→</button>
             <button data-lane="-1" data-vert="0" class="seg">←</button>
             <button data-lane="1" data-vert="1" class="seg">↓</button>
-            <button data-lane="-1" data-vert="1" class="seg">↑</button>
+            <button data-lane="-1" data-vert="1" class="seg active">↑</button>
           </div>
         </div>
         <div class="field">
           <label>停車格位置</label>
           <div class="segmented">
-            <button data-row="1" class="seg active" id="rowBtnA">車道下方 ▽</button>
-            <button data-row="-1" class="seg" id="rowBtnB">車道上方 △</button>
+            <button data-row="1" class="seg active" id="rowBtnA">車道左方 ◁</button>
+            <button data-row="-1" class="seg" id="rowBtnB">車道右方 ▷</button>
           </div>
         </div>
         <div class="field" id="entryModeField" style="display:none">
@@ -279,7 +279,7 @@ html, body {
       <canvas id="canvas"></canvas>
       <div class="hud">
         <div class="hud-item"><span class="hud-label">檔位</span><span id="hudGear">D</span></div>
-        <div class="hud-item"><span class="hud-label">方向盤</span><span id="hudSteer">0°</span></div>
+        <div class="hud-item"><span class="hud-label">輪胎角度</span><span id="hudSteer">0°</span></div>
         <div class="hud-item"><span class="hud-label">進度</span><span id="hudProgress">0%</span></div>
       </div>
     </main>
@@ -854,13 +854,13 @@ function computeManeuver(p) {
 // ---------- state ----------
 const state = {
   vehicleType: "trike",
-  simMode: "in", // "in" = 駛入, "out" = 停妥後駛出, "manual" = 手動駕駛
+  simMode: "manual", // "in" = 駛入, "out" = 停妥後駛出, "manual" = 手動駕駛
   parkStyle: "normal", // 平行停車方式: "normal" = 一般, "deep" = 深切
   manual: { pose: null, delta: 0, keys: {}, trail: [], hit: false, lastDir: 0 },
   spotType: "parallel",
   angleDeg: 45,
-  laneDir: 1,
-  roadVert: false, // true = 車道垂直顯示（視圖旋轉 90°，幾何運算不變）
+  laneDir: -1,
+  roadVert: true, // true = 車道垂直顯示（視圖旋轉 90°，幾何運算不變）
   rowSide: 1,
   entryMode: "reverse",
   carLength: 2.47,
