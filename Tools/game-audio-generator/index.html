@@ -190,6 +190,14 @@
     <div class="ctlRow">
       <div class="ctl">速度 <input type="range" id="tempo" min="50" max="200" step="1" value="160"> <b id="tempoV">160</b> BPM</div>
       <div class="ctl">種子 <input type="number" id="seed" value="1234" min="0" max="999999"> <button id="dice" title="隨機種子">🎲</button></div>
+      <div class="ctl">主旋律音色
+        <select id="leadInst">
+          <option value="synth" selected>🎛️ 合成波形</option>
+          <option value="piano">🎹 鋼琴</option>
+          <option value="epiano">🎹 電鋼琴</option>
+          <option value="musicbox">🎵 八音盒</option>
+        </select>
+      </div>
     </div>
     <div class="ctlRow" style="margin-top:10px;">
       <span class="ctl">音軌：</span>
@@ -907,6 +915,65 @@ function lead(ctx, out, t, f, d, wave, v){
   o.start(t); lfo.start(t);
   o.stop(t + d + 0.02); lfo.stop(t + d + 0.02);
 }
+/* 🎹 鋼琴：多泛音相加 + 快速衰減 + 輕微失諧 + 槌擊聲 */
+function piano(ctx, out, t, f, d, v){
+  const dd = Math.max(0.25, d + 0.35); // 鋼琴會延音，比音符稍長
+  const amp = ctx.createGain();
+  amp.gain.setValueAtTime(0, t);
+  amp.gain.linearRampToValueAtTime(v, t + 0.003);
+  amp.gain.exponentialRampToValueAtTime(0.0006, t + dd);
+  amp.connect(out);
+  const parts = [[1,1,1],[2,0.42,0.85],[3,0.22,0.7],[4,0.13,0.55],[5,0.07,0.45],[7,0.035,0.35]];
+  parts.forEach(([r,a,dec]) => {
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.value = f * r * (1 + 0.0007 * r * r); // 高泛音略偏高 = 真實鋼琴的張弦感
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(a, t);
+    g.gain.exponentialRampToValueAtTime(0.0006, t + Math.max(0.1, dd * dec));
+    o.connect(g); g.connect(amp);
+    o.start(t); o.stop(t + dd + 0.05);
+  });
+  const s = noiseSrc(ctx); // 槌擊瞬態
+  const fl = ctx.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = Math.min(6000, f * 8);
+  const ng = ctx.createGain();
+  ng.gain.setValueAtTime(v * 0.22, t); ng.gain.exponentialRampToValueAtTime(0.0006, t + 0.03);
+  s.connect(fl); fl.connect(ng); ng.connect(out); s.start(t); s.stop(t + 0.05);
+}
+/* 🎹 電鋼琴：FM tine（經典 DX 電鋼音色） */
+function epiano(ctx, out, t, f, d, v){
+  const dd = Math.max(0.25, d + 0.3);
+  const car = ctx.createOscillator(); car.type = 'sine'; car.frequency.value = f;
+  const mod = ctx.createOscillator(); mod.type = 'sine'; mod.frequency.value = f * 14;
+  const mg = ctx.createGain();
+  mg.gain.setValueAtTime(f * 3.5, t);
+  mg.gain.exponentialRampToValueAtTime(f * 0.08, t + 0.25); // 亮攻擊、圓潤延音
+  mod.connect(mg); mg.connect(car.frequency);
+  const amp = ctx.createGain();
+  amp.gain.setValueAtTime(0, t);
+  amp.gain.linearRampToValueAtTime(v, t + 0.004);
+  amp.gain.exponentialRampToValueAtTime(0.0006, t + dd);
+  car.connect(amp); amp.connect(out);
+  car.start(t); mod.start(t); car.stop(t + dd + 0.05); mod.stop(t + dd + 0.05);
+}
+/* 🎵 八音盒：非諧和鐘聲泛音、拉高八度 */
+function musicbox(ctx, out, t, f, d, v){
+  const dd = Math.max(0.4, d + 0.6);
+  [[1,1],[2.76,0.35],[5.40,0.12]].forEach(([r,a]) => {
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f * 2 * r;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(a * v, t);
+    g.gain.exponentialRampToValueAtTime(0.0005, t + dd);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t + dd + 0.05);
+  });
+}
+function playLead(ctx, out, t, f, d, S, v){
+  switch(S.leadInst){
+    case 'piano':    piano(ctx, out, t, f, d, v * 1.15); break;
+    case 'epiano':   epiano(ctx, out, t, f, d, v * 1.15); break;
+    case 'musicbox': musicbox(ctx, out, t, f, d, v * 1.1); break;
+    default:         lead(ctx, out, t, f, d, S.leadWave, v);
+  }
+}
 
 /* ---- 每小節排程（即時播放與離線匯出共用，種子決定一切） ---- */
 function scheduleBar(ctx, out, t, bar, S){
@@ -972,7 +1039,7 @@ function scheduleBar(ctx, out, t, bar, S){
         cur = Math.max(3, Math.min(14, cur));
         const m = S.root + 12 + sc[cur % 7] + 12 * Math.floor(cur / 7);
         const len = (rng() < 0.3 ? 2 : 1) * beat / 2;
-        lead(ctx, out, t + i * beat / 2, m2f(m), len * 0.95, S.leadWave, 0.11);
+        playLead(ctx, out, t + i * beat / 2, m2f(m), len * 0.95, S, 0.11);
         if(rng() < 0.3) i++; // 偶爾休止，讓旋律呼吸
       }
     }
@@ -993,6 +1060,7 @@ function currentSettings(state){
     bassStyle: m.bass,
     arpWave: m.arpWave,
     leadWave: m.leadWave,
+    leadInst: $('#leadInst').value,
     arpDensity: m.arpDensity,
     leadDensity: m.leadDensity,
     seed: (+$('#seed').value) | 0,
@@ -1408,6 +1476,7 @@ function saveBgmPreset(){
     mood: curMood,
     tempo: +$('#tempo').value,
     seed,
+    leadInst: $('#leadInst').value,
     layers: {
       drums: $('#lyDrums').checked, bass: $('#lyBass').checked, arp: $('#lyArp').checked,
       pad: $('#lyPad').checked, lead: $('#lyLead').checked,
@@ -1421,6 +1490,7 @@ function applyBgmPreset(s){
   $('#tempo').value = s.tempo;
   $('#tempo').dispatchEvent(new Event('input'));
   $('#seed').value = s.seed;
+  $('#leadInst').value = s.leadInst || 'synth';
   $('#lyDrums').checked = !!s.layers.drums;
   $('#lyBass').checked  = !!s.layers.bass;
   $('#lyArp').checked   = !!s.layers.arp;
