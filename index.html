@@ -282,6 +282,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
       }];
 
+      products = products.filter(function(product) {
+        return product.slug !== 'optilitedb';
+      });
+
       var copy = {
         en: {
           nav: 'Products',
