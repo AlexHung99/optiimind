@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OptiPdfScan — 離線公文 PDF 辨識與自動整理｜OptiMind</title>
+<meta name="description" content="OptiPdfScan 是完全離線的公文 PDF 辨識工具：自動辨識掃描件、依發文日期與文號改名、並產生結構化 Markdown。檔案不離開你的電腦。">
+<link rel="canonical" href="https://optiimind.com/Tools/optipdfscan/">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="OptiPdfScan — 離線公文 PDF 辨識與自動整理">
+<meta property="og:description" content="拖進來就好：自動辨識、自動改名、自動產生 Markdown。全程離線，公文不出電腦。">
+<meta property="og:url" content="https://optiimind.com/Tools/optipdfscan/">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322D3EE'/%3E%3Cstop offset='1' stop-color='%23E879F9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Cpath d='M15 15h20l14 14v20H15z' fill='%23fff'/%3E%3Cpath d='M35 15l14 14H35z' fill='%23000' opacity='.22'/%3E%3C/svg%3E">
+
+<style>
+  :root{
+    --bg:#0E1016; --surface:#171A22; --surface-2:#1F2430; --border:#2C3242;
+    --fg:#E9ECF3; --muted:#9099AC; --ok:#34D399; --warn:#FBBF24;
+    --accent-1:#22D3EE; --accent-2:#E879F9;
+    --grad:linear-gradient(120deg,#22D3EE,#E879F9);
+    --radius:14px; --maxw:1080px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family:"Microsoft JhengHei UI","Noto Sans TC",system-ui,-apple-system,"Segoe UI",sans-serif;
+    line-height:1.75; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent-1)}
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+
+  /* ---------- header ---------- */
+  header{border-bottom:1px solid var(--border); position:sticky; top:0; background:rgba(14,16,22,.86); backdrop-filter:blur(10px); z-index:10}
+  .nav{display:flex; align-items:center; gap:12px; height:62px}
+  .logo{width:28px;height:28px;border-radius:7px;background:var(--grad);flex:none}
+  .brand{font-weight:700; letter-spacing:.2px}
+  .brand small{display:block; font-weight:400; font-size:11px; color:var(--muted); letter-spacing:.6px}
+  .nav-spacer{flex:1}
+  .nav a{color:var(--muted); text-decoration:none; font-size:14px; margin-left:20px}
+  .nav a:hover{color:var(--fg)}
+
+  /* ---------- hero ---------- */
+  .hero{padding:76px 0 56px; text-align:center}
+  .eyebrow{
+    display:inline-block; font-size:12px; letter-spacing:1.4px; text-transform:uppercase;
+    color:var(--accent-1); border:1px solid var(--border); border-radius:999px; padding:5px 14px; margin-bottom:22px;
+  }
+  h1{
+    font-size:clamp(34px,6vw,58px); line-height:1.15; margin:0 0 18px;
+    background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .lede{font-size:clamp(16px,2.2vw,20px); color:var(--muted); max-width:640px; margin:0 auto 34px}
+  .lede b{color:var(--fg); font-weight:600}
+
+  .cta{display:flex; gap:12px; justify-content:center; flex-wrap:wrap; align-items:center}
+  .btn{
+    display:inline-flex; align-items:center; gap:9px; padding:13px 26px; border-radius:10px;
+    text-decoration:none; font-weight:600; font-size:15px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--fg); transition:.15s;
+  }
+  .btn:hover{background:#2A3040; transform:translateY(-1px)}
+  .btn-primary{background:var(--grad); color:#0B0D12; border:0}
+  .btn-primary:hover{opacity:.9; background:var(--grad)}
+  .relnote{margin-top:14px; font-size:13px; color:var(--muted); min-height:20px}
+
+  /* ---------- sections ---------- */
+  section{padding:60px 0; border-top:1px solid var(--border)}
+  h2{font-size:clamp(22px,3.4vw,30px); margin:0 0 10px}
+  .sub{color:var(--muted); margin:0 0 34px; max-width:660px}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:16px}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:22px}
+  .card h3{margin:0 0 8px; font-size:16px; display:flex; align-items:center; gap:9px}
+  .card p{margin:0; color:var(--muted); font-size:14.5px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--grad);flex:none}
+
+  /* ---------- flow ---------- */
+  .flow{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; counter-reset:s}
+  .step{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:22px; position:relative}
+  .step::before{
+    counter-increment:s; content:counter(s);
+    display:flex; align-items:center; justify-content:center;
+    width:28px;height:28px;border-radius:8px;background:var(--grad); color:#0B0D12;
+    font-weight:800; font-size:14px; margin-bottom:12px;
+  }
+  .step h3{margin:0 0 6px; font-size:15px}
+  .step p{margin:0; font-size:14px; color:var(--muted)}
+
+  /* ---------- table ---------- */
+  table{width:100%; border-collapse:collapse; font-size:14.5px}
+  th,td{text-align:left; padding:11px 14px; border-bottom:1px solid var(--border)}
+  th{color:var(--muted); font-weight:600; font-size:13px}
+  td:first-child{color:var(--muted); white-space:nowrap}
+
+  /* ---------- notice ---------- */
+  .notice{background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--warn); border-radius:10px; padding:18px 20px; margin-top:16px}
+  .notice h3{margin:0 0 6px; font-size:15px; color:var(--warn)}
+  .notice p{margin:0; color:var(--muted); font-size:14.5px}
+
+  footer{border-top:1px solid var(--border); padding:34px 0 46px; color:var(--muted); font-size:13.5px}
+  .footrow{display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap}
+
+  @media (max-width:640px){
+    .hero{padding:52px 0 40px}
+    .nav a{margin-left:14px; font-size:13px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <div class="logo" aria-hidden="true"></div>
+    <div class="brand">OptiPdfScan<small>OPTIMIND</small></div>
+    <div class="nav-spacer"></div>
+    <a href="#features">特色</a>
+    <a href="#how">怎麼用</a>
+    <a href="#specs">系統需求</a>
+    <a href="#download">下載</a>
+  </div>
+</header>
+
+<div class="wrap hero">
+  <span class="eyebrow">完全離線 · Windows 桌面工具</span>
+  <h1>公文丟進來<br>剩下的它處理</h1>
+  <p class="lede">
+    自動辨識掃描公文、依 <b>發文日期＿文號＿發文單位</b> 改名、
+    並產生結構化 Markdown。<b>全程不連網</b>，公文不會離開你的電腦。
+  </p>
+  <div class="cta">
+    <a class="btn btn-primary" id="dl-setup" href="https://optipdfscan-update.optiimind.com/OptiPdfScan-win-Setup.exe">
+      ↓ 下載安裝版 <span style="opacity:.7;font-weight:400">121 MB</span>
+    </a>
+    <a class="btn" id="dl-portable" href="https://optipdfscan-update.optiimind.com/OptiPdfScan-win-Portable.zip">
+      免安裝版 ZIP <span style="opacity:.6;font-weight:400">116 MB</span>
+    </a>
+  </div>
+  <div class="relnote" id="relnote">Windows 10 / 11 · 64 位元</div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <h2>它解決什麼問題</h2>
+    <p class="sub">事務機掃出來的一堆 <code>sharp4070_20260818_103118.pdf</code>，沒人想手動開來看再改名。</p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="dot"></span>完全離線</h3>
+        <p>辨識模型隨程式安裝在本機，執行期不做任何連線。公文內容不會上傳到任何雲端服務。</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>繁體完整</h3>
+        <p>採用字典達 18,708 字的辨識模型。上一代模型缺「範掃說別頁檢並屬議」等繁體專用字，公文會系統性缺字。</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>自動命名</h3>
+        <p>抽出發文日期、發文字號、發文單位自動改名，民國年自動轉換。命名樣板可自訂。</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>整理到指定資料夾</h3>
+        <p>可設定輸出資料夾，改名後自動搬移歸檔，並在旁邊產生同名的 Markdown。</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>去紅章與歪斜校正</h3>
+        <p>濾除紅色印信而保留被壓住的黑字，並自動校正掃描歪斜——這兩項對辨識率的提升往往大於換模型。</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>欄位用規則不用猜</h3>
+        <p>字號與日期一碼都不能錯，因此採規則式抽取。抽不到會留下空值，而不是生出看起來很合理的假資料。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>怎麼用</h2>
+    <p class="sub">常駐系統匣，需要時拖檔進去就好。</p>
+    <div class="flow">
+      <div class="step">
+        <h3>拖進來</h3>
+        <p>把 PDF 或整個資料夾拖進視窗，會自動找出裡面所有 PDF。</p>
+      </div>
+      <div class="step">
+        <h3>自動辨識</h3>
+        <p>逐頁判斷走文字層或 OCR，只有掃描頁才跑辨識，速度不浪費。</p>
+      </div>
+      <div class="step">
+        <h3>確認改名</h3>
+        <p>先顯示預覽，確認無誤再套用；也可以開啟自動套用。隨時可復原。</p>
+      </div>
+      <div class="step">
+        <h3>產出歸檔</h3>
+        <p>PDF 搬到指定資料夾，旁邊附一份結構化 Markdown。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="specs">
+  <div class="wrap">
+    <h2>系統需求</h2>
+    <table>
+      <tr><th>項目</th><th>需求</th></tr>
+      <tr><td>作業系統</td><td>Windows 10 / 11（64 位元）</td></tr>
+      <tr><td>記憶體</td><td>建議 8 GB 以上</td></tr>
+      <tr><td>磁碟空間</td><td>約 350 MB</td></tr>
+      <tr><td>顯示卡</td><td>不需要，純 CPU 運算</td></tr>
+      <tr><td>網路</td><td>安裝時需要；<strong>執行時完全不需要</strong></td></tr>
+    </table>
+
+    <div class="notice">
+      <h3>安裝時可能出現 SmartScreen 提示</h3>
+      <p>本程式目前尚未購買程式碼簽章憑證，Windows 可能顯示「不受信任的發行者」。
+         點選「其他資訊」→「仍要執行」即可。若不放心，請改用免安裝版並自行檢查檔案。</p>
+    </div>
+
+    <div class="notice">
+      <h3>適用範圍</h3>
+      <p>欄位規則依《文書處理手冊》的制式格式撰寫，適用於橫式公文。
+         直排公文（民國 94 年以前）與非制式文件（會議紀錄、簽呈變體）需要另行調整。</p>
+    </div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap">
+    <h2>下載</h2>
+    <p class="sub">安裝版會自動接收後續更新；免安裝版需自行更換。</p>
+    <div class="cta" style="justify-content:flex-start">
+      <a class="btn btn-primary" href="https://optipdfscan-update.optiimind.com/OptiPdfScan-win-Setup.exe">↓ 安裝版 Setup.exe <span style="opacity:.7;font-weight:400">121 MB</span></a>
+      <a class="btn" href="https://optipdfscan-update.optiimind.com/OptiPdfScan-win-Portable.zip">免安裝版 ZIP <span style="opacity:.6;font-weight:400">116 MB</span></a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap footrow">
+    <div>© <span id="yr">2026</span> OptiMind Inc.</div>
+    <div>OptiPdfScan · 離線公文辨識工具</div>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('yr').textContent = new Date().getFullYear();
+
+  // 從 Velopack 的釋出清單讀出目前版本。
+  // 需要 R2 bucket 設定 CORS 允許本網域；讀不到就安靜保持靜態連結，不影響下載。
+  (function () {
+    var BASE = 'https://optipdfscan-update.optiimind.com/';
+    var note = document.getElementById('relnote');
+
+    fetch(BASE + 'releases.win.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (data) {
+        var list = (data && (data.Assets || data.assets)) || [];
+        var newest = null;
+        list.forEach(function (a) {
+          var name = a.FileName || a.fileName || '';
+          if (/-full\.nupkg$/i.test(name)) {
+            var v = a.Version || a.version;
+            if (v && (!newest || v > newest)) newest = v;
+          }
+        });
+        if (newest) {
+          note.textContent = 'v' + newest + ' · Windows 10 / 11 · 64 位元';
+        }
+      })
+      .catch(function () { /* 保持預設文字 */ });
+  })();
+</script>
+
+</body>
+</html>
