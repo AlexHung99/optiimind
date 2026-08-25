@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OptiPdfScan — 離線公文 PDF 辨識與自動整理｜OptiMind</title>
-<meta name="description" content="OptiPdfScan 是完全離線的公文 PDF 辨識工具：自動辨識掃描件、依發文日期與文號改名、並產生結構化 Markdown。檔案不離開你的電腦。">
+<title>OptiPdfScan — 公文辨識、分案與會勘紀錄彙整｜OptiMind</title>
+<meta name="description" content="OptiPdfScan 辨識掃描公文並自動改名，依地段地號分案，把各局處回函彙整成會勘紀錄，再轉成核准函草稿。預設完全離線，公文不離開你的電腦。">
 <link rel="canonical" href="https://optiimind.com/Tools/optipdfscan/">
 
 <meta property="og:type" content="website">
-<meta property="og:title" content="OptiPdfScan — 離線公文 PDF 辨識與自動整理">
-<meta property="og:description" content="拖進來就好：自動辨識、自動改名、自動產生 Markdown。全程離線，公文不出電腦。">
+<meta property="og:title" content="OptiPdfScan — 公文辨識、分案與會勘紀錄彙整">
+<meta property="og:description" content="從一疊掃描件到一份會勘紀錄：自動辨識改名、依地段地號分案、彙整各局處意見、產出核准函草稿。預設完全離線。">
 <meta property="og:url" content="https://optiimind.com/Tools/optipdfscan/">
 
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322D3EE'/%3E%3Cstop offset='1' stop-color='%23E879F9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Cpath d='M15 15h20l14 14v20H15z' fill='%23fff'/%3E%3Cpath d='M35 15l14 14H35z' fill='%23000' opacity='.22'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="data:image/png;base64,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">
 
 <style>
   :root{
@@ -76,6 +76,26 @@
   .card h3{margin:0 0 8px; font-size:16px; display:flex; align-items:center; gap:9px}
   .card p{margin:0; color:var(--muted); font-size:14.5px}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--grad);flex:none}
+  .tag{
+    margin-left:auto; font-size:11px; font-weight:600; letter-spacing:.4px;
+    color:var(--warn); border:1px solid var(--border); border-radius:999px; padding:2px 9px; white-space:nowrap;
+  }
+  code{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:5px;
+    padding:1px 6px; font-size:.92em; font-family:Consolas,"Cascadia Mono",monospace;
+  }
+
+  /* ---------- 檔名前後對照 ---------- */
+  .rename{display:grid; grid-template-columns:1fr auto 1fr; gap:14px; align-items:center; margin:0 0 34px}
+  .rename .box{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; font-size:13.5px; overflow-wrap:anywhere}
+  .rename .box b{display:block; font-size:11px; letter-spacing:.8px; color:var(--muted); font-weight:600; margin-bottom:6px}
+  .rename .arrow{color:var(--accent-1); font-size:20px}
+  @media (max-width:640px){ .rename{grid-template-columns:1fr} .rename .arrow{transform:rotate(90deg); justify-self:center} }
+
+  /* ---------- 更新重點 ---------- */
+  .news{list-style:none; margin:0; padding:0; display:grid; gap:10px}
+  .news li{background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--accent-1); border-radius:10px; padding:13px 16px; font-size:14.5px; color:var(--muted)}
+  .news b{color:var(--fg); font-weight:600}
 
   /* ---------- flow ---------- */
   .flow{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; counter-reset:s}
@@ -105,7 +125,11 @@
 
   @media (max-width:640px){
     .hero{padding:52px 0 40px}
-    .nav a{margin-left:14px; font-size:13px}
+    /* 連結放不下時讓導覽列自己橫向捲動，不要撐破整個頁面 */
+    .nav{overflow-x:auto; scrollbar-width:none; -ms-overflow-style:none}
+    .nav::-webkit-scrollbar{display:none}
+    .nav a{margin-left:14px; font-size:13px; white-space:nowrap; flex:none}
+    .logo,.brand{flex:none}
   }
 </style>
 </head>
@@ -116,42 +140,80 @@
     <div class="logo" aria-hidden="true"></div>
     <div class="brand">OptiPdfScan<small>OPTIMIND</small></div>
     <div class="nav-spacer"></div>
+    <a href="#case">會勘案件</a>
     <a href="#features">特色</a>
     <a href="#how">怎麼用</a>
+    <a href="#whatsnew">更新</a>
     <a href="#specs">系統需求</a>
     <a href="#download">下載</a>
   </div>
 </header>
 
 <div class="wrap hero">
-  <span class="eyebrow">完全離線 · Windows 桌面工具</span>
-  <h1>公文丟進來<br>剩下的它處理</h1>
+  <span class="eyebrow">預設離線 · Windows 桌面工具</span>
+  <h1>一疊掃描件<br>整理成一份會勘紀錄</h1>
   <p class="lede">
-    自動辨識掃描公文、依 <b>發文日期＿文號＿發文單位</b> 改名、
-    並產生結構化 Markdown。<b>全程不連網</b>，公文不會離開你的電腦。
+    辨識公文、依日期文號改名，再<b>依地段地號分案</b>、
+    把各局處回函<b>彙整成會勘紀錄</b>，一鍵轉成<b>核准函草稿</b>。
+    預設全程不連網，公文不會離開你的電腦。
   </p>
   <div class="cta">
     <a class="btn btn-primary" id="dl-setup" href="https://optipdfscan-update.optiimind.com/OptiPdfScan-win-Setup.exe">
-      ↓ 下載安裝版 <span style="opacity:.7;font-weight:400">121 MB</span>
+      ↓ 下載安裝版 <span style="opacity:.7;font-weight:400">123 MB</span>
     </a>
     <a class="btn" id="dl-portable" href="https://optipdfscan-update.optiimind.com/OptiPdfScan-win-Portable.zip">
-      免安裝版 ZIP <span style="opacity:.6;font-weight:400">116 MB</span>
+      免安裝版 ZIP <span style="opacity:.6;font-weight:400">118 MB</span>
     </a>
   </div>
   <div class="relnote" id="relnote">Windows 10 / 11 · 64 位元</div>
 </div>
 
+<section id="case">
+  <div class="wrap">
+    <h2>會勘案件：從回函到核准函</h2>
+    <p class="sub">
+      一次會勘要等十幾個局處回函。過去得一份份開來看、把意見手動抄進會勘紀錄，
+      再照著會勘紀錄重打一次核准函 —— 同一段文字抄兩遍，錯字就是這樣來的。
+    </p>
+    <div class="flow">
+      <div class="step">
+        <h3>依地段地號分案</h3>
+        <p>從主旨抓出「○○段○○地號」判斷同一案件，自動建立案件資料夾並把回函移進去。抓不到地號的留在原地，不亂猜。</p>
+      </div>
+      <div class="step">
+        <h3>產生會勘紀錄</h3>
+        <p>把這一案各局處的「說明」逐條彙整成一張意見回復彙整表，附上來文日期與文號。原文照抄，不改寫。</p>
+      </div>
+      <div class="step">
+        <h3>產生核准函</h3>
+        <p>依會勘紀錄轉成上行簽格式（主旨／說明／擬辦），只調整編號層級。查不到的欄位留下底線，等你填。</p>
+      </div>
+    </div>
+
+    <div class="notice" style="border-left-color:var(--accent-1)">
+      <h3 style="color:var(--accent-1)">核准函一定從會勘紀錄產生，不是從原始掃描件</h3>
+      <p>掃描件的辨識結果一定有要修的地方。會勘紀錄可以直接在程式裡編輯儲存，
+         核准函再從那份改好的檔案讀進來 —— 你的修正不會在下一步被丟掉。</p>
+    </div>
+  </div>
+</section>
+
 <section id="features">
   <div class="wrap">
     <h2>它解決什麼問題</h2>
     <p class="sub">
-      事務機掃出來的一堆 <code>sharp4070_20260818_103118.pdf</code>，沒人想手動開來看再改名。
-      整理後會變成 <code>1150701_桃農管字第1150022840號_○○有限公司_主旨.pdf</code>。
+      事務機掃出來的一堆檔名，沒人想手動開來看再改名。
     </p>
+    <div class="rename">
+      <div class="box"><b>掃描機給的檔名</b>sharp4070_20260818_103118.pdf</div>
+      <div class="arrow">→</div>
+      <div class="box"><b>整理後</b>1150701_桃農管字第1150022840號_○○有限公司_主旨.pdf</div>
+    </div>
     <div class="grid">
       <div class="card">
-        <h3><span class="dot"></span>完全離線</h3>
-        <p>辨識模型隨程式安裝在本機，執行期不做任何連線。公文內容不會上傳到任何雲端服務。</p>
+        <h3><span class="dot"></span>預設完全離線</h3>
+        <p>辨識模型隨程式安裝在本機，預設狀態下執行期不做任何連線，公文內容不會上傳。
+           雲端解析是另外的選項，要自己開、自己填金鑰。</p>
       </div>
       <div class="card">
         <h3><span class="dot"></span>繁體完整</h3>
@@ -159,31 +221,43 @@
       </div>
       <div class="card">
         <h3><span class="dot"></span>自動命名</h3>
-        <p>抽出發文日期、發文字號、發文單位自動改名，民國年自動轉換。命名樣板可自訂。</p>
+        <p>抽出發文日期、發文字號、發文單位自動改名，民國年自動轉換。命名樣板可自訂。
+           套不上公文格式的檔案改用文件標題命名。可設輸出資料夾，改名後自動搬移歸檔。</p>
       </div>
       <div class="card">
-        <h3><span class="dot"></span>整理到指定資料夾</h3>
-        <p>可設定輸出資料夾，改名後自動搬移歸檔，並在旁邊產生同名的 Markdown。</p>
+        <h3><span class="dot"></span>文件瀏覽與分案</h3>
+        <p>獨立分頁瀏覽整理過的資料夾，依發文日期排序，可搜尋機關、文號與日期。
+           能建立資料夾、拖曳搬移，也能依地段地號一次分好案件資料夾；重複執行不會產生重複資料夾。</p>
       </div>
       <div class="card">
         <h3><span class="dot"></span>去紅章與歪斜校正</h3>
         <p>濾除紅色印信而保留被壓住的黑字，並自動校正掃描歪斜——這兩項對辨識率的提升往往大於換模型。</p>
       </div>
       <div class="card">
+        <h3><span class="dot"></span>收文戳記不進內文</h3>
+        <p>收文章蓋在紙的下緣，常和本文最後一行重疊，辨識後會卡進句子中間。
+           程式在合併文字列之前就先把戳記整塊移除。</p>
+      </div>
+      <div class="card">
         <h3><span class="dot"></span>欄位用規則不用猜</h3>
-        <p>字號與日期一碼都不能錯，因此採規則式抽取。抽不到會留下空值，而不是生出看起來很合理的假資料。</p>
+        <p>字號與日期一碼都不能錯，因此採規則式抽取。抽不到會留下空值，
+           而不是生出一個看起來很合理的假資料——那種錯誤沒有人會發現。</p>
       </div>
       <div class="card">
-        <h3><span class="dot"></span>對照檢視</h3>
-        <p>雙擊任一份文件即可開啟檢視視窗，右側讀 Markdown，可隨時展開左側原始 PDF 逐頁對照，確認辨識結果。</p>
+        <h3><span class="dot"></span>對照檢視與就地編輯</h3>
+        <p>雙擊開啟檢視視窗，可展開原始 PDF 逐頁對照。沒有對應 PDF 的檔案直接以全幅顯示，
+           並可按「編輯」直接修改內容後儲存。</p>
       </div>
       <div class="card">
-        <h3><span class="dot"></span>文件瀏覽</h3>
-        <p>獨立分頁瀏覽整理過的資料夾，依發文日期排序，可搜尋機關、文號與日期，直接挑一份開啟對照。</p>
+        <h3><span class="dot"></span>雲端大語言模型解析<span class="tag">選用</span></h3>
+        <p>本機 OCR 之外，可改用 Claude、OpenAI 或 Gemini 解析。
+           金鑰以 Windows DPAPI 加密存放、不寫進設定檔，並可設每次與每月的成本上限，
+           送出前顯示預估花費。<b style="color:var(--warn)">啟用後文件內容會送到該服務。</b></p>
       </div>
       <div class="card">
         <h3><span class="dot"></span>自動更新</h3>
-        <p>安裝版會在背景取得新版並於下次啟動時套用，不會在你辨識到一半時強制重啟。</p>
+        <p>安裝版會在背景取得新版並於下次啟動時套用，不會在你辨識到一半時強制重啟。
+           更新通常只有幾百 KB，不必重載整包。</p>
       </div>
     </div>
   </div>
@@ -211,6 +285,28 @@
         <p>PDF 搬到指定資料夾，旁邊附一份結構化 Markdown，可隨時回頭對照原件。</p>
       </div>
     </div>
+
+    <p class="sub" style="margin:26px 0 0">
+      接下來若是會勘案件，就到「瀏覽文件」分頁走
+      <b style="color:var(--fg)">分案 → 會勘紀錄 → 核准函</b>。
+      三顆按鈕依所在位置自動開關，走到哪一步就只有那一步能按，不會做錯順序。
+    </p>
+  </div>
+</section>
+
+<section id="whatsnew">
+  <div class="wrap">
+    <h2>1.4 這一版新增</h2>
+    <p class="sub">主要圍繞在會勘案件的整段流程。</p>
+    <ul class="news">
+      <li><b>依地段地號分案</b>：從主旨抓地號判斷同案件，自動建案件資料夾並歸檔。</li>
+      <li><b>會勘紀錄彙整</b>：把各局處回函的說明逐條收成一張表，自動比對是哪個局處的意見。</li>
+      <li><b>核准函草稿</b>：由會勘紀錄轉成上行簽格式，意見原文照抄。</li>
+      <li><b>會勘紀錄可編輯儲存</b>：辨識有誤直接在程式裡改，改完再產生核准函。</li>
+      <li><b>收文戳記移除</b>：戳記不再卡進本文句子中間。</li>
+      <li><b>會勘名稱與時間</b>：從會勘通知單補上這兩個欄位，不再留空。</li>
+      <li><b>設定介面</b>：辨識方式、命名樣板、資料夾、雲端金鑰與成本上限集中在一處。</li>
+    </ul>
   </div>
 </section>
 
@@ -221,9 +317,9 @@
       <tr><th>項目</th><th>需求</th></tr>
       <tr><td>作業系統</td><td>Windows 10 / 11（64 位元）</td></tr>
       <tr><td>記憶體</td><td>建議 8 GB 以上</td></tr>
-      <tr><td>磁碟空間</td><td>約 350 MB</td></tr>
+      <tr><td>磁碟空間</td><td>約 400 MB</td></tr>
       <tr><td>顯示卡</td><td>不需要，純 CPU 運算</td></tr>
-      <tr><td>網路</td><td>安裝時需要；<strong>執行時完全不需要</strong></td></tr>
+      <tr><td>網路</td><td>安裝與更新時需要；<strong>本機辨識時完全不需要</strong>（選用雲端解析時才會連線）</td></tr>
     </table>
 
     <div class="notice">
@@ -237,16 +333,31 @@
       <p>欄位規則依《文書處理手冊》的制式格式撰寫，適用於橫式公文。
          直排公文（民國 94 年以前）與非制式文件（會議紀錄、簽呈變體）需要另行調整。</p>
     </div>
+
+    <div class="notice">
+      <h3>會勘功能目前對應桃園市政府</h3>
+      <p>「哪一份回函屬於哪個局處」是靠一份固定的機關對照表判斷的，
+         目前收錄桃園市政府所屬 14 個單位及其常見簡稱（建管處、經發局、養工處…）。
+         其他縣市可以用，但局處要重新對照。分案、辨識、改名等其他功能不受這個限制。</p>
+    </div>
+
+    <div class="notice">
+      <h3>產出的是草稿，不是可直接發文的公文</h3>
+      <p>會勘紀錄與核准函都需要人工複核。抓不到的欄位（例如申請面積）會留下底線提示，
+         程式不會替你填一個看起來合理的數字。</p>
+    </div>
   </div>
 </section>
 
 <section id="download">
   <div class="wrap">
     <h2>下載</h2>
-    <p class="sub">安裝版會自動接收後續更新；免安裝版需自行更換。</p>
+    <p class="sub">
+      安裝版會自動接收後續更新，且只下載差異（通常幾百 KB）；免安裝版需自行更換。
+    </p>
     <div class="cta" style="justify-content:flex-start">
-      <a class="btn btn-primary" href="https://optipdfscan-update.optiimind.com/OptiPdfScan-win-Setup.exe">↓ 安裝版 Setup.exe <span style="opacity:.7;font-weight:400">121 MB</span></a>
-      <a class="btn" href="https://optipdfscan-update.optiimind.com/OptiPdfScan-win-Portable.zip">免安裝版 ZIP <span style="opacity:.6;font-weight:400">116 MB</span></a>
+      <a class="btn btn-primary" href="https://optipdfscan-update.optiimind.com/OptiPdfScan-win-Setup.exe">↓ 安裝版 Setup.exe <span style="opacity:.7;font-weight:400">123 MB</span></a>
+      <a class="btn" href="https://optipdfscan-update.optiimind.com/OptiPdfScan-win-Portable.zip">免安裝版 ZIP <span style="opacity:.6;font-weight:400">118 MB</span></a>
     </div>
   </div>
 </section>
@@ -254,7 +365,7 @@
 <footer>
   <div class="wrap footrow">
     <div>© <span id="yr">2026</span> OptiMind Inc.</div>
-    <div>OptiPdfScan · 離線公文辨識工具</div>
+    <div>OptiPdfScan · 公文辨識與案件彙整工具</div>
   </div>
 </footer>
 
