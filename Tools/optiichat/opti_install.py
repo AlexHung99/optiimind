@@ -1,4 +1,5 @@
 """Install the UI environment and the official CPU/Vulkan compatibility runtime."""
+import base64
 import hashlib
 import json
 import os
@@ -98,6 +99,49 @@ def install_compat():
         shutil.copytree(staged, COMPAT, dirs_exist_ok=True)
 
 
+def create_desktop_shortcut():
+    """Use Windows' actual desktop folder, including OneDrive redirection."""
+    app = LOCAL/'OptiiChat'/'app'
+    pythonw = LOCAL/'OptiiChat'/'runtime'/'Scripts'/'pythonw.exe'
+    if not pythonw.is_file():
+        pythonw = COMPAT/'ui-venv'/'Scripts'/'pythonw.exe'
+    if not pythonw.is_file() or not (app/'opti_bootstrap.py').is_file():
+        raise RuntimeError('Install OptiiChat before creating its desktop shortcut.')
+    icon = LOCAL/'OptiiChat'/'app-icon.ico'
+    # Generate a square, padded Windows icon from the existing official logo.
+    icon_code = '''from PIL import Image
+import sys
+with Image.open(sys.argv[1]) as source:
+    mark = source.convert('RGBA')
+mark.thumbnail((224, 224), Image.Resampling.LANCZOS)
+canvas = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
+canvas.alpha_composite(mark, ((256-mark.width)//2, (256-mark.height)//2))
+canvas.save(sys.argv[2], format='ICO', sizes=[(n,n) for n in (16,24,32,48,64,128,256)])
+'''
+    subprocess.run([str(pythonw.with_name('python.exe')), '-c', icon_code,
+                    str(app/'opti_assets'/'logo-teal.png'), str(icon)],
+                   check=True, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+    script = '''$ErrorActionPreference = 'Stop'
+$desktop = [Environment]::GetFolderPath('DesktopDirectory')
+if (-not $desktop) { throw 'Windows desktop folder is unavailable.' }
+$shortcutPath = Join-Path $desktop 'OptiiChat.lnk'
+$shell = New-Object -ComObject WScript.Shell
+$shortcut = $shell.CreateShortcut($shortcutPath)
+$shortcut.TargetPath = $env:OPTII_SHORTCUT_PYTHON
+$shortcut.Arguments = '"' + (Join-Path $env:OPTII_SHORTCUT_APP 'opti_bootstrap.py') + '"'
+$shortcut.WorkingDirectory = $env:OPTII_SHORTCUT_APP
+$shortcut.IconLocation = $env:OPTII_SHORTCUT_ICON + ',0'
+$shortcut.Description = 'OptiiChat - Local AI workspace'
+$shortcut.Save()
+'''
+    environment = dict(os.environ, OPTII_SHORTCUT_APP=str(app),
+                       OPTII_SHORTCUT_PYTHON=str(pythonw), OPTII_SHORTCUT_ICON=str(icon))
+    encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
+    subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+                   env=environment, check=True, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+    print('OptiiChat desktop shortcut created.')
+
+
 def main():
     if sys.platform != 'win32' or sys.version_info < (3, 11):
         raise RuntimeError('Install Python 3.11 or newer for Windows from https://www.python.org/downloads/windows/')
@@ -110,6 +154,7 @@ def main():
     subprocess.run([str(runtime/'Scripts'/'python.exe'), '-m', 'pip', 'install', '-r', str(ROOT/'opti-requirements.txt')], check=True)
     install_compat()
     install_app()
+    create_desktop_shortcut()
     print('Installation complete. The app downloads llama3.2-vision if no models are installed.')
 
 

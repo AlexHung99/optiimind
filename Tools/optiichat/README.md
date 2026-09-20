@@ -4,7 +4,7 @@ Windows 本機 AI 聊天工作室：Ollama 文字／圖片聊天、框選截圖�
 
 - **介紹與下載：** https://optiimind.com/Tools/optiichat/
 - **程式碼：** 本目錄
-- **目前版本：** 1.0.1
+- **目前版本：** 1.0.2
 
 ## 安裝
 
@@ -12,7 +12,7 @@ Windows 本機 AI 聊天工作室：Ollama 文字／圖片聊天、框選截圖�
 2. 從介紹頁下載 ZIP，解壓縮至可寫入的資料夾。
 3. 執行 `Install-OptiiChat.cmd`。它會建立 `%LOCALAPPDATA%\OptiiChat\runtime` 的 Python 環境，安裝套件，並將程式安裝至 `%LOCALAPPDATA%\OptiiChat\app`。
 4. 缺少 Vision 相容服務時，腳本從 Ollama 官方 GitHub 下載 0.24.0 Windows ZIP（約 2.1 GB），驗證官方 SHA-256，安裝 CPU／Vulkan 相容檔案。若本機已有相容服務則略過。
-5. 日後執行 `Start-OptiiChat.cmd`。完全沒有 Ollama 模型時自動下載 `llama3.2-vision`（約 7.8 GB）；已有模型時使用下拉選單選擇。
+5. 安裝完成後，桌面會自動建立使用官方 Logo 的「OptiiChat」捷徑；日後雙擊即可啟動，也可執行 `Start-OptiiChat.cmd`。完全沒有 Ollama 模型時自動下載 `llama3.2-vision`（約 7.8 GB）；已有模型時使用下拉選單選擇。
 
 這是 Python 程式包，不是獨立 EXE。請預留下載、解壓、Python 套件及模型空間。模型硬體需求各不相同；CPU 圖片推論可能需數分鐘。安裝腳本需要連網，不要求將模型傳到第三方服務。
 
