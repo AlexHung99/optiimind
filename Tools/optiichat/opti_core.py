@@ -247,6 +247,31 @@ def ensure_model_service(kind, device):
         raise RuntimeError('Ollama 啟動逾時，請稍後再試。')
 
 
+def breeze_hardware_available():
+    """Gate the optional model UI on the vendor's recommended single-GPU VRAM.
+
+    This is a hardware eligibility check, not proof a Breeze service is installed.
+    Unknown hardware stays hidden; memory from multiple cards is not combined.
+    """
+    nvml = None
+    try:
+        import pynvml
+        pynvml.nvmlInit()
+        nvml = pynvml
+        return any(
+            nvml.nvmlDeviceGetMemoryInfo(nvml.nvmlDeviceGetHandleByIndex(index)).total >= 12 * 1024**3
+            for index in range(nvml.nvmlDeviceGetCount())
+        )
+    except Exception:
+        return False
+    finally:
+        if nvml:
+            try:
+                nvml.nvmlShutdown()
+            except Exception:
+                pass
+
+
 class ResourceMonitor:
     def __init__(self):
         import psutil

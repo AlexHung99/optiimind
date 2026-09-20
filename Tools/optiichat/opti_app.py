@@ -20,7 +20,7 @@ from llama_vision_ui import ChatApp, StreamRequest, build_messages
 from opti_capture import RegionCapture
 from opti_version import VERSION
 from opti_update import UPDATE_DIR, check_for_update
-from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch_arguments,
+from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch_arguments, breeze_hardware_available,
                        ensure_model_service, json_request, load_settings, route_messages, save_settings,
                        ModelDownload, initialize_models, model_choices, model_service_kind, select_installed_defaults)
 
@@ -48,6 +48,10 @@ class OptiiApp(ChatApp):
         except Exception as error:
             self.settings = deepcopy(DEFAULTS)
             self.config_error = str(error)
+        self.breeze_available = breeze_hardware_available()
+        if not self.breeze_available:
+            # Keep saved voice design/clone parameters, but never invoke the hidden engine.
+            self.settings['speech'].update(provider='windows', device='CPU')
         self.extra = queue.Queue()
         self.shutdown = threading.Event()
         self.speech_job = None
@@ -174,7 +178,7 @@ class OptiiApp(ChatApp):
         self.remove_button.pack(side='left', padx=(6, 0))
         self.fast_check = ttk.Checkbutton(side, text='快速圖片（560 px）', variable=self.fast)
         self.fast_check.pack(anchor='w', pady=(10, 16))
-        self.label(side, '語音工作室', color='gold', anchor='w').pack(fill='x')
+        self.label(side, '語音工作室' if self.breeze_available else 'Windows 本機朗讀', color='gold', anchor='w').pack(fill='x')
         self.label(side, textvariable=self.audio_status, color='muted', wraplength=245, anchor='w').pack(fill='x', pady=8)
         self.speak_button = ttk.Button(side, text='朗讀回覆 / 輸入文字', command=self.speak)
         self.speak_button.pack(fill='x')
@@ -695,34 +699,37 @@ class SettingsWindow(tk.Toplevel):
             self.field(box, 'Temperature（0～2）', key+'.temperature')
         self.note(models, '文字選單列出聊天模型；圖片選單只列出支援看圖的模型。\n首次啟動若完全沒有模型，會自動從 Ollama 官方下載 llama3.2-vision。\nCPU 強制 num_gpu=0；GPU 依層數卸載，部分運算仍可能使用 RAM。\nLlama 3.2 Vision 使用相容服務；其他模型使用一般 Ollama。')
         speech = self.tab(notebook, '語音')
-        provider = self.field(speech, '語音引擎', 'speech.provider', ['windows', 'breeze'])
+        self.provider_combo = provider = self.field(speech, '語音引擎', 'speech.provider',
+                                                   ['windows', 'breeze'] if app.breeze_available else ['windows'])
         provider.bind('<<ComboboxSelected>>', lambda _: self.provider_changed())
         self.device_widget = self.field(speech, '語音運算裝置', 'speech.device', ['CPU', 'GPU'])
         self.device_widget.configure(state='disabled')
-        self.note(speech, 'Windows 使用 CPU，可直接朗讀。Breeze 官方僅支援 CUDA GPU。\n本機 8 GB 顯存低於官方建議 12 GB；Breeze 需另啟動相容服務。')
+        self.note(speech, 'Windows 使用 CPU，可直接朗讀，不需另外下載語音模型。')
         self.native_box = ttk.LabelFrame(speech, text='Windows 本機語音', padding=10)
         self.native_box.pack(fill='x', pady=8)
         self.voice_combo = self.field(self.native_box, '已安裝聲音', 'speech.voice_id', [''])
         self.field(self.native_box, '語速（80～350）', 'speech.rate')
         self.field(self.native_box, '音量（0～1）', 'speech.volume')
-        self.breeze_box = ttk.LabelFrame(speech, text='Breeze-TTS-2', padding=10)
-        self.breeze_box.pack(fill='x', pady=8)
-        self.field(self.breeze_box, '服務網址', 'speech.endpoint')
-        ttk.Button(self.breeze_box, text='測試服務 / health', command=self.health).pack(anchor='e')
-        self.field(self.breeze_box, 'Voice Design / Clone', 'speech.mode', ['design', 'clone'])
-        self.field(self.breeze_box, '聲音描述 / Direction', 'speech.instruction')
-        self.field(self.breeze_box, 'Clone 參考音檔', 'speech.ref_audio')
-        ttk.Button(self.breeze_box, text='選擇參考音檔', command=self.choose_reference).pack(anchor='e')
-        self.field(self.breeze_box, '音檔正確逐字稿', 'speech.ref_text')
-        self.field(self.breeze_box, 'CFG Scale（>0）', 'speech.cfg_scale')
-        self.field(self.breeze_box, 'Seed', 'speech.seed')
-        self.note(speech, 'design：以描述設計聲音；clone：需音檔及逐字稿，可加 Direction。\nBreeze 會將文字與參考音檔傳至所填服務；Windows 不使用這些參數。')
-        advanced = self.tab(notebook, 'Breeze 服務參數')
-        self.note(advanced, '以下是官方服務啟動參數，需要在服務端重啟才生效。\n儲存設定只保存選項，不會遠端更改已執行的服務。')
-        for key in ['fast_all', 'fast_text_encoder', 'fast_backbone_prefill', 'fast_backbone_decode', 'fast_depth_decoder', 'fast_codec']:
-            self.check(advanced, '--'+key.replace('_', '-'), 'speech.'+key)
-        ttk.Button(advanced, text='複製服務啟動命令', command=self.copy_command).pack(anchor='w', pady=14)
-        self.note(advanced, '將命令中的 PATH_TO_BREEZE_TTS_2 替換成模型目錄。\n預設 eager 約需 7.7 GiB，建議 12 GB GPU；fast-all 建議 24 GB。\n\n官方 API 固定值：max_new_tokens=1500、max_seq_len=2048、\nrepetition_penalty=1.1。這些不是可傳入的請求參數。\n輸出格式：24 kHz / mono / 16-bit PCM（本程式封裝為 WAV）。\n\n權重與產出限研究及非商業使用，詳見模型授權。\n完整安裝方式見 OptiiChat-使用說明.md。')
+        self.breeze_box = None
+        if app.breeze_available:
+            self.breeze_box = ttk.LabelFrame(speech, text='Breeze-TTS-2', padding=10)
+            self.breeze_box.pack(fill='x', pady=8)
+            self.field(self.breeze_box, '服務網址', 'speech.endpoint')
+            ttk.Button(self.breeze_box, text='測試服務 / health', command=self.health).pack(anchor='e')
+            self.field(self.breeze_box, 'Voice Design / Clone', 'speech.mode', ['design', 'clone'])
+            self.field(self.breeze_box, '聲音描述 / Direction', 'speech.instruction')
+            self.field(self.breeze_box, 'Clone 參考音檔', 'speech.ref_audio')
+            ttk.Button(self.breeze_box, text='選擇參考音檔', command=self.choose_reference).pack(anchor='e')
+            self.field(self.breeze_box, '音檔正確逐字稿', 'speech.ref_text')
+            self.field(self.breeze_box, 'CFG Scale（>0）', 'speech.cfg_scale')
+            self.field(self.breeze_box, 'Seed', 'speech.seed')
+            self.note(speech, 'design：以描述設計聲音；clone：需音檔及逐字稿，可加 Direction。\nBreeze 會將文字與參考音檔傳至所填服務；Windows 不使用這些參數。')
+            advanced = self.tab(notebook, 'Breeze 服務參數')
+            self.note(advanced, '以下是官方服務啟動參數，需要在服務端重啟才生效。\n儲存設定只保存選項，不會遠端更改已執行的服務。')
+            for key in ['fast_all', 'fast_text_encoder', 'fast_backbone_prefill', 'fast_backbone_decode', 'fast_depth_decoder', 'fast_codec']:
+                self.check(advanced, '--'+key.replace('_', '-'), 'speech.'+key)
+            ttk.Button(advanced, text='複製服務啟動命令', command=self.copy_command).pack(anchor='w', pady=14)
+            self.note(advanced, '將命令中的 PATH_TO_BREEZE_TTS_2 替換成模型目錄。\n預設 eager 約需 7.7 GiB，建議 12 GB GPU；fast-all 建議 24 GB。\n\n官方 API 固定值：max_new_tokens=1500、max_seq_len=2048、\nrepetition_penalty=1.1。這些不是可傳入的請求參數。\n輸出格式：24 kHz / mono / 16-bit PCM（本程式封裝為 WAV）。\n\n權重與產出限研究及非商業使用，詳見模型授權。\n完整安裝方式見 OptiiChat-使用說明.md。')
         self.provider_changed()
         self.set_models(app.catalog if app.catalog_loaded else None)
         threading.Thread(target=self.load_voices, daemon=True).start()
@@ -770,6 +777,8 @@ class SettingsWindow(tk.Toplevel):
         ttk.Checkbutton(parent, text=title, variable=self.variable(key, True)).pack(anchor='w', pady=7)
 
     def provider_changed(self):
+        if not self.app.breeze_available:
+            self.vars['speech.provider'].set('windows')
         breeze = self.vars['speech.provider'].get() == 'breeze'
         self.vars['speech.device'].set('GPU' if breeze else 'CPU')
         def state_tree(parent, enabled):
@@ -778,7 +787,8 @@ class SettingsWindow(tk.Toplevel):
                     child.configure(state=('readonly' if isinstance(child, ttk.Combobox) else 'normal') if enabled else 'disabled')
                 state_tree(child, enabled)
         state_tree(self.native_box, not breeze)
-        state_tree(self.breeze_box, breeze)
+        if self.breeze_box is not None:
+            state_tree(self.breeze_box, breeze)
 
     def collect(self):
         settings = deepcopy(self.app.settings)

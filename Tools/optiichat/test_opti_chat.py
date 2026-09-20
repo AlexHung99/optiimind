@@ -45,6 +45,21 @@ class SpeechHandler(BaseHTTPRequestHandler):
 
 
 class CoreTests(unittest.TestCase):
+    def test_breeze_requires_one_supported_gpu_and_hides_unknown_hardware(self):
+        for capacities, expected in [([], False), ([8], False), ([8, 8], False), ([12], True), ([8, 24], True)]:
+            with self.subTest(capacities=capacities):
+                nvml = Mock()
+                nvml.nvmlDeviceGetCount.return_value = len(capacities)
+                nvml.nvmlDeviceGetHandleByIndex.side_effect = lambda index: index
+                nvml.nvmlDeviceGetMemoryInfo.side_effect = lambda index: SimpleNamespace(total=capacities[index]*1024**3)
+                with patch.dict('sys.modules', pynvml=nvml):
+                    self.assertEqual(core.breeze_hardware_available(), expected)
+                nvml.nvmlShutdown.assert_called_once()
+        nvml = Mock()
+        nvml.nvmlInit.side_effect = RuntimeError('driver unavailable')
+        with patch.dict('sys.modules', pynvml=nvml):
+            self.assertFalse(core.breeze_hardware_available())
+
     def test_settings_roundtrip_and_invalid_devices(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/'settings.json'
@@ -141,8 +156,47 @@ class CoreTests(unittest.TestCase):
 
 
 class DesktopTests(unittest.TestCase):
+    def test_unsupported_breeze_ui_is_absent_and_saved_provider_falls_back(self):
+        saved = deepcopy(core.DEFAULTS)
+        saved['speech'].update(provider='breeze', device='GPU', instruction='保留聲音設定')
+        with patch.object(opti_app, 'load_settings', side_effect=lambda: deepcopy(saved)), \
+             patch.object(opti_app, 'breeze_hardware_available', return_value=False), \
+             patch.object(opti_app.OptiiApp, 'start_tray'), \
+             patch.object(opti_app.OptiiApp, 'monitor'), \
+             patch.object(opti_app, 'initialize_models', return_value=CATALOG), \
+             patch.object(opti_app.SettingsWindow, 'load_voices'):
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                root.update()
+                app.open_settings()
+                dialog = app.settings_window
+                self.assertEqual(tuple(dialog.provider_combo['values']), ('windows',))
+                self.assertIsNone(dialog.breeze_box)
+                self.assertNotIn('speech.mode', dialog.vars)
+                self.assertNotIn('speech.fast_all', dialog.vars)
+                def descendants(widget):
+                    for child in widget.winfo_children():
+                        yield child
+                        yield from descendants(child)
+                notebooks = [widget for widget in descendants(dialog) if isinstance(widget, opti_app.ttk.Notebook)]
+                titles = [book.tab(tab, 'text') for book in notebooks for tab in book.tabs()]
+                self.assertNotIn('Breeze 服務參數', titles)
+                dialog.vars['speech.provider'].set('breeze')
+                dialog.provider_changed()
+                config = core.validate_settings(dialog.collect())
+                self.assertEqual(config['speech']['provider'], 'windows')
+                self.assertEqual(config['speech']['device'], 'CPU')
+                self.assertEqual(config['speech']['instruction'], '保留聲音設定')
+                self.assertEqual(str(dialog.voice_combo['state']), 'readonly')
+                self.assertEqual(saved['speech']['provider'], 'breeze')
+                self.assertTrue(app.speak_button.winfo_ismapped())
+            finally:
+                app.quit()
+
     def test_theme_settings_and_tray_preserve_conversation(self):
         with patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)), \
+             patch.object(opti_app, 'breeze_hardware_available', return_value=True), \
              patch.object(opti_app.OptiiApp, 'start_tray'), \
              patch.object(opti_app.OptiiApp, 'monitor'), \
              patch.object(opti_app, 'initialize_models', return_value=CATALOG), \

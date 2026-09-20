@@ -34,7 +34,7 @@ Esc 或滑鼠右鍵可取消，取消時保留原先附加的圖片。新的截�
 
 ## 設定
 
-右上「設定」有外觀、聊天模型、語音、Breeze 服務參數四頁。
+右上「設定」有外觀、聊天模型、語音三頁；符合單卡 NVIDIA 12 GB 顯存建議配置才顯示 Breeze 引擎與服務參數頁。無法偵測硬體時也會隱藏。
 
 | 模型 | CPU | GPU |
 |---|---|---|
@@ -55,7 +55,7 @@ Windows 模式可選已安裝聲音、語速及音量，不提供 Voice Design�
 
 ### Breeze-TTS-2 狀態與使用
 
-**目前完成 API 串接與設定介面，尚未在這台 Windows 電腦安裝或啟動 Breeze 權重。** 目前沒有可連線的 Breeze 服務，因此 Voice Design／Clone 尚不能在本機實際產生聲音。
+**此機 8 GB 顯存未達建議配置，已隱藏 Breeze、Voice Design／Clone 與服務參數，保留 Windows 本機朗讀。尚未安裝 Breeze 權重。** 目前沒有可連線的 Breeze 服務，因此 Voice Design／Clone 尚不能在本機實際產生聲音。
 
 [官方模型卡](https://huggingface.co/BreezeBlue/Breeze-TTS-2)列出的環境是 Linux、Python 3.10+ 和 CUDA GPU，建議至少 12 GB 顯存；fast-all 建議 24 GB。[官方推論程式](https://github.com/breezeblue-ai/breeze-tts/blob/main/models/fast_streaming.py)會拒絕 CPU。這台 8 GB 顯卡還需負擔桌面，低於官方建議配置；因此沒有安裝無法保證運作的大型環境，也未將 Windows 語音當成 Breeze。
 
@@ -116,4 +116,4 @@ Breeze 原始碼與模型授權不同；權重、衍生模型及自架產出限�
 - 相容服務日誌：`%LOCALAPPDATA%\OptiiChat\server-11435.log`／`server-11436.log`；原 CPU 服務亦可能由舊啟動器啟動。
 - 結束 UI 不強制停止共用 Ollama 服務。
 
-31 項自動測試涵蓋更新驗證／本機修改保護／失敗還原、框選縮放、負座標螢幕定位、截圖取消／附加／传送／暫存清理，以及模型清單、無模型初始化、下載進度／失敗／取消、模型分流、設定保存、Design／Clone 請求、PCM/WAV、主題與系統匣、Unicode 串流與圖片上下文。截圖測試使用合成影像，未讀取真實桌面；空模型下載流程使用模擬清單與串流驗證，沒有刪除現有模型來重下載。Breeze API 音訊測試使用本機模擬服務，並不代表實際 Breeze 模型已驗證。
+33 項自動測試涵蓋更新驗證／本機修改保護／失敗還原、框選縮放、負座標螢幕定位、截圖取消／附加／传送／暫存清理，以及模型清單、無模型初始化、下載進度／失敗／取消、模型分流、設定保存、Design／Clone 請求、PCM/WAV、主題與系統匣、Unicode 串流與圖片上下文。截圖測試使用合成影像，未讀取真實桌面；空模型下載流程使用模擬清單與串流驗證，沒有刪除現有模型來重下載。Breeze API 音訊測試使用本機模擬服務，並不代表實際 Breeze 模型已驗證。
