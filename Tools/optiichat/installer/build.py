@@ -16,7 +16,10 @@ def main():
     parser.add_argument('--makensis', type=Path)
     parser.add_argument('--prepare-only', action='store_true')
     parser.add_argument('--test', action='store_true')
+    parser.add_argument('--download-base-url', help='HTTPS base URL for the published installer')
     args = parser.parse_args()
+    if args.download_base_url and not args.download_base_url.startswith('https://'):
+        parser.error('--download-base-url must start with https://')
     runtime = BUILD/'python'
     if not (runtime/'bundle-ready.json').exists():
         if runtime.exists():
@@ -73,8 +76,10 @@ def main():
     data = output.read_bytes()
     print(json.dumps({'file':str(output), 'size':len(data), 'sha256':hashlib.sha256(data).hexdigest()}))
     if not args.test:
+        download_url = ('downloads/' + output.name if not args.download_base_url
+                        else args.download_base_url.rstrip('/') + '/' + output.name)
         (ROOT/'installer.json').write_text(json.dumps({'version':package['version'],
-            'url':'downloads/'+output.name, 'bytes':len(data), 'sha256':hashlib.sha256(data).hexdigest(), 'signed':False}, indent=2)+'\n', encoding='utf-8')
+            'url':download_url, 'bytes':len(data), 'sha256':hashlib.sha256(data).hexdigest(), 'signed':False}, indent=2)+'\n', encoding='utf-8')
 
 
 if __name__ == '__main__':

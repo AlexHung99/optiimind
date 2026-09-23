@@ -68,6 +68,8 @@ Git clone 的開發者若修改程式，應以 Git 更新；自動更新不會�
 python installer/build.py --makensis C:\tools\nsis-3.12\makensis.exe
 ```
 
+若安裝檔改由 Cloudflare R2 提供，建置時加上 `--download-base-url https://下載用的.optiimind.com`，並替換為實際啟用的自訂網域。上傳 EXE 到對應的 R2 bucket 後，確認公開網址的檔案大小與 SHA-256 和 `installer.json` 一致，再發佈 manifest。下載頁會使用 `installer.json` 的 `url`，因此只有完成上傳與驗證後才切換網址。
+
 工具只複製 Python 標準發行目錄，排除原有 site-packages，再依鎖定版本從 PyPI 安裝套件，不包含個人環境、設定或模型。輸出 EXE、`installer.json` 與 `.installer-build` 暫存。提交 EXE 與 manifest，暫存不提交。Python 與套件授權檔保留在執行環境內。
 
 `--test` 編譯隔離測試安裝版本，不建立使用者捷徑或登錄入口，安裝至 `.installer-build/install-smoke`。

@@ -44,7 +44,13 @@
     function theme() { document.documentElement.dataset.theme = choice || (preference.matches ? 'dark' : 'light'); document.querySelector('#theme').setAttribute('aria-label', document.documentElement.dataset.theme === 'dark' ? '切換為亮色主題' : '切換為暗色主題'); }
     theme(); preference.addEventListener('change', theme);
     document.querySelector('#theme').addEventListener('click', () => { choice = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('optiichat-theme', choice); } catch (_) {} theme(); });
-    fetch('installer.json').then(r => { if (!r.ok) throw Error(); return r.json(); }).then(release => { if (/^\d+\.\d+\.\d+$/.test(release.version)) { document.querySelector('#download-link').href = 'downloads/OptiChat-Setup-' + release.version + '.exe'; document.querySelector('#download-info').textContent = '版本 ' + release.version + ' · 內含 Python · 尚未簽章'; } }).catch(() => {});
+    fetch('installer.json').then(r => { if (!r.ok) throw Error(); return r.json(); }).then(release => {
+      if (!/^\d+\.\d+\.\d+$/.test(release.version)) return;
+      const url = new URL(release.url, location.href);
+      if (url.protocol !== 'https:' || !(url.hostname === 'optiimind.com' || url.hostname.endsWith('.optiimind.com'))) return;
+      document.querySelector('#download-link').href = url.href;
+      document.querySelector('#download-info').textContent = '版本 ' + release.version + ' · 內含 Python · 尚未簽章';
+    }).catch(() => {});
   </script>
 </body>
 </html>
