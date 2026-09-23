@@ -45,7 +45,6 @@ def build_ui(app):
     rail.pack(side='left', fill='y')
     rail.pack_propagate(False)
     _button(rail, '對話', app.new_chat, 'Rail.TButton').pack(fill='x', pady=(0, 18))
-    _button(rail, '附檔', app.choose_file, 'Rail.TButton').pack(fill='x', pady=4)
     _button(rail, '歷史', lambda: app.conversation_list.focus_set(), 'Rail.TButton').pack(fill='x', pady=4)
     _button(rail, '設定', app.open_settings, 'Rail.TButton').pack(fill='x', pady=4)
 
@@ -70,6 +69,7 @@ def build_ui(app):
     app.history_canvas = tk.Canvas(history, highlightthickness=0, bd=0,
                                    yscrollcommand=history_scroll.set)
     app.roles.append((app.history_canvas, 'panel', None))
+    history_scroll.pack(side='right', fill='y')
     app.history_canvas.pack(fill='both', expand=True)
     history_scroll.configure(command=app.history_canvas.yview)
     app.history_items = app.frame(app.history_canvas, role='panel')
@@ -103,11 +103,14 @@ def build_ui(app):
     app.stop_button.pack(fill='x')
     input_shell = app.frame(app.composer, role='input', highlightthickness=1, padx=10, pady=9)
     input_shell.pack(fill='both', expand=True)
-    app.attach_button = _button(input_shell, '+', app.choose_file, width=3)
+    controls = app.frame(input_shell, role='input')
+    controls.pack(side='bottom', fill='x')
+    app.attach_button = _button(controls, '+', app.choose_file, width=3)
     app.attach_button.pack(side='left', anchor='s', padx=(0, 7))
-    app.capture_button = _button(input_shell, '截圖', app.take_screenshot, width=5)
+    app.capture_button = _button(controls, '截圖', app.take_screenshot, width=5)
     app.capture_button.pack(side='left', anchor='s', padx=(0, 8))
     input_body = app.frame(input_shell, role='input')
+    app.input_body = input_body
     input_body.pack(fill='both', expand=True)
     app.input = tk.Text(input_body, height=3, wrap='word', relief='flat', bd=0, padx=8, pady=5,
                         font=(app.ui_font, 11), undo=True)
@@ -120,7 +123,7 @@ def build_ui(app):
     app.placeholder.bind('<Button-1>', lambda _: app.input.focus_set())
     app.input.bind('<<Modified>>', lambda _: update_placeholder(app), add=True)
     app.input.edit_modified(False)
-    chip = app.frame(input_body, role='input', height=24)
+    chip = app.frame(input_shell, role='input', height=24)
     app.attachment_row = chip
     app.preview_image = app.label(chip, '', role='input', color='muted')
     app.preview_label = app.label(chip, '', role='input', color='muted', anchor='w')
@@ -179,7 +182,7 @@ def toggle_search(app):
 
 
 def show_attachment(app, pdf=False):
-    app.attachment_row.pack(fill='x')
+    app.attachment_row.pack(side='bottom', fill='x', before=app.input_body)
     if app.pending_path and app.preview:
         app.preview_image.pack(side='left', before=app.preview_label, padx=(0, 9))
         app.composer.configure(height=208)
@@ -221,21 +224,48 @@ def build_history_cards(app):
         row = app.frame(card, role=role)
         row.pack(fill='x')
         name = record.get('title', '未命名對話')
-        if len(name) > 14:
-            name = name[:13]+'…'
-        btn = tk.Button(row, text=name, anchor='w', relief='flat', bd=0, padx=2,
-                        font=(app.ui_font, 10), command=lambda i=index: choose_history(app, i))
+        shown = name if len(name) <= 40 else name[:39]+'…'
+        btn = tk.Button(row, text=shown, anchor='w', relief='flat', bd=0, padx=2,
+                        font=(app.ui_font, 10), justify='left', wraplength=174,
+                        command=lambda i=index: choose_history(app, i))
         app.roles.append((btn, role, 'ink'))
         btn.pack(side='left', fill='x', expand=True)
         menu = tk.Button(row, text='...', relief='flat', bd=0, padx=1,
                          command=lambda i=index: rename_history(app, i))
         app.roles.append((menu, role, 'muted'))
         menu.pack(side='right')
-        stamp = app.label(card, record.get('created', '')[:16].replace('T', ' '), role=role, color='muted')
-        stamp.configure(font=('Segoe UI', 9))
-        stamp.pack(anchor='w', padx=28)
+        created = record.get('created', '')[:16].replace('T', ' ')
+        if created and name != created:
+            stamp = app.label(card, created, role=role, color='muted')
+            stamp.configure(font=(app.ui_font, 9))
+            stamp.pack(anchor='w', padx=2)
     if app.last_theme:
         paint_roles(app, app.last_theme)
+
+
+def legacy_display_turns(record):
+    """Show pre-card conversations as separate messages without exposing PDF prompt text."""
+    turns = []
+    pending = None
+    stamp = record.get('created', '')[:16].replace('T', ' ')
+    for message in record.get('messages', []):
+        if not isinstance(message, dict) or not isinstance(message.get('content'), str):
+            continue
+        content = message['content']
+        if message.get('role') == 'user':
+            lines = content.splitlines()
+            question = next((line.strip() for line in lines if line.strip()), '')
+            attachment = next((line.strip() for line in lines if line.startswith('PDF：')), '')
+            pending = {'time': stamp, 'question': (question or record.get('title', '舊版對話'))[:320],
+                       'attachment': attachment[:180], 'model': '本機模型', 'answer': ''}
+        elif message.get('role') == 'assistant' and pending:
+            pending['answer'] = content or '（舊版對話沒有保存完整回覆）'
+            turns.append(pending)
+            pending = None
+    if pending:
+        pending['answer'] = '（舊版對話沒有保存完整回覆）'
+        turns.append(pending)
+    return turns
 
 
 def choose_history(app, index):
@@ -255,7 +285,8 @@ def render_turns(app):
         child.destroy()
     app.roles = [(widget, bg, fg) for widget, bg, fg in app.roles if widget.winfo_exists()]
     app.visual_answer_var = None
-    turns = (app.conversation or {}).get('display_turns', [])
+    record = app.conversation or {}
+    turns = record.get('display_turns') or legacy_display_turns(record)
     if not turns:
         previous = (app.conversation or {}).get('transcript', '').strip()
         text = previous if previous else '從一句話開始，或按 + 加入圖片、PDF。'
@@ -265,11 +296,21 @@ def render_turns(app):
         welcome.pack(anchor='w', padx=28, pady=36)
     else:
         for turn in turns:
-            add_turn(app, turn)
-    app.visual_canvas.yview_moveto(1.0)
+            add_turn(app, turn, scroll=False)
+    if app.last_theme:
+        paint_roles(app, app.last_theme)
+    settle_chat_scroll(app, to_bottom=bool(turns))
 
 
-def add_turn(app, turn):
+def settle_chat_scroll(app, to_bottom=True):
+    # The canvas still has the previous conversation's scroll range until Tk
+    # finishes laying out the replacement cards.
+    app.visual_body.update_idletasks()
+    app.visual_canvas.configure(scrollregion=app.visual_canvas.bbox('all'))
+    app.visual_canvas.yview_moveto(1.0 if to_bottom else 0.0)
+
+
+def add_turn(app, turn, scroll=True):
     row = app.frame(app.visual_body, role='chat')
     row.pack(fill='x', pady=(6, 20))
     stamp = turn.get('time') or datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -304,9 +345,10 @@ def add_turn(app, turn):
         answer.configure(font=(app.ui_font, 11))
         answer.pack(fill='x')
         app.visual_answer_var = answer_var
-    if app.last_theme:
-        paint_roles(app, app.last_theme)
-    app.visual_canvas.yview_moveto(1.0)
+    if scroll:
+        if app.last_theme:
+            paint_roles(app, app.last_theme)
+        settle_chat_scroll(app)
 
 
 def render_answer(app, parent, content):

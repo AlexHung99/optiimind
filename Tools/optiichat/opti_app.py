@@ -173,6 +173,9 @@ class OptiiApp(ChatApp):
         self.persist_conversation()
         try:
             record = load_record(item['id'])
+            if 'display_turns' not in record:
+                from opti_ui import legacy_display_turns
+                record['display_turns'] = legacy_display_turns(record)
             self.clear_image()
             self.conversation = record
             self.history = [m for m in record.get('messages', []) if m.get('role') in ('user', 'assistant')][-6:]

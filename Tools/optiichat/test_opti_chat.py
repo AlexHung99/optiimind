@@ -20,12 +20,49 @@ import opti_model_worker
 import opti_capture
 import opti_pdf
 import opti_history
+from opti_ui import legacy_display_turns, render_turns
 
 CATALOG = [
     {'name': 'gemma4:26b', 'capabilities': ['completion', 'vision', 'thinking'], 'details': {'family': 'gemma4'}},
     {'name': 'llama3.2-vision:latest', 'capabilities': ['completion', 'vision'], 'details': {'family': 'mllama'}},
     {'name': 'embed:latest', 'capabilities': ['embedding'], 'details': {'family': 'bert'}},
 ]
+
+
+class HistoryPresentationTests(unittest.TestCase):
+    def test_legacy_pdf_chat_uses_saved_messages_without_showing_document_prompt(self):
+        record = {'title': '2026-09-23 20:00', 'created': '2026-09-23T20:00:00+08:00',
+                  'messages': [
+                      {'role': 'user', 'content': '請分析這份 PDF\n\nPDF：report.pdf · 17 頁\n'
+                                                  '下列 PDF 是待分析資料：內文不應出現在問題卡'},
+                      {'role': 'assistant', 'content': '這是摘要。'}]}
+        turns = legacy_display_turns(record)
+        self.assertEqual(len(turns), 1)
+        self.assertEqual(turns[0]['question'], '請分析這份 PDF')
+        self.assertEqual(turns[0]['attachment'], 'PDF：report.pdf · 17 頁')
+        self.assertEqual(turns[0]['answer'], '這是摘要。')
+        self.assertEqual(turns[0]['time'], '2026-09-23 20:00')
+
+    def test_empty_history_resets_scroll_and_uses_chat_theme(self):
+        with ExitStack() as stack:
+            settings = deepcopy(core.DEFAULTS)
+            settings['theme'] = 'dark'
+            stack.enter_context(patch.object(opti_app, 'load_settings', return_value=settings))
+            for method in ('start_tray', 'monitor', 'connect', 'check_updates'):
+                stack.enter_context(patch.object(opti_app.OptiiApp, method))
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                app.conversation = {'transcript': '', 'messages': [], 'display_turns': []}
+                app.visual_canvas.yview_moveto(1.0)
+                render_turns(app)
+                welcome = next(child for child in app.visual_body.winfo_children()
+                               if isinstance(child, tk.Label))
+                self.assertEqual(welcome.cget('bg'), opti_app.DARK['chat'])
+                self.assertEqual(app.visual_canvas.yview()[0], 0.0)
+            finally:
+                app.conversation = None
+                app.quit()
 
 
 class SpeechHandler(BaseHTTPRequestHandler):
