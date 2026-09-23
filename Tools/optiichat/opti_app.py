@@ -11,14 +11,15 @@ import tempfile
 import threading
 import time
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 import winsound
 import winreg
 
 from PIL import Image, ImageDraw, ImageTk
-from llama_vision_ui import ChatApp, StreamRequest, build_messages
+from llama_vision_ui import ChatApp, StreamRequest, build_messages, prepare_image
 from opti_capture import RegionCapture
-from opti_pdf import PdfPicker, pdf_prompt
+from opti_pdf import PdfPicker, pdf_prompt, prepare_pdf, inspect_pdf
+from opti_history import new_record, save_record, list_records, load_record
 from opti_version import VERSION
 from opti_update import UPDATE_DIR, check_for_update
 from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch_arguments, breeze_hardware_available,
@@ -71,6 +72,10 @@ class OptiiApp(ChatApp):
         self.capture_files = set()
         self.pending_document = None
         self.pdf_image_note = ''
+        self.pdf_source = None
+        self.pdf_job = None
+        self.conversation = None
+        self.conversation_index = []
         self.scrollbar_images = {}
         self.update_busy = False
         self.update_status = tk.StringVar(root, value='目前版本 '+VERSION)
@@ -105,30 +110,47 @@ class OptiiApp(ChatApp):
         self.audio_status = tk.StringVar(value='語音待命')
         style = ttk.Style(self.root)
         style.theme_use('clam')
-        header = self.frame(self.root, padx=26, pady=16)
+        shell = self.frame(self.root)
+        shell.pack(fill='both', expand=True)
+        sidebar = self.frame(shell, width=260, padx=15, pady=18)
+        sidebar.pack(side='left', fill='y')
+        sidebar.pack_propagate(False)
+        history_heading = self.label(sidebar, '對話紀錄', color='gold')
+        history_heading.configure(font=('Microsoft JhengHei UI', 15, 'bold'))
+        history_heading.pack(anchor='w', pady=(0, 12))
+        self.new_button = ttk.Button(sidebar, text='＋ 新對話', command=self.new_chat)
+        self.new_button.pack(fill='x')
+        self.conversation_list = tk.Listbox(sidebar, relief='flat', borderwidth=0,
+                                             font=('Microsoft JhengHei UI', 10), activestyle='none')
+        self.roles.append((self.conversation_list, 'bg', 'ink'))
+        self.conversation_list.pack(fill='both', expand=True, pady=(16, 8))
+        self.conversation_list.bind('<<ListboxSelect>>', self.select_conversation)
+        self.conversation_list.bind('<F2>', self.rename_conversation)
+        ttk.Button(sidebar, text='重新命名', command=self.rename_conversation).pack(fill='x')
+        ttk.Button(sidebar, text='重新檢查模型', command=self.refresh_models).pack(fill='x', pady=(10, 0))
+        center = self.frame(shell)
+        center.pack(side='left', fill='both', expand=True)
+        header = self.frame(center, padx=26, pady=16)
         header.pack(fill='x')
         self.logo = self.label(header)
         self.logo.pack(side='left', padx=(0, 14))
         brand = self.label(header, 'Optiimind', color='ink')
         brand.configure(font=('Georgia', 26, 'bold'))
         brand.pack(side='left')
-        self.label(header, 'OptiChat  /  本機 AI 工作室', color='muted').pack(side='left', padx=20)
+        self.label(header, 'OptiChat', color='muted').pack(side='left', padx=20)
         ttk.Button(header, text='設定', command=self.open_settings).pack(side='right')
-        toolbar = self.frame(self.root, padx=26, pady=8)
+        toolbar = self.frame(center, padx=26, pady=8)
         toolbar.pack(fill='x')
         self.label(toolbar, textvariable=self.status, color='accent', wraplength=530, justify='left').pack(side='left')
-        self.new_button = ttk.Button(toolbar, text='新對話', command=self.new_chat)
-        self.new_button.pack(side='right')
         ttk.Button(toolbar, text='複製回覆', command=self.copy_answer).pack(side='right', padx=6)
         self.capture_button = ttk.Button(toolbar, text='截圖', command=self.take_screenshot)
         self.capture_button.pack(side='right', padx=6)
         self.root.bind('<Control-Shift-S>', self.take_screenshot)
-        # Reserve fixed controls before allocating the growing transcript.
-        footer = self.frame(self.root, padx=26, pady=8)
+        footer = self.frame(center, padx=26, pady=8)
         footer.pack(side='bottom', fill='x')
         self.label(footer, textvariable=self.metrics, color='muted').pack(side='left')
         self.label(footer, 'Ctrl+Enter 傳送 · × 常駐', color='muted').pack(side='right')
-        composer = self.frame(self.root, padx=26, pady=10)
+        composer = self.frame(center, padx=26, pady=10)
         composer.pack(side='bottom', fill='x')
         actions = self.frame(composer)
         actions.pack(side='right', padx=(12, 0))
@@ -136,62 +158,31 @@ class OptiiApp(ChatApp):
         self.send_button.pack(fill='x')
         self.stop_button = ttk.Button(actions, text='停止初始化', command=self.stop)
         self.stop_button.pack(fill='x', pady=(6, 0))
-        self.input = tk.Text(composer, height=3, wrap='word', relief='flat', padx=14, pady=10,
+        self.attach_button = ttk.Button(composer, text='＋', width=3, command=self.choose_file)
+        self.attach_button.pack(side='left', padx=(0, 8), anchor='s')
+        input_area = self.frame(composer)
+        input_area.pack(fill='both', expand=True)
+        self.input = tk.Text(input_area, height=3, wrap='word', relief='flat', padx=14, pady=10,
                              font=('Microsoft JhengHei UI', 11), undo=True)
         self.input.pack(fill='both', expand=True)
         self.roles.append((self.input, 'paper', 'ink'))
         self.input.bind('<Control-Return>', self.keyboard_send)
-        body = self.frame(self.root, padx=26, pady=8)
-        body.pack(fill='both', expand=True)
-        sidebar = self.frame(body, width=280)
-        sidebar.pack(side='right', fill='y', padx=(20, 0))
-        sidebar.pack_propagate(False)
-        side_scroll = ttk.Scrollbar(sidebar)
-        side_scroll.pack(side='right', fill='y')
-        side_canvas = tk.Canvas(sidebar, highlightthickness=0, yscrollcommand=side_scroll.set)
-        self.roles.append((side_canvas, 'bg', None))
-        side_canvas.pack(fill='both', expand=True)
-        side_scroll.configure(command=side_canvas.yview)
-        side = self.frame(side_canvas)
-        side_item = side_canvas.create_window((0, 0), window=side, anchor='nw')
-        side.bind('<Configure>', lambda _: side_canvas.configure(scrollregion=side_canvas.bbox('all')))
-        side_canvas.bind('<Configure>', lambda event: side_canvas.itemconfigure(side_item, width=event.width))
-        def side_wheel(event):
-            if str(event.widget).startswith(str(sidebar)):
-                side_canvas.yview_scroll(-int(event.delta/120), 'units')
-        self.root.bind('<MouseWheel>', side_wheel, add=True)
-        self.label(side, '模型與附件', color='gold', anchor='w').pack(fill='x', pady=(0, 10))
-        self.route_combo = ttk.Combobox(side, textvariable=self.route, values=['自動分流', '純文字', '圖片理解'], state='readonly')
-        self.route_combo.pack(fill='x')
-        self.model_summary = self.label(side, justify='left', anchor='w', wraplength=250, color='muted')
-        self.model_summary.pack(fill='x', pady=10)
-        ttk.Button(side, text='重新檢查 / 重試模型下載', command=self.refresh_models).pack(fill='x', pady=(0, 8))
-        preview = self.frame(side, role='paper', height=145)
-        preview.pack(fill='x')
-        preview.pack_propagate(False)
-        self.preview_label = self.label(preview, '尚未選擇圖片\nJPG · PNG · WEBP', role='paper', color='muted')
-        self.preview_label.pack(fill='both', expand=True)
-        self.image_name = self.label(side, '圖片在本機處理', color='muted', wraplength=245, anchor='w')
-        self.image_name.pack(fill='x', pady=8)
-        row = self.frame(side)
-        row.pack(fill='x')
-        self.attach_button = ttk.Button(row, text='＋ 圖片', command=self.choose_image)
-        self.attach_button.pack(side='left', expand=True, fill='x')
-        self.remove_button = ttk.Button(row, text='移除', command=self.clear_image, state='disabled')
-        self.remove_button.pack(side='left', padx=(6, 0))
-        self.pdf_button = ttk.Button(side, text='＋ PDF 文件', command=self.choose_pdf)
-        self.pdf_button.pack(fill='x', pady=(8, 0))
-        self.fast_check = ttk.Checkbutton(side, text='快速圖片（560 px）', variable=self.fast)
-        self.fast_check.pack(anchor='w', pady=(10, 16))
-        self.label(side, '語音工作室' if self.breeze_available else 'Windows 本機朗讀', color='gold', anchor='w').pack(fill='x')
-        self.label(side, textvariable=self.audio_status, color='muted', wraplength=245, anchor='w').pack(fill='x', pady=8)
-        self.speak_button = ttk.Button(side, text='朗讀回覆 / 輸入文字', command=self.speak)
-        self.speak_button.pack(fill='x')
-        row = self.frame(side)
-        row.pack(fill='x', pady=6)
-        ttk.Button(row, text='停止語音', command=self.stop_speech).pack(side='left', expand=True, fill='x')
-        ttk.Button(row, text='匯出 WAV', command=self.export_audio).pack(side='left', expand=True, fill='x', padx=(6, 0))
-        chat = self.frame(body, role='paper')
+        attachment = self.frame(input_area)
+        attachment.pack(fill='x')
+        self.preview_label = self.label(attachment, '', color='muted', anchor='w')
+        self.preview_label.pack(side='left', fill='x', expand=True)
+        self.image_name = self.preview_label
+        self.remove_button = ttk.Button(attachment, text='×', width=3, command=self.clear_image, state='disabled')
+        self.remove_button.pack(side='right')
+        self.page_button = ttk.Button(attachment, text='選頁', command=self.open_pdf_page, state='disabled')
+        self.page_button.pack(side='right', padx=6)
+        self.pdf_button = self.attach_button
+        self.fast_check = ttk.Checkbutton(attachment, variable=self.fast)
+        self.speak_button = ttk.Button(footer, text='朗讀', command=self.speak)
+        self.speak_button.pack(side='right', padx=8)
+        ttk.Button(footer, text='停止語音', command=self.stop_speech).pack(side='right')
+        ttk.Button(footer, text='匯出 WAV', command=self.export_audio).pack(side='right')
+        chat = self.frame(center, role='paper', padx=20, pady=8)
         chat.pack(fill='both', expand=True)
         bar = ttk.Scrollbar(chat)
         bar.pack(side='right', fill='y')
@@ -200,9 +191,94 @@ class OptiiApp(ChatApp):
         self.transcript.pack(fill='both', expand=True)
         bar.configure(command=self.transcript.yview)
         self.roles.append((self.transcript, 'paper', 'ink'))
-        self.write('從一句話，或一張圖片開始。\n', 'assistant')
-        self.write('在設定中選擇本機模型，附上圖片會自動切換至圖片模型。\n右側可朗讀回覆，也可以先輸入文字再產生語音。\n\n', 'note')
+        self.write('從一句話開始，或按 ＋ 加入圖片、PDF。\n\n', 'note')
+        self.refresh_conversations()
+        self.configure_drop()
         self.input.focus_set()
+
+    def refresh_conversations(self):
+        self.conversation_index = list_records()
+        self._listing = True
+        try:
+            self.conversation_list.delete(0, 'end')
+            for record in self.conversation_index:
+                self.conversation_list.insert('end', record.get('title', '未命名對話'))
+            if self.conversation:
+                for index, record in enumerate(self.conversation_index):
+                    if record['id'] == self.conversation['id']:
+                        self.conversation_list.selection_set(index)
+                        break
+        finally:
+            self._listing = False
+
+    def persist_conversation(self):
+        if not self.conversation:
+            return
+        self.conversation['transcript'] = self.transcript.get('1.0', 'end-1c')
+        self.conversation['messages'] = list(self.history)
+        self.conversation['draft'] = self.input.get('1.0', 'end-1c')
+        try:
+            save_record(self.conversation)
+            self.refresh_conversations()
+        except OSError as error:
+            self.status.set('對話儲存失敗：'+str(error))
+
+    def select_conversation(self, event=None):
+        if getattr(self, '_listing', False) or self.busy or self.pdf_job:
+            return
+        selection = self.conversation_list.curselection()
+        if not selection:
+            return
+        item = self.conversation_index[selection[0]]
+        if self.conversation and item['id'] == self.conversation['id']:
+            return
+        self.persist_conversation()
+        try:
+            record = load_record(item['id'])
+            self.clear_image()
+            self.conversation = record
+            self.history = [m for m in record.get('messages', []) if m.get('role') in ('user', 'assistant')][-6:]
+            self.last_answer = next((m.get('content', '') for m in reversed(self.history)
+                                     if m.get('role') == 'assistant'), '')
+            self.photos.clear()
+            self.transcript.configure(state='normal')
+            self.transcript.delete('1.0', 'end')
+            self.transcript.insert('end', record.get('transcript', ''))
+            self.transcript.configure(state='disabled')
+            self.input.delete('1.0', 'end')
+            self.input.insert('1.0', record.get('draft', ''))
+            self.refresh_conversations()
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            self.status.set('無法開啟對話：'+str(error))
+
+    def rename_conversation(self, event=None):
+        selection = self.conversation_list.curselection()
+        if self.busy or not selection:
+            return 'break'
+        record = self.conversation_index[selection[0]]
+        name = simpledialog.askstring('重新命名對話', '對話標題：', initialvalue=record['title'], parent=self.root)
+        if name is not None and name.strip():
+            name = name.strip()[:100]
+            if self.conversation and self.conversation['id'] == record['id']:
+                self.conversation['title'] = name
+                self.persist_conversation()
+            else:
+                record['title'] = name
+                try:
+                    save_record(record)
+                    self.refresh_conversations()
+                except OSError as error:
+                    self.status.set('標題儲存失敗：'+str(error))
+        return 'break'
+
+    def new_chat(self):
+        if self.busy:
+            return
+        self.persist_conversation()
+        self.cancel_pdf_job()
+        self.conversation = None
+        super().new_chat()
+        self.refresh_conversations()
 
     def resolved_theme(self):
         if self.settings['theme'] != 'system':
@@ -249,7 +325,7 @@ class OptiiApp(ChatApp):
         logo.thumbnail((74, 44), Image.Resampling.LANCZOS)
         self.logo_photo = ImageTk.PhotoImage(logo)
         self.logo.configure(image=self.logo_photo)
-        self.model_summary.configure(text=f"文字 · {self.settings['text']['model']} / {self.settings['text']['device']}\n圖片 · {self.settings['vision']['model']} / {self.settings['vision']['device']}")
+        self.conversation_list.configure(selectbackground=p['accent'], selectforeground=p['paper'])
 
     def style_scrollbars(self, style, theme, palette):
         # Keep ttk's native dragging, page scrolling, and keyboard behavior.
@@ -337,38 +413,121 @@ class OptiiApp(ChatApp):
             except OSError:
                 pass  # Retry our own temporary file at exit if it is briefly locked.
 
+    def configure_drop(self):
+        try:
+            from tkinterdnd2 import DND_FILES, TkinterDnD
+            TkinterDnD.require(self.root)
+            for widget in (self.input, self.transcript):
+                widget.drop_target_register(DND_FILES)
+                widget.dnd_bind('<<Drop>>', self.on_drop)
+        except Exception as error:
+            self.status.set('拖放無法啟用：'+str(error)+' · 可使用 ＋ 選檔')
+
+    def on_drop(self, event):
+        paths = self.root.tk.splitlist(event.data)
+        if len(paths) != 1:
+            self.status.set('一次請拖入一個檔案。')
+        else:
+            self.attach_file(paths[0])
+        return 'copy'
+
+    def choose_file(self):
+        if self.busy or self.closed:
+            return
+        filename = filedialog.askopenfilename(parent=self.root, title='加入對話附件',
+            filetypes=[('PDF 或圖片', '*.pdf *.png *.jpg *.jpeg *.webp *.bmp'), ('所有檔案', '*.*')])
+        if filename:
+            self.attach_file(filename)
+
+    def attach_file(self, filename):
+        if self.busy or self.closed:
+            self.status.set('請等待目前回覆完成。')
+            return
+        path = Path(filename)
+        if path.suffix.lower() == '.pdf':
+            self.load_pdf(path)
+        elif path.suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp', '.bmp'):
+            self.attach_image(path)
+            if self.pending_path == path:
+                self.status.set('圖片已附加 · 輸入問題後按傳送')
+        else:
+            self.status.set('目前支援 PDF、PNG、JPG、WEBP、BMP。')
+
+    def load_pdf(self, filename):
+        try:
+            _, size = inspect_pdf(filename)
+        except Exception as error:
+            self.status.set(str(error))
+            return
+        self.cancel_pdf_job()
+        cancelled = threading.Event()
+        self.pdf_job = cancelled
+        self.status.set(f'正在解析 PDF · {size/1024**2:.2f} MB…')
+        def work():
+            try:
+                result = prepare_pdf(filename,
+                    lambda note: self.extra.put(('pdf_progress', (cancelled, note))), cancelled)
+                self.extra.put(('pdf_ready', (cancelled, result)))
+            except InterruptedError:
+                pass
+            except Exception as error:
+                self.extra.put(('pdf_error', (cancelled, str(error))))
+        threading.Thread(target=work, daemon=True).start()
+
+    def cancel_pdf_job(self):
+        if self.pdf_job:
+            self.pdf_job.set()
+            self.pdf_job = None
+
+    def open_pdf_page(self):
+        if self.pdf_source and not self.busy and not self.pdf_job:
+            PdfPicker(self.root, self.pdf_source['path'], self.attach_pdf, self.pdf_source)
+
     def attach_image(self, filename):
         previous = self.pending_path
-        super().attach_image(filename)
-        if self.pending_path != previous:
+        try:
+            prepare_image(filename, fast=True)
+            self.cancel_pdf_job()
+            self.pending_path = Path(filename)
+            self.preview = None
+            self.preview_label.configure(image='', text='圖片 · '+self.pending_path.name, width=0, height=1)
+            self.remove_button.configure(state='normal')
             self.remove_capture_file(previous)
             self.pending_document = None
             self.pdf_image_note = ''
+            self.pdf_source = None
+            self.page_button.configure(state='disabled')
+            self.route.set('自動分流')
+        except Exception as error:
+            messagebox.showerror('無法開啟圖片', str(error), parent=self.root)
 
     def choose_pdf(self):
         if self.busy or self.closed:
             return
         filename = filedialog.askopenfilename(parent=self.root, title='選擇 PDF', filetypes=[('PDF 文件', '*.pdf')])
         if filename:
-            PdfPicker(self.root, filename, self.attach_pdf)
+            self.load_pdf(filename)
 
     def attach_pdf(self, document, image=None, page=None):
         if self.closed:
             return
+        self.pdf_source = document
         if image is not None:
             path = None
             try:
-                with tempfile.NamedTemporaryFile(prefix='OptiChat-pdf-', suffix='.png', delete=False) as stream:
+                with tempfile.NamedTemporaryFile(prefix='OptiChat-pdf-', suffix='.jpg', delete=False) as stream:
                     path = Path(stream.name)
                 self.capture_files.add(path)
-                image.save(path)
+                image.save(path, format='JPEG', quality=82, optimize=True)
                 self.attach_image(path)
                 if self.pending_path != path:
                     self.remove_capture_file(path)
                     return
                 self.pdf_image_note = f"PDF：{document['path'].name} · 第 {page}／{document['pages']} 頁"
                 self.image_name.configure(text=self.pdf_image_note)
-                self.route.set('圖片理解')
+                self.pdf_source = document
+                self.page_button.configure(state='normal')
+                self.route.set('自動分流')
                 self.fast.set(False)
                 self.status.set('PDF 頁面已附加 · 輸入問題後按傳送')
             except Exception as error:
@@ -379,8 +538,9 @@ class OptiiApp(ChatApp):
             return
         self.clear_image()
         self.pending_document = document
+        self.page_button.configure(state='normal')
         self.route.set('純文字')
-        self.preview_label.configure(image='', text=f"PDF 文件\n{document['pages']} 頁\n文字模式", width=27, height=6)
+        self.preview_label.configure(image='', text=f"PDF · {document['pages']} 頁 · 文字已擷取")
         self.image_name.configure(text=document['path'].name)
         self.remove_button.configure(state='normal')
         _, label = pdf_prompt(document, '', self.settings['text'])
@@ -410,16 +570,21 @@ class OptiiApp(ChatApp):
             self.write(self.pdf_image_note+'\n', 'note')
 
     def clear_image(self):
+        self.cancel_pdf_job()
         previous = self.pending_path
-        super().clear_image()
+        self.pending_path = None
+        self.preview = None
+        self.preview_label.configure(image='', text='', width=0, height=1)
+        self.remove_button.configure(state='disabled')
         self.remove_capture_file(previous)
         self.pending_document = None
         self.pdf_image_note = ''
+        self.pdf_source = None
+        self.page_button.configure(state='disabled')
 
     def set_busy(self, busy):
         super().set_busy(busy)
         self.capture_button.configure(state='disabled' if busy or self.capture_session else 'normal')
-        self.pdf_button.configure(state='disabled' if busy else 'normal')
 
     def refresh_models(self):
         if self.model_loading or self.busy or self.speech_job:
@@ -469,11 +634,14 @@ class OptiiApp(ChatApp):
     def send(self):
         if not self.ready or self.model_loading:
             return
+        if self.pdf_job:
+            self.status.set('請等待 PDF 解析完成。')
+            return
         if self.speech_job:
             self.status.set('請先停止或等待語音生成完成。')
             return
         if self.route_mode() == 'text' and self.pending_path:
-            self.status.set('目前是純文字模式；請切換自動分流或圖片理解。')
+            self.route.set('自動分流')
             return
         pending = {'role': 'user', 'content': ''}
         if self.pending_path:
@@ -482,7 +650,12 @@ class OptiiApp(ChatApp):
         if self.settings[kind]['model'] not in model_choices(self.catalog, kind):
             self.status.set('目前選取的模型未安裝或不支援此功能，請在設定重新選擇。')
             return
+        was_busy = self.busy
         super().send()
+        if not was_busy and self.busy:
+            if self.conversation is None:
+                self.conversation = new_record()
+            self.persist_conversation()
 
     def poll(self):
         if self.closed:
@@ -537,6 +710,7 @@ class OptiiApp(ChatApp):
                     self.status.set(f'● {self.active_kind} / {self.active_device} · {int(time.monotonic()-self.started)} 秒')
                     self.set_busy(False)
                     self.request = None
+                    self.persist_conversation()
                     if self.settings['auto_speak'] and getattr(self, 'completed_turn', False) and not value:
                         self.speak(self.last_answer)
                     self.completed_turn = False
@@ -606,6 +780,21 @@ class OptiiApp(ChatApp):
                     return
                 elif kind == 'tray_error':
                     self.status.set('系統匣不可用；關閉視窗將改為最小化。')
+                elif kind == 'pdf_progress':
+                    job, note = value
+                    if self.pdf_job is job and not job.is_set():
+                        self.status.set(note)
+                elif kind == 'pdf_ready':
+                    job, result = value
+                    if self.pdf_job is job and not job.is_set():
+                        self.pdf_job = None
+                        self.attach_pdf(*result)
+                        self.input.focus_set()
+                elif kind == 'pdf_error':
+                    job, detail = value
+                    if self.pdf_job is job and not job.is_set():
+                        self.pdf_job = None
+                        self.status.set('PDF 無法解析：'+detail)
                 elif kind == 'speech_ready':
                     job, path = value
                     if self.speech_job is not job:
@@ -716,6 +905,9 @@ class OptiiApp(ChatApp):
             self.quit()
 
     def quit(self):
+        if not self.closed:
+            self.persist_conversation()
+        self.cancel_pdf_job()
         self.shutdown.set()
         if self.capture_session:
             self.capture_session.cancel()

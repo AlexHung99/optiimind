@@ -19,6 +19,7 @@ import opti_app
 import opti_model_worker
 import opti_capture
 import opti_pdf
+import opti_history
 
 CATALOG = [
     {'name': 'gemma4:26b', 'capabilities': ['completion', 'vision', 'thinking'], 'details': {'family': 'gemma4'}},
@@ -378,6 +379,9 @@ class CaptureTests(unittest.TestCase):
             stack.enter_context(patch.object(opti_app.OptiiApp, 'start_tray'))
             stack.enter_context(patch.object(opti_app.OptiiApp, 'monitor'))
             stack.enter_context(patch.object(opti_app.OptiiApp, 'connect'))
+            directory = Path(stack.enter_context(tempfile.TemporaryDirectory()))
+            stack.enter_context(patch.object(opti_app, 'save_record', side_effect=lambda r:opti_history.save_record(r, directory)))
+            stack.enter_context(patch.object(opti_app, 'list_records', side_effect=lambda:opti_history.list_records(directory)))
             root = tk.Tk()
             app = opti_app.OptiiApp(root)
             try:
@@ -386,7 +390,7 @@ class CaptureTests(unittest.TestCase):
                 app.screenshot_done(Image.new('RGB', (320, 180), 'blue'))
                 path = app.pending_path
                 self.assertTrue(path.is_file())
-                self.assertIsNotNone(app.preview)
+                self.assertIn('螢幕截圖', app.image_name.cget('text'))
                 self.assertEqual(app.route.get(), '自動分流')
                 self.assertEqual(app.input.get('1.0', 'end-1c'), '幫我看這段內容')
                 app.screenshot_done(None)
@@ -480,6 +484,10 @@ class PdfTests(unittest.TestCase):
             stack.enter_context(patch.object(opti_app.OptiiApp, 'monitor'))
             stack.enter_context(patch.object(opti_app.OptiiApp, 'connect'))
             directory = stack.enter_context(tempfile.TemporaryDirectory())
+            stack.enter_context(patch.object(opti_app, 'save_record',
+                side_effect=lambda record: opti_history.save_record(record, Path(directory)/'history')))
+            stack.enter_context(patch.object(opti_app, 'list_records',
+                side_effect=lambda: opti_history.list_records(Path(directory)/'history')))
             path = Path(directory)/'test.pdf'
             self.text_pdf(path)
             document = opti_pdf.read_pdf(path)
@@ -500,12 +508,57 @@ class PdfTests(unittest.TestCase):
                 app.set_busy(False)
                 app.attach_pdf(document, opti_pdf.render_page(path, 1), 1)
                 image_path = app.pending_path
-                self.assertEqual(app.route.get(), '圖片理解')
+                self.assertEqual(app.route.get(), '自動分流')
                 self.assertTrue(image_path.is_file())
                 self.assertIn('第 1', app.prepare_turn('辨識')['content'])
                 app.clear_image()
                 self.assertFalse(image_path.exists())
                 self.assertTrue(path.is_file())
+            finally:
+                app.quit()
+
+    def test_drop_pdf_into_chat_and_restore_renamed_conversation(self):
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)))
+            stack.enter_context(patch.object(opti_app.OptiiApp, 'start_tray'))
+            stack.enter_context(patch.object(opti_app.OptiiApp, 'monitor'))
+            stack.enter_context(patch.object(opti_app.OptiiApp, 'connect'))
+            directory = Path(stack.enter_context(tempfile.TemporaryDirectory()))
+            store = directory/'history'
+            stack.enter_context(patch.object(opti_app, 'save_record', side_effect=lambda r:opti_history.save_record(r, store)))
+            stack.enter_context(patch.object(opti_app, 'list_records', side_effect=lambda:opti_history.list_records(store)))
+            stack.enter_context(patch.object(opti_app, 'load_record', side_effect=lambda i:opti_history.load_record(i, store)))
+            pdf = directory/'PDF 文件 with spaces.pdf'
+            self.text_pdf(pdf)
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                self.assertTrue(root.tk.call('package', 'present', 'tkdnd'))
+                app.input.insert('1.0', '請摘要')
+                event = SimpleNamespace(data=root.tk.call('list', str(pdf)))
+                app.on_drop(event)
+                for _ in range(100):
+                    root.update()
+                    if app.pending_document:
+                        break
+                    time.sleep(.01)
+                self.assertIsNotNone(app.pending_document)
+                self.assertEqual(app.input.get('1.0', 'end-1c'), '請摘要')
+                self.assertEqual(app.pending_document['path'], pdf)
+                app.ready, app.model_loading, app.catalog = True, False, CATALOG
+                with patch.object(app, 'generate'):
+                    app.send()
+                self.assertRegex(app.conversation['title'], r'^\d{4}-\d\d-\d\d \d\d:\d\d$')
+                self.assertEqual(len(opti_history.list_records(store)), 1)
+                app.set_busy(False)
+                app.new_chat()
+                self.assertEqual(app.conversation_list.size(), 1)
+                app.conversation_list.selection_set(0)
+                app.select_conversation()
+                self.assertIn('請摘要', app.transcript.get('1.0', 'end-1c'))
+                with patch.object(opti_app.simpledialog, 'askstring', return_value='我的報告'):
+                    app.rename_conversation()
+                self.assertEqual(opti_history.list_records(store)[0]['title'], '我的報告')
             finally:
                 app.quit()
 

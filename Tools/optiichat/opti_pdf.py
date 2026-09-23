@@ -10,13 +10,30 @@ MAX_BYTES = 100 * 1024**2
 MAX_PAGES = 200
 MAX_TEXT = 60000
 PDF_LOCK = threading.Lock()  # PDFium calls must not overlap across picker workers.
+LARGE_BYTES = 20 * 1024**2
 
 
-def read_pdf(filename):
-    import pypdfium2 as pdfium
+def inspect_pdf(filename):
     path = Path(filename)
-    if path.stat().st_size > MAX_BYTES:
+    if path.suffix.lower() != '.pdf' or not path.is_file():
+        raise ValueError('請拖入一個 PDF 檔案。')
+    size = path.stat().st_size
+    if size > MAX_BYTES:
         raise ValueError('PDF 超過 100 MB，請先拆分檔案。')
+    if not size:
+        raise ValueError('PDF 是空檔案。')
+    return path, size
+
+
+def check_cancel(cancel):
+    if cancel is not None and cancel.is_set():
+        raise InterruptedError('PDF 解析已取消。')
+
+
+def read_pdf(filename, progress=None, cancel=None):
+    import pypdfium2 as pdfium
+    path, size = inspect_pdf(filename)
+    check_cancel(cancel)
     with PDF_LOCK, pdfium.PdfDocument(path) as pdf:
         count = len(pdf)
         if not count:
@@ -24,6 +41,9 @@ def read_pdf(filename):
         parts, empty, used = [], [], 0
         scanned = min(count, MAX_PAGES)
         for index in range(scanned):
+            check_cancel(cancel)
+            if progress and (index % 10 == 0 or index == scanned-1):
+                progress(f'PDF {size/1024**2:.2f} MB · 正在擷取第 {index+1}／{count} 頁…')
             with closing(pdf[index]) as page:
                 with closing(page.get_textpage()) as textpage:
                     text = textpage.get_text_range(count=min(textpage.count_chars(), MAX_TEXT + 1)).strip()
@@ -36,11 +56,11 @@ def read_pdf(filename):
             if used >= MAX_TEXT:
                 scanned = index + 1
                 break
-        return {'path':path, 'pages':count, 'text':''.join(parts), 'empty_pages':empty,
+        return {'path':path, 'size_bytes':size, 'pages':count, 'text':''.join(parts), 'empty_pages':empty,
                 'truncated':used > MAX_TEXT or scanned < count, 'checked_pages':scanned}
 
 
-def render_page(filename, page_number):
+def render_page(filename, page_number, max_edge=1600):
     import pypdfium2 as pdfium
     path = Path(filename)
     if path.stat().st_size > MAX_BYTES:
@@ -52,8 +72,22 @@ def render_page(filename, page_number):
             width, height = page.get_size()
             if width <= 0 or height <= 0:
                 raise ValueError('PDF 頁面尺寸無效。')
-            with closing(page.render(scale=min(2, 1600/max(width,height)))) as bitmap:
+            with closing(page.render(scale=min(2, max_edge/max(width,height)))) as bitmap:
                 return bitmap.to_pil().convert('RGB').copy()
+
+
+def prepare_pdf(filename, progress=None, cancel=None):
+    """Extract text without recompressing the source; bound raster memory at render time."""
+    document = read_pdf(filename, progress, cancel)
+    check_cancel(cancel)
+    if document['text']:
+        return document, None, None
+    edge = 896 if document['size_bytes'] >= LARGE_BYTES else 1120
+    if progress:
+        progress(f'未找到文字層 · 正在縮小第 1 頁圖片（最長邊 {edge}px）…')
+    image = render_page(filename, 1, max_edge=edge)
+    check_cancel(cancel)
+    return document, image, 1
 
 
 def pdf_prompt(document, question, profile):
@@ -72,7 +106,7 @@ def pdf_prompt(document, question, profile):
 
 
 class PdfPicker(tk.Toplevel):
-    def __init__(self, parent, filename, on_attach):
+    def __init__(self, parent, filename, on_attach, document=None):
         super().__init__(parent)
         self.title('附加 PDF')
         self.geometry('590x300')
@@ -100,7 +134,10 @@ class PdfPicker(tk.Toplevel):
         self.image_button.pack(side='left')
         ttk.Button(body, text='取消', command=self.close).pack(anchor='e')
         self.protocol('WM_DELETE_WINDOW', self.close)
-        self.run(lambda: read_pdf(filename), 'document')
+        if document is None:
+            self.run(lambda: read_pdf(filename), 'document')
+        else:
+            self.events.put(('document', document))
         self.poll()
 
     def run(self, action, kind):

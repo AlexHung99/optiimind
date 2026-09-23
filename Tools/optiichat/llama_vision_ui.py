@@ -33,7 +33,10 @@ def prepare_image(path, fast=True):
         image = Image.alpha_composite(background, image).convert('RGB')
         image.thumbnail((560, 560) if fast else (1120, 1120), Image.Resampling.LANCZOS)
     output = io.BytesIO()
-    image.save(output, format='PNG')
+    if path.suffix.lower() in ('.jpg', '.jpeg'):
+        image.save(output, format='JPEG', quality=85, optimize=True)
+    else:
+        image.save(output, format='PNG')
     return base64.b64encode(output.getvalue()).decode('ascii'), image
 
 
