@@ -18,6 +18,7 @@ import opti_core as core
 import opti_app
 import opti_model_worker
 import opti_capture
+import opti_pdf
 
 CATALOG = [
     {'name': 'gemma4:26b', 'capabilities': ['completion', 'vision', 'thinking'], 'details': {'family': 'gemma4'}},
@@ -412,6 +413,99 @@ class CaptureTests(unittest.TestCase):
                     self.assertTrue(generate.call_args.args[1][-1]['images'])
                     self.assertFalse(path.exists())
                 self.assertEqual(app.capture_files, set())
+            finally:
+                app.quit()
+
+
+
+
+class PdfTests(unittest.TestCase):
+    @staticmethod
+    def text_pdf(path):
+        stream = b'BT /F1 12 Tf 20 70 Td (Hello PDF document) Tj ET'
+        objects = [b'<< /Type /Catalog /Pages 2 0 R >>',
+                   b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+                   b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+                   b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+                   b'<< /Length '+str(len(stream)).encode()+b' >>\nstream\n'+stream+b'\nendstream']
+        data = b'%PDF-1.4\n'
+        offsets = []
+        for index, obj in enumerate(objects, 1):
+            offsets.append(len(data))
+            data += str(index).encode()+b' 0 obj\n'+obj+b'\nendobj\n'
+        xref = len(data)
+        data += b'xref\n0 6\n0000000000 65535 f \n'
+        for offset in offsets:
+            data += f'{offset:010d} 00000 n \n'.encode()
+        data += b'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+str(xref).encode()+b'\n%%EOF'
+        path.write_bytes(data)
+
+    def test_pdf_text_extraction_render_and_invalid_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'文件.pdf'
+            self.text_pdf(path)
+            document = opti_pdf.read_pdf(path)
+            self.assertIn('Hello PDF document', document['text'])
+            self.assertIn('第 1 頁', document['text'])
+            self.assertFalse(document['truncated'])
+            self.assertEqual(opti_pdf.render_page(path, 1).size, (400, 200))
+            with self.assertRaises(ValueError):
+                opti_pdf.render_page(path, 2)
+            with patch.object(opti_pdf, 'MAX_BYTES', 1), self.assertRaises(ValueError):
+                opti_pdf.read_pdf(path)
+            path.write_bytes(b'not a PDF')
+            with self.assertRaises(Exception):
+                opti_pdf.read_pdf(path)
+
+    def test_scanned_pdf_and_long_document_report_limits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'scan.pdf'
+            Image.new('RGB', (100, 200), 'blue').save(path, 'PDF')
+            document = opti_pdf.read_pdf(path)
+            self.assertEqual(document['text'], '')
+            self.assertEqual(document['empty_pages'], [1])
+            self.assertGreater(opti_pdf.render_page(path, 1).height, 0)
+            document['text'] = '文字內容'*10000
+            content, note = opti_pdf.pdf_prompt(document, '摘要', core.DEFAULTS['text'])
+            self.assertIn('部分內容', note)
+            self.assertLess(len(content), 2000)
+            self.text_pdf(path)
+            with patch.object(opti_pdf, 'MAX_TEXT', 12):
+                self.assertTrue(opti_pdf.read_pdf(path)['truncated'])
+
+    def test_pdf_attachment_preserves_draft_sends_context_and_cleans_page(self):
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)))
+            stack.enter_context(patch.object(opti_app.OptiiApp, 'start_tray'))
+            stack.enter_context(patch.object(opti_app.OptiiApp, 'monitor'))
+            stack.enter_context(patch.object(opti_app.OptiiApp, 'connect'))
+            directory = stack.enter_context(tempfile.TemporaryDirectory())
+            path = Path(directory)/'test.pdf'
+            self.text_pdf(path)
+            document = opti_pdf.read_pdf(path)
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                self.assertIn('OptiChat', root.title())
+                app.input.insert('1.0', '幫我摘要')
+                app.attach_pdf(document)
+                self.assertEqual(app.input.get('1.0', 'end-1c'), '幫我摘要')
+                self.assertEqual(app.route.get(), '純文字')
+                app.ready, app.model_loading, app.catalog = True, False, CATALOG
+                with patch.object(app, 'generate'):
+                    app.send()
+                self.assertIn('Hello PDF document', app.turn['content'])
+                self.assertIn('幫我摘要', app.turn['content'])
+                self.assertIsNone(app.pending_document)
+                app.set_busy(False)
+                app.attach_pdf(document, opti_pdf.render_page(path, 1), 1)
+                image_path = app.pending_path
+                self.assertEqual(app.route.get(), '圖片理解')
+                self.assertTrue(image_path.is_file())
+                self.assertIn('第 1', app.prepare_turn('辨識')['content'])
+                app.clear_image()
+                self.assertFalse(image_path.exists())
+                self.assertTrue(path.is_file())
             finally:
                 app.quit()
 

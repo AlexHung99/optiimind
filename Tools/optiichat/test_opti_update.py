@@ -23,6 +23,27 @@ def archive(version='1.1.0', extra=None):
 
 
 class UpdateTests(unittest.TestCase):
+    def test_installer_upgrade_does_not_replace_unmanaged_new_filename(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source, installed = Path(temp)/'source', Path(temp)/'installed'
+            source.mkdir()
+            installed.mkdir()
+            self.old_install(installed)
+            (installed/'opti_pdf.py').write_bytes(b'# user file')
+            _, files = archive('1.1.0', {'opti_pdf.py': b'# release file'})
+            for name, data in files.items():
+                (source/name).write_bytes(data)
+            with self.assertRaisesRegex(RuntimeError, 'unmanaged'):
+                install_app(source, installed)
+            self.assertEqual((installed/'opti_pdf.py').read_bytes(), b'# user file')
+
+    def test_manual_check_replaces_an_older_pending_update(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root/'pending.json').write_text(json.dumps({'version': '1.0.1'}))
+            self.stage(root)
+            self.assertEqual(json.loads((root/'pending.json').read_text())['version'], '1.1.0')
+
     def test_fresh_install_and_reinstall_protect_customization(self):
         with tempfile.TemporaryDirectory() as temp:
             source, installed = Path(temp)/'source', Path(temp)/'installed'

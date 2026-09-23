@@ -318,14 +318,26 @@ class ChatApp:
         self.send()
         return 'break'
 
+    def has_attachment(self):
+        return bool(self.pending_path)
+
+    def default_prompt(self):
+        return '請描述這張圖片。'
+
+    def prepare_turn(self, text):
+        return {'role': 'user', 'content': text}
+
+    def write_attachment_note(self):
+        pass
+
     def send(self):
         if self.busy or not self.ready:
             return
         text = self.input.get('1.0', 'end-1c').strip()
-        if not text and not self.pending_path:
+        if not text and not self.has_attachment():
             return
-        text = text or '請描述這張圖片。'
-        turn = {'role': 'user', 'content': text}
+        text = text or self.default_prompt()
+        turn = self.prepare_turn(text)
         image = None
         if self.pending_path:
             try:
@@ -336,6 +348,7 @@ class ChatApp:
                 return
         self.write('你\n', 'user')
         self.write(text + '\n')
+        self.write_attachment_note()
         if image:
             image.thumbnail((250, 170), Image.Resampling.LANCZOS)
             photo = ImageTk.PhotoImage(image)

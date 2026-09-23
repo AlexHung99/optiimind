@@ -18,6 +18,7 @@ import winreg
 from PIL import Image, ImageDraw, ImageTk
 from llama_vision_ui import ChatApp, StreamRequest, build_messages
 from opti_capture import RegionCapture
+from opti_pdf import PdfPicker, pdf_prompt
 from opti_version import VERSION
 from opti_update import UPDATE_DIR, check_for_update
 from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch_arguments, breeze_hardware_available,
@@ -68,11 +69,13 @@ class OptiiApp(ChatApp):
         self.model_download = ModelDownload()
         self.capture_session = None
         self.capture_files = set()
+        self.pending_document = None
+        self.pdf_image_note = ''
         self.scrollbar_images = {}
         self.update_busy = False
         self.update_status = tk.StringVar(root, value='目前版本 '+VERSION)
         super().__init__(root)
-        root.title('OptiiChat · 本機 AI 工作室')
+        root.title('OptiChat · 本機 AI 工作室')
         root.geometry('1180x940')
         root.minsize(980, 740)
         self.fast.set(self.settings['fast_image'])
@@ -109,7 +112,7 @@ class OptiiApp(ChatApp):
         brand = self.label(header, 'Optiimind', color='ink')
         brand.configure(font=('Georgia', 26, 'bold'))
         brand.pack(side='left')
-        self.label(header, 'OPTII CHAT  /  本機 AI 工作室', color='muted').pack(side='left', padx=20)
+        self.label(header, 'OptiChat  /  本機 AI 工作室', color='muted').pack(side='left', padx=20)
         ttk.Button(header, text='設定', command=self.open_settings).pack(side='right')
         toolbar = self.frame(self.root, padx=26, pady=8)
         toolbar.pack(fill='x')
@@ -157,7 +160,7 @@ class OptiiApp(ChatApp):
             if str(event.widget).startswith(str(sidebar)):
                 side_canvas.yview_scroll(-int(event.delta/120), 'units')
         self.root.bind('<MouseWheel>', side_wheel, add=True)
-        self.label(side, '模型與圖片', color='gold', anchor='w').pack(fill='x', pady=(0, 10))
+        self.label(side, '模型與附件', color='gold', anchor='w').pack(fill='x', pady=(0, 10))
         self.route_combo = ttk.Combobox(side, textvariable=self.route, values=['自動分流', '純文字', '圖片理解'], state='readonly')
         self.route_combo.pack(fill='x')
         self.model_summary = self.label(side, justify='left', anchor='w', wraplength=250, color='muted')
@@ -176,6 +179,8 @@ class OptiiApp(ChatApp):
         self.attach_button.pack(side='left', expand=True, fill='x')
         self.remove_button = ttk.Button(row, text='移除', command=self.clear_image, state='disabled')
         self.remove_button.pack(side='left', padx=(6, 0))
+        self.pdf_button = ttk.Button(side, text='＋ PDF 文件', command=self.choose_pdf)
+        self.pdf_button.pack(fill='x', pady=(8, 0))
         self.fast_check = ttk.Checkbutton(side, text='快速圖片（560 px）', variable=self.fast)
         self.fast_check.pack(anchor='w', pady=(10, 16))
         self.label(side, '語音工作室' if self.breeze_available else 'Windows 本機朗讀', color='gold', anchor='w').pack(fill='x')
@@ -337,15 +342,84 @@ class OptiiApp(ChatApp):
         super().attach_image(filename)
         if self.pending_path != previous:
             self.remove_capture_file(previous)
+            self.pending_document = None
+            self.pdf_image_note = ''
+
+    def choose_pdf(self):
+        if self.busy or self.closed:
+            return
+        filename = filedialog.askopenfilename(parent=self.root, title='選擇 PDF', filetypes=[('PDF 文件', '*.pdf')])
+        if filename:
+            PdfPicker(self.root, filename, self.attach_pdf)
+
+    def attach_pdf(self, document, image=None, page=None):
+        if self.closed:
+            return
+        if image is not None:
+            path = None
+            try:
+                with tempfile.NamedTemporaryFile(prefix='OptiChat-pdf-', suffix='.png', delete=False) as stream:
+                    path = Path(stream.name)
+                self.capture_files.add(path)
+                image.save(path)
+                self.attach_image(path)
+                if self.pending_path != path:
+                    self.remove_capture_file(path)
+                    return
+                self.pdf_image_note = f"PDF：{document['path'].name} · 第 {page}／{document['pages']} 頁"
+                self.image_name.configure(text=self.pdf_image_note)
+                self.route.set('圖片理解')
+                self.fast.set(False)
+                self.status.set('PDF 頁面已附加 · 輸入問題後按傳送')
+            except Exception as error:
+                self.remove_capture_file(path)
+                messagebox.showerror('無法附加 PDF', str(error), parent=self.root)
+            return
+        if not document['text']:
+            return
+        self.clear_image()
+        self.pending_document = document
+        self.route.set('純文字')
+        self.preview_label.configure(image='', text=f"PDF 文件\n{document['pages']} 頁\n文字模式", width=27, height=6)
+        self.image_name.configure(text=document['path'].name)
+        self.remove_button.configure(state='normal')
+        _, label = pdf_prompt(document, '', self.settings['text'])
+        self.status.set(label+' · 尚未傳送')
+
+    def has_attachment(self):
+        return bool(self.pending_document) or super().has_attachment()
+
+    def default_prompt(self):
+        return '請摘要這份 PDF 的內容。' if self.pending_document else super().default_prompt()
+
+    def prepare_turn(self, text):
+        if self.pending_document:
+            kind = 'vision' if self.route_mode() == 'vision' else 'text'
+            content, _ = pdf_prompt(self.pending_document, text, self.settings[kind])
+            return {'role': 'user', 'content': content}
+        if self.pdf_image_note:
+            text += '\n'+self.pdf_image_note+'（只附加此頁）'
+        return super().prepare_turn(text)
+
+    def write_attachment_note(self):
+        if self.pending_document:
+            kind = 'vision' if self.route_mode() == 'vision' else 'text'
+            _, label = pdf_prompt(self.pending_document, '', self.settings[kind])
+            self.write(label+'\n', 'note')
+        elif self.pdf_image_note:
+            self.write(self.pdf_image_note+'\n', 'note')
 
     def clear_image(self):
         previous = self.pending_path
         super().clear_image()
         self.remove_capture_file(previous)
+        self.pending_document = None
+        self.pdf_image_note = ''
 
     def set_busy(self, busy):
         super().set_busy(busy)
         self.capture_button.configure(state='disabled' if busy or self.capture_session else 'normal')
+        self.pdf_button.configure(state='disabled' if busy else 'normal')
 
     def refresh_models(self):
         if self.model_loading or self.busy or self.speech_job:
@@ -497,8 +571,8 @@ class OptiiApp(ChatApp):
             icon = app_icon(256, '#14161A')
             def action(name):
                 return lambda *_: self.extra.put((name, None))
-            self.tray_icon = pystray.Icon('OptiiChat', icon, 'OptiiChat · 本機 AI 工作室', pystray.Menu(
-                pystray.MenuItem('開啟 OptiiChat', action('show'), default=True),
+            self.tray_icon = pystray.Icon('OptiChat', icon, 'OptiChat · 本機 AI 工作室', pystray.Menu(
+                pystray.MenuItem('開啟 OptiChat', action('show'), default=True),
                 pystray.MenuItem('設定', action('settings')),
                 pystray.MenuItem('結束程式', action('quit'))))
             def run():
@@ -658,7 +732,7 @@ class SettingsWindow(tk.Toplevel):
     def __init__(self, app):
         super().__init__(app.root)
         self.app = app
-        self.title('OptiiChat 設定')
+        self.title('OptiChat 設定')
         self.geometry('860x790')
         self.minsize(780, 710)
         self.transient(app.root)

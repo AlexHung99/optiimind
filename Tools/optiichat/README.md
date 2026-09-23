@@ -1,20 +1,28 @@
-# OptiiChat
+# OptiChat
 
 Windows 本機 AI 聊天工作室：Ollama 文字／圖片聊天、框選截圖、語音朗讀、系統匣常駐、亮暗主題與自動更新。
 
 - **介紹與下載：** https://optiimind.com/Tools/optiichat/
 - **程式碼：** 本目錄
-- **目前版本：** 1.0.2
+- **目前版本：** 1.1.0
 
 ## 安裝
 
-1. 安裝 Windows 64 位元版 [Python 3.11+](https://www.python.org/downloads/windows/) 與 [Ollama](https://ollama.com/download/windows)。
-2. 從介紹頁下載 ZIP，解壓縮至可寫入的資料夾。
-3. 執行 `Install-OptiiChat.cmd`。它會建立 `%LOCALAPPDATA%\OptiiChat\runtime` 的 Python 環境，安裝套件，並將程式安裝至 `%LOCALAPPDATA%\OptiiChat\app`。
-4. 缺少 Vision 相容服務時，腳本從 Ollama 官方 GitHub 下載 0.24.0 Windows ZIP（約 2.1 GB），驗證官方 SHA-256，安裝 CPU／Vulkan 相容檔案。若本機已有相容服務則略過。
-5. 安裝完成後，桌面會自動建立使用官方 Logo 的「OptiiChat」捷徑；日後雙擊即可啟動，也可執行 `Start-OptiiChat.cmd`。完全沒有 Ollama 模型時自動下載 `llama3.2-vision`（約 7.8 GB）；已有模型時使用下拉選單選擇。
+1. 從介紹頁下載 `OptiChat-Setup-1.1.0.exe`，執行安裝精靈；不需要自行安裝 Python。
+2. 安裝包含獨立 Python 3.14.3、介面、PDF 及朗讀套件，放在 `%LOCALAPPDATA%\OptiiChat\python`；程式在同一資料夾下的 `app`。為保留舊版設定與更新相容性，內部資料夾名稱沿用 OptiiChat。
+3. 自動建立桌面與開始功能表「OptiChat」捷徑。雙擊即可開啟。
+4. 初次啟動若尚未安裝 Ollama，會顯示官方下載入口；完成 Ollama 安裝後按「繼續」。缺少 Vision 相容服務時會下載官方 0.24.0 Windows ZIP（約 2.1 GB），驗證官方 SHA-256，並安裝 CPU／Vulkan 檔案。
+5. 完全沒有模型時，在聊天介面自動下載 `llama3.2-vision`（約 7.8 GB）。已有模型與設定會保留。
 
-這是 Python 程式包，不是獨立 EXE。請預留下載、解壓、Python 套件及模型空間。模型硬體需求各不相同；CPU 圖片推論可能需數分鐘。安裝腳本需要連網，不要求將模型傳到第三方服務。
+安裝程式目前**未經程式碼簽章**；Windows 可能顯示發行者未知。安裝本身不需要系統管理員權限，Ollama 官方安裝程式的提示以其本身為準。請預留模型空間；CPU 圖片推論可能需數分鐘。
+
+可從 Windows「已安裝的應用程式」移除 OptiChat；移除程式與內含 Python，保留設定、音訊、Ollama 與模型。更新或重新安裝前先從系統匣結束程式。ZIP 原始碼安裝仍保留，需自行準備 Python 3.11+ 與 Ollama，執行 `Install-OptiiChat.cmd`。
+
+## PDF
+
+點「＋ PDF 文件」，選擇擷取文字或指定一頁轉為圖片，輸入問題後傳送。掃描文件、圖表建議使用頁面圖片，由圖片模型辨識；不會自動為整份掃描 PDF 進行 OCR。文字模式顯示頁碼，沒有文字層的頁面會提示略過。
+
+每份上限 100 MB；文字擷取最多 200 頁／60,000 字，實際送出再依模型 Context 截取並標示「部分內容」。可提高 Context 或改選特定頁面。頁面圖片一次一頁，密碼保護的 PDF 請先自行解鎖。附件在本機處理，送出前不會交給模型；換附件／新對話會清理程式自己的暫存圖片，原始 PDF 保留。
 
 ## 使用
 
@@ -31,6 +39,8 @@ Windows 本機 AI 聊天工作室：Ollama 文字／圖片聊天、框選截圖�
 
 更新只更換發行包的程式檔案；使用者設定、語音輸出與模型保留。寫入前備份舊檔，寫入失敗時嘗試還原；偵測到本機修改時停止覆蓋。備份與更新紀錄位於 `%LOCALAPPDATA%\OptiiChat\updates`。來源以 HTTPS GitHub 儲存庫與 SHA-256 驗證，**沒有額外程式碼簽章**。
 
+EXE 內含的 Python 執行環境不隨小版本 ZIP 更新；若未來更換 Python，需下載新版 EXE。套件需求變更時，更新器使用內含 pip 安裝。
+
 Git clone 的開發者若修改程式，應以 Git 更新；自動更新不會覆寫這些變更。更新套件可能更新 Python 相依套件，模型本身不會被自動更換。
 
 ## 發行新版（維護者）
@@ -42,9 +52,21 @@ Git clone 的開發者若修改程式，應以 Git 更新；自動更新不會�
    python opti_release.py
    ```
 3. 提交程式碼、`package-files.json`、`downloads/OptiiChat-版本.zip`、`update.json` 至此儲存庫 `main`。
-4. 保留舊版下載包。更新檢查使用新 manifest，介紹頁下載按鈕也會讀取它。
+4. 保留舊版下載包。更新檢查使用新 manifest，EXE 下載按鈕另外讀取 `installer.json`。
 
 `opti_release.py` 只打包明列的程式、測試、說明與品牌素材，排除設定、暫存、使用者音檔、模型權重及 Git 資訊。若新增新的檔案類型，請同步維護 `opti_update.safe_name` 的允許清單。
+
+## 建置 EXE（維護者）
+
+使用官方 NSIS 3.12 可攜式工具與 Windows x64 CPython 3.14.3。先安裝 `opti-requirements.txt`，執行測試與 `python opti_release.py`，再執行：
+
+```powershell
+python installer/build.py --makensis C:\tools\nsis-3.12\makensis.exe
+```
+
+工具只複製 Python 標準發行目錄，排除原有 site-packages，再依鎖定版本從 PyPI 安裝套件，不包含個人環境、設定或模型。輸出 EXE、`installer.json` 與 `.installer-build` 暫存。提交 EXE 與 manifest，暫存不提交。Python 與套件授權檔保留在執行環境內。
+
+`--test` 編譯隔離測試安裝版本，不建立使用者捷徑或登錄入口，安裝至 `.installer-build/install-smoke`。
 
 ## 資料與相容性
 
@@ -54,4 +76,4 @@ Git clone 的開發者若修改程式，應以 Git 更新；自動更新不會�
 - 網路用於安裝相依套件、模型下載、GitHub 更新，以及使用者自行指定的 Breeze 服務。
 - 官網 Logo 來源見 [opti_assets/README.md](opti_assets/README.md)。Breeze 權重與自架產出受其研究及非商業授權限制；本儲存庫不散布該模型。
 
-33 項自動測試涵蓋聊天串流、截圖、模型初始化、語音串接與更新驗證／還原。測試不代表所有硬體組合皆可執行所有模型。
+38 項自動測試涵蓋聊天串流、截圖、模型初始化、語音串接與更新驗證／還原。測試不代表所有硬體組合皆可執行所有模型。

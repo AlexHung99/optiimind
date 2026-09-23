@@ -31,8 +31,10 @@ def install_app(source=ROOT, destination=None):
             raise RuntimeError('Installation file checksum mismatch: '+name)
         files[name] = data
     existing = destination/'package-files.json'
+    owned = set()
     if existing.exists():
         baseline = json.loads(existing.read_text(encoding='utf-8'))
+        owned = set(baseline['files'])
         if version_tuple(baseline['version']) > version_tuple(package['version']):
             print('A newer app version is already installed; keeping it.')
             return
@@ -42,20 +44,20 @@ def install_app(source=ROOT, destination=None):
                 raise RuntimeError('Local app modifications detected: '+name)
     for name, data in files.items():
         path = target_path(destination, name)
-        if not existing.exists() and path.exists() and path.read_bytes() != data:
+        if name not in owned and path.exists() and path.read_bytes() != data:
             raise RuntimeError('An unmanaged app file already exists: '+name)
     for name, data in files.items():
         atomic_write(target_path(destination, name), data)
     atomic_write(existing, manifest_data)
 
 
-def install_compat():
+def install_compat(progress=print, cancelled=None):
     if (COMPAT/'ollama.exe').exists():
         version = subprocess.run([str(COMPAT/'ollama.exe'), '--version'], capture_output=True, text=True, timeout=15)
         if '0.24.0' in version.stdout+version.stderr:
             return
         raise RuntimeError('A different compatibility runtime is installed; refusing to overwrite it.')
-    print('Downloading official Ollama 0.24.0 compatibility runtime (large download)…', flush=True)
+    progress('正在下載官方 Vision 相容服務（約 2.1 GB）…')
     req = Request('https://api.github.com/repos/ollama/ollama/releases/tags/v0.24.0', headers={'User-Agent': 'OptiiChat-Installer'})
     with urlopen(req, timeout=30) as response:
         release = json.load(response)
@@ -72,16 +74,20 @@ def install_compat():
         with urlopen(url, timeout=60) as response, archive_path.open('wb') as output:
             total = 0
             while chunk := response.read(1024*1024):
+                if cancelled and cancelled.is_set():
+                    raise RuntimeError('下載已取消。')
                 output.write(chunk)
                 checksum.update(chunk)
                 total += len(chunk)
-                print(f'\r{total/1024**2:.0f} / {asset["size"]/1024**2:.0f} MB', end='', flush=True)
-        print()
+                progress(f'下載相容服務：{total/1024**2:.0f} / {asset["size"]/1024**2:.0f} MB')
+        progress('正在驗證及解壓縮相容服務…')
         if checksum.hexdigest() != expected.split(':', 1)[1]:
             raise RuntimeError('Ollama download checksum mismatch.')
         staged = Path(temp)/'runtime'
         with zipfile.ZipFile(archive_path) as archive:
             for entry in archive.infolist():
+                if cancelled and cancelled.is_set():
+                    raise RuntimeError('安裝已取消。')
                 name = PurePosixPath(entry.filename)
                 if name.is_absolute() or '..' in name.parts or '\\' in entry.filename or ':' in entry.filename:
                     raise RuntimeError('Unsafe runtime archive path.')
@@ -102,7 +108,9 @@ def install_compat():
 def create_desktop_shortcut():
     """Use Windows' actual desktop folder, including OneDrive redirection."""
     app = LOCAL/'OptiiChat'/'app'
-    pythonw = LOCAL/'OptiiChat'/'runtime'/'Scripts'/'pythonw.exe'
+    pythonw = LOCAL/'OptiiChat'/'python'/'pythonw.exe'
+    if not pythonw.is_file():
+        pythonw = LOCAL/'OptiiChat'/'runtime'/'Scripts'/'pythonw.exe'
     if not pythonw.is_file():
         pythonw = COMPAT/'ui-venv'/'Scripts'/'pythonw.exe'
     if not pythonw.is_file() or not (app/'opti_bootstrap.py').is_file():
@@ -124,22 +132,29 @@ canvas.save(sys.argv[2], format='ICO', sizes=[(n,n) for n in (16,24,32,48,64,128
     script = '''$ErrorActionPreference = 'Stop'
 $desktop = [Environment]::GetFolderPath('DesktopDirectory')
 if (-not $desktop) { throw 'Windows desktop folder is unavailable.' }
-$shortcutPath = Join-Path $desktop 'OptiiChat.lnk'
+$shortcutPath = Join-Path $desktop 'OptiChat.lnk'
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = $env:OPTII_SHORTCUT_PYTHON
 $shortcut.Arguments = '"' + (Join-Path $env:OPTII_SHORTCUT_APP 'opti_bootstrap.py') + '"'
 $shortcut.WorkingDirectory = $env:OPTII_SHORTCUT_APP
 $shortcut.IconLocation = $env:OPTII_SHORTCUT_ICON + ',0'
-$shortcut.Description = 'OptiiChat - Local AI workspace'
+$shortcut.Description = 'OptiChat - Local AI workspace'
 $shortcut.Save()
+$legacyPath = Join-Path $desktop 'OptiiChat.lnk'
+if (Test-Path -LiteralPath $legacyPath) {
+    $legacy = $shell.CreateShortcut($legacyPath)
+    if ($legacy.Arguments -eq $shortcut.Arguments -and $legacy.WorkingDirectory -eq $shortcut.WorkingDirectory) {
+        Remove-Item -LiteralPath $legacyPath
+    }
+}
 '''
     environment = dict(os.environ, OPTII_SHORTCUT_APP=str(app),
                        OPTII_SHORTCUT_PYTHON=str(pythonw), OPTII_SHORTCUT_ICON=str(icon))
     encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
     subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
                    env=environment, check=True, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
-    print('OptiiChat desktop shortcut created.')
+    print('OptiChat desktop shortcut created.')
 
 
 def main():
@@ -160,7 +175,18 @@ def main():
 
 if __name__ == '__main__':
     try:
-        main()
+        if '--install-bundled' in sys.argv:
+            import argparse
+            parser = argparse.ArgumentParser()
+            parser.add_argument('--install-bundled', action='store_true')
+            parser.add_argument('--destination')
+            parser.add_argument('--no-shortcut', action='store_true')
+            args = parser.parse_args()
+            install_app(destination=args.destination)
+            if not args.no_shortcut:
+                create_desktop_shortcut()
+        else:
+            main()
     except Exception as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)

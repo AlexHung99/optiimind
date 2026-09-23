@@ -101,7 +101,7 @@ def check_for_update(current=VERSION, directory=None, force=False):
     pending = directory/'pending.json'
     if pending.exists():
         item = json.loads(pending.read_text(encoding='utf-8'))
-        if version_tuple(item['version']) > version_tuple(current):
+        if version_tuple(item['version']) > version_tuple(current) and not force:
             return '新版 '+item['version']+' 已下載，下次啟動套用。'
     checked = directory/'last-check'
     if not force and checked.exists() and time.time()-checked.stat().st_mtime < 24*3600:

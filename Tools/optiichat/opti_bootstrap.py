@@ -40,6 +40,9 @@ def main():
                     (UPDATE_DIR/'last-error.txt').unlink(missing_ok=True)
                 except Exception as error:
                     (UPDATE_DIR/'last-error.txt').write_text(str(error), encoding='utf-8')
+                from opti_setup import dependencies_ready, run_setup
+                if not dependencies_ready() and not run_setup():
+                    return
             subprocess.Popen([sys.executable, str(root/'opti_app.py')], cwd=root, creationflags=subprocess.CREATE_NO_WINDOW)
             # Keep a second launcher from updating files before the new app claims its mutex.
             import time

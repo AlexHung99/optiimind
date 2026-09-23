@@ -5,3 +5,4 @@ nvidia-ml-py==13.610.43
 pyttsx3==2.99
 pywin32==312
 comtypes==1.4.16
+pypdfium2==5.12.1
