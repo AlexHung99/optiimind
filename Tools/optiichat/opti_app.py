@@ -1,5 +1,7 @@
 """OptiiChat desktop interface; all widgets are owned by the Tk thread."""
 from copy import deepcopy
+import ctypes
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -27,8 +29,12 @@ from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch
                        ModelDownload, initialize_models, model_choices, model_service_kind, select_installed_defaults)
 
 ASSETS = Path(__file__).with_name('opti_assets')
-LIGHT = dict(bg='#F3F4F1', paper='#FFFFFF', ink='#14161A', muted='#6F756F', line='#DADDD7', accent='#087E7A', gold='#89692E')
-DARK = dict(bg='#14161A', paper='#202427', ink='#F3F4F1', muted='#AAB4AD', line='#394144', accent='#2FD4C8', gold='#D8B978')
+LIGHT = dict(bg='#EAF3F5', rail='#DFEBEF', panel='#F7FBFD', chat='#FFFFFF',
+             user_card='#E3F8FA', assistant_card='#F3F8FA', input='#FFFFFF', selected='#C6F1F3',
+             paper='#FFFFFF', ink='#142A38', muted='#647D8E', line='#B8D1D9', accent='#087E88', gold='#087E88')
+DARK = dict(bg='#091720', rail='#0A1925', panel='#102330', chat='#0D1C27',
+            user_card='#103344', assistant_card='#172D3A', input='#142B39', selected='#0A3D4B',
+            paper='#132735', ink='#EDF4FA', muted='#9DAFBE', line='#29495B', accent='#38E3EE', gold='#38E3EE')
 
 
 def app_icon(size, background=(0, 0, 0, 0)):
@@ -81,8 +87,8 @@ class OptiiApp(ChatApp):
         self.update_status = tk.StringVar(root, value='目前版本 '+VERSION)
         super().__init__(root)
         root.title('OptiChat · 本機 AI 工作室')
-        root.geometry('1180x940')
-        root.minsize(980, 740)
+        root.geometry('1410x960')
+        root.minsize(1050, 740)
         self.fast.set(self.settings['fast_image'])
         self.apply_theme()
         self.icon_images = [ImageTk.PhotoImage(app_icon(size)) for size in (256, 128, 64, 48, 32, 24, 20, 16)]
@@ -105,96 +111,8 @@ class OptiiApp(ChatApp):
         return widget
 
     def _build(self):
-        self.route = tk.StringVar(value='自動分流')
-        self.metrics = tk.StringVar(value='CPU —   GPU —')
-        self.audio_status = tk.StringVar(value='語音待命')
-        style = ttk.Style(self.root)
-        style.theme_use('clam')
-        shell = self.frame(self.root)
-        shell.pack(fill='both', expand=True)
-        sidebar = self.frame(shell, width=260, padx=15, pady=18)
-        sidebar.pack(side='left', fill='y')
-        sidebar.pack_propagate(False)
-        history_heading = self.label(sidebar, '對話紀錄', color='gold')
-        history_heading.configure(font=('Microsoft JhengHei UI', 15, 'bold'))
-        history_heading.pack(anchor='w', pady=(0, 12))
-        self.new_button = ttk.Button(sidebar, text='＋ 新對話', command=self.new_chat)
-        self.new_button.pack(fill='x')
-        self.conversation_list = tk.Listbox(sidebar, relief='flat', borderwidth=0,
-                                             font=('Microsoft JhengHei UI', 10), activestyle='none')
-        self.roles.append((self.conversation_list, 'bg', 'ink'))
-        self.conversation_list.pack(fill='both', expand=True, pady=(16, 8))
-        self.conversation_list.bind('<<ListboxSelect>>', self.select_conversation)
-        self.conversation_list.bind('<F2>', self.rename_conversation)
-        ttk.Button(sidebar, text='重新命名', command=self.rename_conversation).pack(fill='x')
-        ttk.Button(sidebar, text='重新檢查模型', command=self.refresh_models).pack(fill='x', pady=(10, 0))
-        center = self.frame(shell)
-        center.pack(side='left', fill='both', expand=True)
-        header = self.frame(center, padx=26, pady=16)
-        header.pack(fill='x')
-        self.logo = self.label(header)
-        self.logo.pack(side='left', padx=(0, 14))
-        brand = self.label(header, 'Optiimind', color='ink')
-        brand.configure(font=('Georgia', 26, 'bold'))
-        brand.pack(side='left')
-        self.label(header, 'OptiChat', color='muted').pack(side='left', padx=20)
-        ttk.Button(header, text='設定', command=self.open_settings).pack(side='right')
-        toolbar = self.frame(center, padx=26, pady=8)
-        toolbar.pack(fill='x')
-        self.label(toolbar, textvariable=self.status, color='accent', wraplength=530, justify='left').pack(side='left')
-        ttk.Button(toolbar, text='複製回覆', command=self.copy_answer).pack(side='right', padx=6)
-        self.capture_button = ttk.Button(toolbar, text='截圖', command=self.take_screenshot)
-        self.capture_button.pack(side='right', padx=6)
-        self.root.bind('<Control-Shift-S>', self.take_screenshot)
-        footer = self.frame(center, padx=26, pady=8)
-        footer.pack(side='bottom', fill='x')
-        self.label(footer, textvariable=self.metrics, color='muted').pack(side='left')
-        self.label(footer, 'Ctrl+Enter 傳送 · × 常駐', color='muted').pack(side='right')
-        composer = self.frame(center, padx=26, pady=10)
-        composer.pack(side='bottom', fill='x')
-        actions = self.frame(composer)
-        actions.pack(side='right', padx=(12, 0))
-        self.send_button = ttk.Button(actions, text='傳送 ↗', style='Accent.TButton', command=self.send, state='disabled')
-        self.send_button.pack(fill='x')
-        self.stop_button = ttk.Button(actions, text='停止初始化', command=self.stop)
-        self.stop_button.pack(fill='x', pady=(6, 0))
-        self.attach_button = ttk.Button(composer, text='＋', width=3, command=self.choose_file)
-        self.attach_button.pack(side='left', padx=(0, 8), anchor='s')
-        input_area = self.frame(composer)
-        input_area.pack(fill='both', expand=True)
-        self.input = tk.Text(input_area, height=3, wrap='word', relief='flat', padx=14, pady=10,
-                             font=('Microsoft JhengHei UI', 11), undo=True)
-        self.input.pack(fill='both', expand=True)
-        self.roles.append((self.input, 'paper', 'ink'))
-        self.input.bind('<Control-Return>', self.keyboard_send)
-        attachment = self.frame(input_area)
-        attachment.pack(fill='x')
-        self.preview_label = self.label(attachment, '', color='muted', anchor='w')
-        self.preview_label.pack(side='left', fill='x', expand=True)
-        self.image_name = self.preview_label
-        self.remove_button = ttk.Button(attachment, text='×', width=3, command=self.clear_image, state='disabled')
-        self.remove_button.pack(side='right')
-        self.page_button = ttk.Button(attachment, text='選頁', command=self.open_pdf_page, state='disabled')
-        self.page_button.pack(side='right', padx=6)
-        self.pdf_button = self.attach_button
-        self.fast_check = ttk.Checkbutton(attachment, variable=self.fast)
-        self.speak_button = ttk.Button(footer, text='朗讀', command=self.speak)
-        self.speak_button.pack(side='right', padx=8)
-        ttk.Button(footer, text='停止語音', command=self.stop_speech).pack(side='right')
-        ttk.Button(footer, text='匯出 WAV', command=self.export_audio).pack(side='right')
-        chat = self.frame(center, role='paper', padx=20, pady=8)
-        chat.pack(fill='both', expand=True)
-        bar = ttk.Scrollbar(chat)
-        bar.pack(side='right', fill='y')
-        self.transcript = tk.Text(chat, wrap='word', state='disabled', relief='flat', padx=22, pady=20,
-                                  font=('Microsoft JhengHei UI', 11), spacing3=9, yscrollcommand=bar.set)
-        self.transcript.pack(fill='both', expand=True)
-        bar.configure(command=self.transcript.yview)
-        self.roles.append((self.transcript, 'paper', 'ink'))
-        self.write('從一句話開始，或按 ＋ 加入圖片、PDF。\n\n', 'note')
-        self.refresh_conversations()
-        self.configure_drop()
-        self.input.focus_set()
+        from opti_ui import build_ui
+        build_ui(self)
 
     def refresh_conversations(self):
         self.conversation_index = list_records()
@@ -210,6 +128,8 @@ class OptiiApp(ChatApp):
                         break
         finally:
             self._listing = False
+        from opti_ui import build_history_cards
+        build_history_cards(self)
 
     def persist_conversation(self):
         if not self.conversation:
@@ -248,6 +168,8 @@ class OptiiApp(ChatApp):
             self.input.delete('1.0', 'end')
             self.input.insert('1.0', record.get('draft', ''))
             self.refresh_conversations()
+            from opti_ui import render_turns
+            render_turns(self)
         except (OSError, ValueError, KeyError, TypeError) as error:
             self.status.set('無法開啟對話：'+str(error))
 
@@ -279,6 +201,8 @@ class OptiiApp(ChatApp):
         self.conversation = None
         super().new_chat()
         self.refresh_conversations()
+        from opti_ui import render_turns
+        render_turns(self)
 
     def resolved_theme(self):
         if self.settings['theme'] != 'system':
@@ -294,22 +218,24 @@ class OptiiApp(ChatApp):
         self.last_theme = theme
         p = DARK if theme == 'dark' else LIGHT
         self.root.configure(bg=p['bg'])
-        remaining = []
-        for widget, bg, fg in self.roles:
-            if widget.winfo_exists():
-                widget.configure(bg=p[bg])
-                if fg:
-                    widget.configure(fg=p[fg])
-                if isinstance(widget, tk.Text):
-                    widget.configure(insertbackground=p['ink'], selectbackground=p['accent'])
-                remaining.append((widget, bg, fg))
-        self.roles = remaining
+        self.root.after(650, lambda chosen=theme: self.set_titlebar_theme(chosen))
+        from opti_ui import paint_roles
+        paint_roles(self, theme)
+        self.transcript.configure(bg=p['paper'], fg=p['ink'])
         style = ttk.Style(self.root)
         style.configure('.', font=('Microsoft JhengHei UI', 10), background=p['bg'], foreground=p['ink'])
-        style.configure('TButton', padding=(10, 7), background=p['paper'], foreground=p['ink'], borderwidth=0)
-        style.map('TButton', background=[('active', p['line'])], foreground=[('disabled', p['muted'])])
-        style.configure('Accent.TButton', background='#0ABAB5', foreground='#101817')
-        style.map('Accent.TButton', background=[('active', '#2FD4C8'), ('disabled', p['line'])])
+        style.configure('TButton', padding=(10, 7), background=p['panel'], foreground=p['ink'], borderwidth=0)
+        style.map('TButton', background=[('active', p['selected'])], foreground=[('disabled', p['muted'])])
+        style.configure('Outline.TButton', padding=(10, 8), background=p['panel'], foreground=p['ink'], borderwidth=1,
+                        bordercolor=p['line'], relief='flat')
+        style.map('Outline.TButton', background=[('active', p['selected'])])
+        style.configure('Primary.TButton', padding=(11, 8), background=p['selected'], foreground=p['ink'],
+                        borderwidth=1, bordercolor=p['accent'], relief='flat')
+        style.map('Primary.TButton', background=[('active', p['accent'])], foreground=[('active', p['bg'])])
+        style.configure('Rail.TButton', padding=(6, 10), background=p['rail'], foreground=p['ink'], borderwidth=0,
+                        font=('Segoe UI Symbol', 17))
+        style.map('Rail.TButton', background=[('active', p['selected'])])
+        style.configure('Accent.TButton', background=p['accent'], foreground=p['bg'])
         style.configure('TEntry', fieldbackground=p['paper'], foreground=p['ink'], insertcolor=p['ink'])
         style.configure('TCombobox', fieldbackground=p['paper'], foreground=p['ink'], arrowcolor=p['ink'])
         style.map('TCombobox', fieldbackground=[('readonly', p['paper'])], foreground=[('readonly', p['ink'])])
@@ -321,11 +247,27 @@ class OptiiApp(ChatApp):
         for tag, color in [('user', 'accent'), ('assistant', 'gold'), ('note', 'muted')]:
             self.transcript.tag_configure(tag, foreground=p[color], font=('Microsoft JhengHei UI', 10, 'bold' if tag != 'note' else 'normal'))
         self.transcript.tag_configure('error', foreground='#E57373' if theme == 'dark' else '#A23F3F')
-        logo = Image.open(ASSETS/('logo-white.png' if theme == 'dark' else 'logo-black.png')).convert('RGBA')
-        logo.thumbnail((74, 44), Image.Resampling.LANCZOS)
+        logo = Image.open(ASSETS/'logo-teal.png').convert('RGBA')
+        logo.thumbnail((52, 38), Image.Resampling.LANCZOS)
         self.logo_photo = ImageTk.PhotoImage(logo)
         self.logo.configure(image=self.logo_photo)
-        self.conversation_list.configure(selectbackground=p['accent'], selectforeground=p['paper'])
+        self.conversation_list.configure(bg=p['panel'], fg=p['ink'], selectbackground=p['selected'], selectforeground=p['ink'])
+        self.refresh_conversations()
+
+    def set_titlebar_theme(self, theme):
+        if self.closed or not self.root.winfo_exists():
+            return
+        try:
+            dark = ctypes.c_int(theme == 'dark')
+            ctypes.windll.user32.GetParent.argtypes = [ctypes.c_void_p]
+            ctypes.windll.user32.GetParent.restype = ctypes.c_void_p
+            child = ctypes.c_void_p(self.root.winfo_id())
+            hwnd = ctypes.windll.user32.GetParent(child) or child.value
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                ctypes.c_void_p(hwnd), 20,
+                ctypes.byref(dark), ctypes.sizeof(dark))
+        except (AttributeError, OSError):
+            pass
 
     def style_scrollbars(self, style, theme, palette):
         # Keep ttk's native dragging, page scrolling, and keyboard behavior.
@@ -417,7 +359,7 @@ class OptiiApp(ChatApp):
         try:
             from tkinterdnd2 import DND_FILES, TkinterDnD
             TkinterDnD.require(self.root)
-            for widget in (self.input, self.transcript):
+            for widget in (self.root,):
                 widget.drop_target_register(DND_FILES)
                 widget.dnd_bind('<<Drop>>', self.on_drop)
         except Exception as error:
@@ -492,6 +434,8 @@ class OptiiApp(ChatApp):
             self.preview = None
             self.preview_label.configure(image='', text='圖片 · '+self.pending_path.name, width=0, height=1)
             self.remove_button.configure(state='normal')
+            from opti_ui import show_attachment
+            show_attachment(self)
             self.remove_capture_file(previous)
             self.pending_document = None
             self.pdf_image_note = ''
@@ -527,6 +471,8 @@ class OptiiApp(ChatApp):
                 self.image_name.configure(text=self.pdf_image_note)
                 self.pdf_source = document
                 self.page_button.configure(state='normal')
+                from opti_ui import show_attachment
+                show_attachment(self, pdf=True)
                 self.route.set('自動分流')
                 self.fast.set(False)
                 self.status.set('PDF 頁面已附加 · 輸入問題後按傳送')
@@ -543,6 +489,8 @@ class OptiiApp(ChatApp):
         self.preview_label.configure(image='', text=f"PDF · {document['pages']} 頁 · 文字已擷取")
         self.image_name.configure(text=document['path'].name)
         self.remove_button.configure(state='normal')
+        from opti_ui import show_attachment
+        show_attachment(self, pdf=True)
         _, label = pdf_prompt(document, '', self.settings['text'])
         self.status.set(label+' · 尚未傳送')
 
@@ -581,6 +529,8 @@ class OptiiApp(ChatApp):
         self.pdf_image_note = ''
         self.pdf_source = None
         self.page_button.configure(state='disabled')
+        from opti_ui import hide_attachment
+        hide_attachment(self)
 
     def set_busy(self, busy):
         super().set_busy(busy)
@@ -642,7 +592,14 @@ class OptiiApp(ChatApp):
             return
         if self.route_mode() == 'text' and self.pending_path:
             self.route.set('自動分流')
-            return
+        question = self.input.get('1.0', 'end-1c').strip() or (self.default_prompt() if self.has_attachment() else '')
+        attachment = ''
+        if self.pending_document:
+            _, attachment = pdf_prompt(self.pending_document, '', self.settings['text'])
+        elif self.pdf_image_note:
+            attachment = self.pdf_image_note
+        elif self.pending_path:
+            attachment = '圖片：'+self.pending_path.name
         pending = {'role': 'user', 'content': ''}
         if self.pending_path:
             pending['images'] = ['pending']
@@ -651,10 +608,18 @@ class OptiiApp(ChatApp):
             self.status.set('目前選取的模型未安裝或不支援此功能，請在設定重新選擇。')
             return
         was_busy = self.busy
+        self._visual_error = None
         super().send()
         if not was_busy and self.busy:
             if self.conversation is None:
                 self.conversation = new_record()
+            record = {'time': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                      'question': question, 'attachment': attachment,
+                      'model': self.settings[self.active_kind]['model']+' · '+self.active_device,
+                      'answer': ''}
+            self.conversation.setdefault('display_turns', []).append(record)
+            from opti_ui import add_turn
+            add_turn(self, record)
             self.persist_conversation()
 
     def poll(self):
@@ -693,6 +658,8 @@ class OptiiApp(ChatApp):
                 elif kind == 'token':
                     self.answer += value
                     self.write(value)
+                    if self.visual_answer_var:
+                        self.visual_answer_var.set(self.answer)
                 elif kind == 'complete':
                     self.history.extend([self.turn, {'role': 'assistant', 'content': self.answer}])
                     self.history = self.history[-6:]
@@ -702,6 +669,9 @@ class OptiiApp(ChatApp):
                         self.write('\n（已達長度上限，可輸入「請繼續」。）', 'note')
                 elif kind == 'error':
                     self.write('\n回覆失敗：'+value+'\n', 'error')
+                    self._visual_error = value
+                    if self.visual_answer_var:
+                        self.visual_answer_var.set('回覆失敗：'+value)
                     self.completed_turn = False
                 elif kind == 'finished':
                     if value:
@@ -710,6 +680,14 @@ class OptiiApp(ChatApp):
                     self.status.set(f'● {self.active_kind} / {self.active_device} · {int(time.monotonic()-self.started)} 秒')
                     self.set_busy(False)
                     self.request = None
+                    if self.conversation and self.conversation.get('display_turns'):
+                        current = self.conversation['display_turns'][-1]
+                        current['answer'] = self.answer or ('回覆失敗：'+self._visual_error if self._visual_error else
+                                                            '已停止。' if value else '未取得回覆。')
+                        if self.visual_answer_var:
+                            self.visual_answer_var.set(current['answer'])
+                        from opti_ui import render_turns
+                        render_turns(self)
                     self.persist_conversation()
                     if self.settings['auto_speak'] and getattr(self, 'completed_turn', False) and not value:
                         self.speak(self.last_answer)
