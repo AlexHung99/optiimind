@@ -102,7 +102,7 @@ def check_for_update(current=VERSION, directory=None, force=False):
     if pending.exists():
         item = json.loads(pending.read_text(encoding='utf-8'))
         if version_tuple(item['version']) > version_tuple(current) and not force:
-            return '新版 '+item['version']+' 已下載，下次啟動套用。'
+            return '新版 '+item['version']+' 已下載；從系統匣「結束程式」後重新開啟即可套用。'
     checked = directory/'last-check'
     if not force and checked.exists() and time.time()-checked.stat().st_mtime < 24*3600:
         return '已啟用自動更新（每天檢查一次）。'
@@ -121,7 +121,7 @@ def check_for_update(current=VERSION, directory=None, force=False):
     atomic_write(directory/filename, data)
     atomic_write(pending, json.dumps({'version': version, 'sha256': manifest['sha256'], 'archive': filename}).encode())
     checked.touch()
-    return '新版 '+version+' 已下載，下次啟動套用。'
+    return '新版 '+version+' 已下載；從系統匣「結束程式」後重新開啟即可套用。'
 
 
 def target_path(root, name):

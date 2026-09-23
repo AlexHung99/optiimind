@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 
 from opti_update import UPDATE_DIR, app_running, apply_pending
 
@@ -21,6 +22,19 @@ def install_requirements(data):
         path.unlink(missing_ok=True)
 
 
+def ready_to_update(directory=UPDATE_DIR, checks=20, interval=.25):
+    """Allow a tray exit to finish before deciding whether startup may update files."""
+    if not app_running():
+        return True
+    if not (Path(directory)/'pending.json').is_file():
+        return False
+    for _ in range(checks):
+        time.sleep(interval)
+        if not app_running():
+            return True
+    return False
+
+
 def main():
     root = Path(__file__).resolve().parent
     UPDATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -34,7 +48,7 @@ def main():
         lock.seek(0)
         msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
         try:
-            if not app_running():
+            if ready_to_update():
                 try:
                     apply_pending(root, installer=install_requirements)
                     (UPDATE_DIR/'last-error.txt').unlink(missing_ok=True)
@@ -45,7 +59,6 @@ def main():
                     return
             subprocess.Popen([sys.executable, str(root/'opti_app.py')], cwd=root, creationflags=subprocess.CREATE_NO_WINDOW)
             # Keep a second launcher from updating files before the new app claims its mutex.
-            import time
             for _ in range(50):
                 if app_running():
                     break

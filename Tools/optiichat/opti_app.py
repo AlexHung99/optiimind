@@ -824,6 +824,8 @@ class OptiiApp(ChatApp):
                 elif kind == 'update':
                     self.update_busy = False
                     self.update_status.set(value)
+                    if '已下載' in value:
+                        self.status.set(value)
         except queue.Empty:
             pass
         self.root.after(100, self.poll_extra)
@@ -948,7 +950,7 @@ class SettingsWindow(tk.Toplevel):
         self.check(general, '模型完成回覆後自動朗讀', 'auto_speak')
         self.check(general, '預設快速圖片模式（560 px）', 'fast_image')
         self.check(general, '啟動時自動檢查及下載更新', 'auto_update')
-        self.note(general, '新版下載後於下次啟動自動套用，不會中斷對話。\n更新只更換程式檔案，保留設定與模型。')
+        self.note(general, '新版下載後，請從系統匣選「結束程式」再重新開啟，更新會在啟動前套用。\n按視窗右上角 × 只會隱藏；更新保留設定與模型。')
         ttk.Label(general, textvariable=app.update_status, wraplength=680).pack(anchor='w', pady=8)
         ttk.Button(general, text='立即檢查更新', command=lambda: app.check_updates(True)).pack(anchor='w')
         self.note(general, '系統匣右鍵可開啟設定或結束程式。\n聊天紀錄只存於記憶體，結束程式即清除。\nCPU／GPU 數值是整台電腦的即時使用率。\n\n介面與原始標誌取自 optiimind.com，為你的本機工具。')

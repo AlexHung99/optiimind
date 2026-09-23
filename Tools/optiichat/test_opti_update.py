@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 import opti_update as update
+import opti_bootstrap as bootstrap
 from opti_install import install_app
 
 
@@ -23,6 +24,27 @@ def archive(version='1.1.0', extra=None):
 
 
 class UpdateTests(unittest.TestCase):
+    def test_launcher_waits_for_tray_exit_when_update_is_pending(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            (directory/'pending.json').write_text('{}')
+            with patch.object(bootstrap, 'app_running', side_effect=[True, True, False]) as running, \
+                 patch.object(bootstrap.time, 'sleep') as sleep:
+                self.assertTrue(bootstrap.ready_to_update(directory, checks=3))
+            self.assertEqual(running.call_count, 3)
+            self.assertEqual(sleep.call_count, 2)
+            with patch.object(bootstrap, 'app_running', return_value=True), \
+                 patch.object(bootstrap.time, 'sleep') as sleep:
+                self.assertFalse(bootstrap.ready_to_update(directory, checks=2))
+            self.assertEqual(sleep.call_count, 2)
+
+    def test_launcher_does_not_wait_without_pending_update(self):
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(bootstrap, 'app_running', return_value=True), \
+             patch.object(bootstrap.time, 'sleep') as sleep:
+            self.assertFalse(bootstrap.ready_to_update(temp))
+            sleep.assert_not_called()
+
     def test_installer_upgrade_does_not_replace_unmanaged_new_filename(self):
         with tempfile.TemporaryDirectory() as temp:
             source, installed = Path(temp)/'source', Path(temp)/'installed'
