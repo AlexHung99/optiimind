@@ -4,11 +4,11 @@ Windows 本機 AI 聊天工作室：Ollama 文字／圖片聊天、框選截圖�
 
 - **介紹與下載：** https://optiimind.com/Tools/optiichat/
 - **程式碼：** 本目錄
-- **目前版本：** 1.3.0
+- **目前版本：** 1.3.1
 
 ## 安裝
 
-1. 從介紹頁下載 `OptiChat-Setup-1.3.0.exe`，執行安裝精靈；不需要自行安裝 Python。
+1. 從介紹頁下載 `OptiChat-Setup-1.3.1.exe`，執行安裝精靈；不需要自行安裝 Python。
 2. 安裝包含獨立 Python 3.14.3、介面、PDF 及朗讀套件，放在 `%LOCALAPPDATA%\OptiiChat\python`；程式在同一資料夾下的 `app`。為保留舊版設定與更新相容性，內部資料夾名稱沿用 OptiiChat。
 3. 自動建立桌面與開始功能表「OptiChat」捷徑。雙擊即可開啟。
 4. 初次啟動若尚未安裝 Ollama，會顯示官方下載入口；完成 Ollama 安裝後按「繼續」。缺少 Vision 相容服務時會下載官方 0.24.0 Windows ZIP（約 2.1 GB），驗證官方 SHA-256，並安裝 CPU／Vulkan 檔案。
@@ -31,7 +31,7 @@ Windows 本機 AI 聊天工作室：Ollama 文字／圖片聊天、框選截圖�
 - 主視窗採深色青藍聊天版面：左側快捷列與歷史對話、中間對話卡片、上方狀態及操作列、下方輸入與 CPU／GPU 資源列。可在設定改為亮色或跟隨 Windows。
 - 設定 → 聊天模型：選已安裝模型及 CPU／GPU。圖片選單只列支援 vision 的模型。
 - 左側「＋ 新對話」開始新聊天；歷史清單以首次對話時間命名，可選取並按「重新命名」（或 F2）修改。紀錄存在本機 `%LOCALAPPDATA%\OptiiChat\history`，重啟後仍可讀取。歷史圖片只保存文字註記，不保存圖片副本；重新分析圖片時需重新附加。
-- 按輸入框旁「＋」選圖片／PDF，或直接拖入聊天區。上方「截圖」或程式內 `Ctrl+Shift+S` 框選，放開自動附加；Esc／右鍵取消。
+- 按輸入框旁「+」選圖片／PDF，或直接拖入聊天區。旁邊的「截圖」或程式內 `Ctrl+Shift+S` 可框選畫面，放開後圖片會顯示在輸入框預覽；Esc／右鍵取消。
 - `Ctrl+Enter` 傳送。關閉視窗預設收至系統匣；從系統匣選「結束程式」才真正離開。
 - 啟動時偵測 NVIDIA 顯存；未達單卡 12 GB 建議配置或無法偵測時，隱藏 Breeze、Voice Design／Clone 與服務參數頁，改用 Windows 朗讀。原有聲音描述與參考音檔設定保留。符合硬體條件仍須另外啟動相容的 Breeze 服務。
 - Windows 語音可直接朗讀與匯出 WAV。Breeze-TTS-2 僅提供 API 串接，需要另行啟動官方 CUDA 服務；不包含模型權重。
@@ -82,4 +82,4 @@ python installer/build.py --makensis C:\tools\nsis-3.12\makensis.exe
 - 網路用於安裝相依套件、模型下載、GitHub 更新，以及使用者自行指定的 Breeze 服務。
 - 官網 Logo 來源見 [opti_assets/README.md](opti_assets/README.md)。Breeze 權重與自架產出受其研究及非商業授權限制；本儲存庫不散布該模型。
 
-38 項自動測試涵蓋聊天串流、截圖、模型初始化、語音串接與更新驗證／還原。測試不代表所有硬體組合皆可執行所有模型。
+39 項自動測試涵蓋聊天串流、截圖、模型初始化、語音串接與更新驗證／還原。測試不代表所有硬體組合皆可執行所有模型。

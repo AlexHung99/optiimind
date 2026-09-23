@@ -34,7 +34,7 @@ def build_ui(app):
     metric.configure(font=('Segoe UI', 10))
     metric.pack(side='left', pady=16)
     app.label(bottom, 'Ctrl+Enter 傳送 · × 常駐', role='panel', color='muted').pack(side='right', pady=16)
-    app.speak_button = _button(bottom, '◖)) 朗讀', app.speak)
+    app.speak_button = _button(bottom, '朗讀', app.speak)
     app.speak_button.pack(side='right', padx=18, pady=9)
     _button(bottom, '匯出 WAV', app.export_audio).pack(side='right', pady=9)
     _button(bottom, '停止語音', app.stop_speech).pack(side='right', padx=5, pady=9)
@@ -44,10 +44,10 @@ def build_ui(app):
     rail = app.frame(shell, role='rail', width=74, padx=8, pady=18)
     rail.pack(side='left', fill='y')
     rail.pack_propagate(False)
-    _button(rail, '▢', app.new_chat, 'Rail.TButton', width=3).pack(fill='x', pady=(0, 18))
-    _button(rail, '＋', app.choose_file, 'Rail.TButton', width=3).pack(fill='x', pady=4)
-    _button(rail, '◷', lambda: app.conversation_list.focus_set(), 'Rail.TButton', width=3).pack(fill='x', pady=4)
-    _button(rail, '⚙', app.open_settings, 'Rail.TButton', width=3).pack(fill='x', pady=4)
+    _button(rail, '對話', app.new_chat, 'Rail.TButton').pack(fill='x', pady=(0, 18))
+    _button(rail, '附檔', app.choose_file, 'Rail.TButton').pack(fill='x', pady=4)
+    _button(rail, '歷史', lambda: app.conversation_list.focus_set(), 'Rail.TButton').pack(fill='x', pady=4)
+    _button(rail, '設定', app.open_settings, 'Rail.TButton').pack(fill='x', pady=4)
 
     history = app.frame(shell, role='panel', width=248, padx=14, pady=18,
                         highlightthickness=1)
@@ -56,10 +56,10 @@ def build_ui(app):
     heading = app.frame(history, role='panel')
     heading.pack(fill='x')
     title = app.label(heading, '對話紀錄', role='panel')
-    title.configure(font=('Microsoft JhengHei UI', 14, 'bold'))
+    title.configure(font=(app.ui_font, 14, 'bold'))
     title.pack(side='left')
-    _button(heading, '⌕', lambda: toggle_search(app), width=3).pack(side='right')
-    app.new_button = _button(history, '＋  新對話', app.new_chat, 'Primary.TButton')
+    _button(heading, '搜尋', lambda: toggle_search(app)).pack(side='right')
+    app.new_button = _button(history, '+  新對話', app.new_chat, 'Primary.TButton')
     app.new_button.pack(fill='x', pady=(17, 8))
     app.search_entry = ttk.Entry(history, textvariable=app.search_var)
     app.search_var.trace_add('write', lambda *_: build_history_cards(app))
@@ -78,44 +78,39 @@ def build_ui(app):
         app.history_canvas.configure(scrollregion=app.history_canvas.bbox('all')))
     app.history_canvas.bind('<Configure>', lambda event:
         app.history_canvas.itemconfigure(history_window, width=event.width))
-    _button(history, '✎  重新命名', app.rename_conversation).pack(fill='x', pady=(8, 4))
-    _button(history, '⟳  重新檢查模型', app.refresh_models).pack(fill='x')
+    _button(history, '重新命名', app.rename_conversation).pack(fill='x', pady=(8, 4))
+    _button(history, '重新檢查模型', app.refresh_models).pack(fill='x')
 
     center = app.frame(shell, role='bg')
     center.pack(side='left', fill='both', expand=True, padx=(0, 12), pady=(12, 12))
     toolbar = app.frame(center, role='panel', height=64, padx=16, highlightthickness=1)
     toolbar.pack(fill='x')
     toolbar.pack_propagate(False)
-    status_icon = app.label(toolbar, '▥', role='panel', color='accent')
-    status_icon.configure(font=('Segoe UI Symbol', 19))
-    status_icon.pack(side='left', padx=(0, 11))
     app.label(toolbar, textvariable=app.status, role='panel', color='accent',
               wraplength=470, justify='left').pack(side='left', fill='x', expand=True)
-    _button(toolbar, '⚙  設定', app.open_settings, 'Primary.TButton').pack(side='right', padx=(8, 0), pady=11)
-    _button(toolbar, '▤  複製回覆', app.copy_answer).pack(side='right', padx=5, pady=11)
-    app.capture_button = _button(toolbar, '▣  截圖', app.take_screenshot)
-    app.capture_button.pack(side='right', padx=5, pady=11)
     app.root.bind('<Control-Shift-S>', app.take_screenshot)
 
-    composer = app.frame(center, role='bg', height=128)
-    composer.pack(side='bottom', fill='x', pady=(10, 0))
-    composer.pack_propagate(False)
-    actions = app.frame(composer, role='bg', width=190)
+    app.composer = app.frame(center, role='bg', height=128)
+    app.composer.pack(side='bottom', fill='x', pady=(10, 0))
+    app.composer.pack_propagate(False)
+    actions = app.frame(app.composer, role='bg', width=190)
     actions.pack(side='right', fill='y', padx=(10, 0))
     actions.pack_propagate(False)
-    app.send_button = _button(actions, '➤  傳送', app.send, 'Primary.TButton')
+    app.send_button = _button(actions, '傳送', app.send, 'Primary.TButton')
     app.send_button.configure(state='disabled')
     app.send_button.pack(fill='x', pady=(0, 7))
-    app.stop_button = _button(actions, '■  停止初始化', app.stop)
+    app.stop_button = _button(actions, '停止初始化', app.stop)
     app.stop_button.pack(fill='x')
-    input_shell = app.frame(composer, role='input', highlightthickness=1, padx=10, pady=9)
+    input_shell = app.frame(app.composer, role='input', highlightthickness=1, padx=10, pady=9)
     input_shell.pack(fill='both', expand=True)
-    app.attach_button = _button(input_shell, '＋', app.choose_file, width=3)
+    app.attach_button = _button(input_shell, '+', app.choose_file, width=3)
     app.attach_button.pack(side='left', anchor='s', padx=(0, 7))
+    app.capture_button = _button(input_shell, '截圖', app.take_screenshot, width=5)
+    app.capture_button.pack(side='left', anchor='s', padx=(0, 8))
     input_body = app.frame(input_shell, role='input')
     input_body.pack(fill='both', expand=True)
     app.input = tk.Text(input_body, height=3, wrap='word', relief='flat', bd=0, padx=8, pady=5,
-                        font=('Microsoft JhengHei UI', 11), undo=True)
+                        font=(app.ui_font, 11), undo=True)
     app.roles.append((app.input, 'input', 'ink'))
     app.input.pack(fill='both', expand=True)
     app.input.bind('<Control-Return>', app.keyboard_send)
@@ -127,6 +122,7 @@ def build_ui(app):
     app.input.edit_modified(False)
     chip = app.frame(input_body, role='input', height=24)
     app.attachment_row = chip
+    app.preview_image = app.label(chip, '', role='input', color='muted')
     app.preview_label = app.label(chip, '', role='input', color='muted', anchor='w')
     app.preview_label.pack(side='left', fill='x', expand=True)
     app.image_name = app.preview_label
@@ -158,7 +154,7 @@ def build_ui(app):
         app.visual_canvas.itemconfigure(chat_window, width=event.width))
     app.root.bind('<MouseWheel>', lambda event: wheel(app, event), add=True)
     app.visual_answer_var = None
-    app.write('從一句話開始，或按 ＋ 加入圖片、PDF。\n\n', 'note')
+    app.write('從一句話開始，或按 + 加入圖片、PDF。\n\n', 'note')
     app.refresh_conversations()
     app.configure_drop()
     render_turns(app)
@@ -184,6 +180,12 @@ def toggle_search(app):
 
 def show_attachment(app, pdf=False):
     app.attachment_row.pack(fill='x')
+    if app.pending_path and app.preview:
+        app.preview_image.pack(side='left', before=app.preview_label, padx=(0, 9))
+        app.composer.configure(height=208)
+    else:
+        app.preview_image.pack_forget()
+        app.composer.configure(height=128)
     if pdf:
         app.page_button.pack(side='right', padx=5, before=app.remove_button)
     else:
@@ -191,7 +193,9 @@ def show_attachment(app, pdf=False):
 
 
 def hide_attachment(app):
+    app.preview_image.pack_forget()
     app.attachment_row.pack_forget()
+    app.composer.configure(height=128)
 
 
 def wheel(app, event):
@@ -219,11 +223,11 @@ def build_history_cards(app):
         name = record.get('title', '未命名對話')
         if len(name) > 14:
             name = name[:13]+'…'
-        btn = tk.Button(row, text='▢  '+name, anchor='w', relief='flat', bd=0, padx=2,
-                        font=('Microsoft JhengHei UI', 10), command=lambda i=index: choose_history(app, i))
+        btn = tk.Button(row, text=name, anchor='w', relief='flat', bd=0, padx=2,
+                        font=(app.ui_font, 10), command=lambda i=index: choose_history(app, i))
         app.roles.append((btn, role, 'ink'))
         btn.pack(side='left', fill='x', expand=True)
-        menu = tk.Button(row, text='⋯', relief='flat', bd=0, padx=1,
+        menu = tk.Button(row, text='...', relief='flat', bd=0, padx=1,
                          command=lambda i=index: rename_history(app, i))
         app.roles.append((menu, role, 'muted'))
         menu.pack(side='right')
@@ -254,10 +258,10 @@ def render_turns(app):
     turns = (app.conversation or {}).get('display_turns', [])
     if not turns:
         previous = (app.conversation or {}).get('transcript', '').strip()
-        text = previous if previous else '從一句話開始，或按 ＋ 加入圖片、PDF。'
+        text = previous if previous else '從一句話開始，或按 + 加入圖片、PDF。'
         welcome = app.label(app.visual_body, text, role='chat', color='muted',
                             justify='left', wraplength=680)
-        welcome.configure(font=('Microsoft JhengHei UI', 12))
+        welcome.configure(font=(app.ui_font, 12))
         welcome.pack(anchor='w', padx=28, pady=36)
     else:
         for turn in turns:
@@ -275,18 +279,18 @@ def add_turn(app, turn):
     user.pack(anchor='e', padx=(60, 24))
     question = app.label(user, turn.get('question', ''), role='user_card', color='ink',
                          justify='left', wraplength=650)
-    question.configure(font=('Microsoft JhengHei UI', 11))
+    question.configure(font=(app.ui_font, 11))
     question.pack(anchor='w')
     attachment = turn.get('attachment')
     if attachment:
-        info = app.label(user, '▣  '+attachment, role='user_card', color='muted',
+        info = app.label(user, '附件：'+attachment, role='user_card', color='muted',
                          justify='left', wraplength=620)
         info.pack(anchor='w', pady=(10, 0))
     assistant = app.frame(row, role='chat')
     assistant.pack(fill='x', pady=(22, 0))
-    header = app.label(assistant, '◢  '+turn.get('model', '本機模型')+'    '+stamp,
+    header = app.label(assistant, turn.get('model', '本機模型')+'    '+stamp,
                        role='chat', color='accent', anchor='w')
-    header.configure(font=('Microsoft JhengHei UI', 10, 'bold'))
+    header.configure(font=(app.ui_font, 10, 'bold'))
     header.pack(anchor='w', padx=10, pady=(0, 6))
     answer_card = app.frame(assistant, role='assistant_card', padx=20, pady=17, highlightthickness=1)
     answer_card.pack(fill='x', padx=(25, 145))
@@ -297,7 +301,7 @@ def add_turn(app, turn):
         answer_var = tk.StringVar(value='正在載入／思考…')
         answer = app.label(answer_card, textvariable=answer_var, role='assistant_card', color='ink',
                            justify='left', anchor='w', wraplength=730)
-        answer.configure(font=('Microsoft JhengHei UI', 11))
+        answer.configure(font=(app.ui_font, 11))
         answer.pack(fill='x')
         app.visual_answer_var = answer_var
     if app.last_theme:
@@ -320,7 +324,7 @@ def render_answer(app, parent, content):
         label = app.label(parent, value, role='assistant_card',
                           color='accent' if numbered else 'ink', justify='left',
                           anchor='w', wraplength=710)
-        label.configure(font=('Microsoft JhengHei UI', 11 if not heading else 12,
+        label.configure(font=(app.ui_font, 11 if not heading else 12,
                               'bold' if heading else 'normal'))
         label.pack(fill='x', pady=(2, 0))
 

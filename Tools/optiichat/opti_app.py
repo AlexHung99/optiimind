@@ -14,6 +14,7 @@ import threading
 import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
+from tkinter import font as tkfont
 import winsound
 import winreg
 
@@ -37,6 +38,22 @@ DARK = dict(bg='#091720', rail='#0A1925', panel='#102330', chat='#0D1C27',
             paper='#132735', ink='#EDF4FA', muted='#9DAFBE', line='#29495B', accent='#38E3EE', gold='#38E3EE')
 
 
+def ui_font_family(root):
+    """Use an installed Traditional Chinese UI font for text throughout the app."""
+    try:
+        available = {name.casefold(): name for name in tkfont.families(root)}
+    except tk.TclError:
+        available = {}
+    for preferred in ('Microsoft JhengHei UI', 'Microsoft JhengHei', 'Noto Sans CJK TC',
+                      'Noto Sans TC', 'Arial Unicode MS', 'Segoe UI'):
+        if preferred.casefold() in available:
+            return available[preferred.casefold()]
+    try:
+        return tkfont.nametofont('TkDefaultFont', root=root).actual('family')
+    except tk.TclError:
+        return 'Segoe UI'
+
+
 def app_icon(size, background=(0, 0, 0, 0)):
     """Fit the wide brand mark inside a square Windows icon without stretching."""
     with Image.open(ASSETS/'logo-teal.png') as source:
@@ -50,6 +67,7 @@ def app_icon(size, background=(0, 0, 0, 0)):
 
 class OptiiApp(ChatApp):
     def __init__(self, root):
+        self.ui_font = ui_font_family(root)
         self.config_error = None
         try:
             self.settings = load_settings()
@@ -106,7 +124,7 @@ class OptiiApp(ChatApp):
         return widget
 
     def label(self, parent, text='', role='bg', color='ink', **kwargs):
-        widget = tk.Label(parent, text=text, font=('Microsoft JhengHei UI', 10), **kwargs)
+        widget = tk.Label(parent, text=text, font=(self.ui_font, 10), **kwargs)
         self.roles.append((widget, role, color))
         return widget
 
@@ -223,7 +241,7 @@ class OptiiApp(ChatApp):
         paint_roles(self, theme)
         self.transcript.configure(bg=p['paper'], fg=p['ink'])
         style = ttk.Style(self.root)
-        style.configure('.', font=('Microsoft JhengHei UI', 10), background=p['bg'], foreground=p['ink'])
+        style.configure('.', font=(self.ui_font, 10), background=p['bg'], foreground=p['ink'])
         style.configure('TButton', padding=(10, 7), background=p['panel'], foreground=p['ink'], borderwidth=0)
         style.map('TButton', background=[('active', p['selected'])], foreground=[('disabled', p['muted'])])
         style.configure('Outline.TButton', padding=(10, 8), background=p['panel'], foreground=p['ink'], borderwidth=1,
@@ -233,7 +251,7 @@ class OptiiApp(ChatApp):
                         borderwidth=1, bordercolor=p['accent'], relief='flat')
         style.map('Primary.TButton', background=[('active', p['accent'])], foreground=[('active', p['bg'])])
         style.configure('Rail.TButton', padding=(6, 10), background=p['rail'], foreground=p['ink'], borderwidth=0,
-                        font=('Segoe UI Symbol', 17))
+                        font=(self.ui_font, 10))
         style.map('Rail.TButton', background=[('active', p['selected'])])
         style.configure('Accent.TButton', background=p['accent'], foreground=p['bg'])
         style.configure('TEntry', fieldbackground=p['paper'], foreground=p['ink'], insertcolor=p['ink'])
@@ -245,7 +263,7 @@ class OptiiApp(ChatApp):
         self.root.option_add('*TCombobox*Listbox.background', p['paper'])
         self.root.option_add('*TCombobox*Listbox.foreground', p['ink'])
         for tag, color in [('user', 'accent'), ('assistant', 'gold'), ('note', 'muted')]:
-            self.transcript.tag_configure(tag, foreground=p[color], font=('Microsoft JhengHei UI', 10, 'bold' if tag != 'note' else 'normal'))
+            self.transcript.tag_configure(tag, foreground=p[color], font=(self.ui_font, 10, 'bold' if tag != 'note' else 'normal'))
         self.transcript.tag_configure('error', foreground='#E57373' if theme == 'dark' else '#A23F3F')
         logo = Image.open(ASSETS/'logo-teal.png').convert('RGBA')
         logo.thumbnail((52, 38), Image.Resampling.LANCZOS)
@@ -363,7 +381,7 @@ class OptiiApp(ChatApp):
                 widget.drop_target_register(DND_FILES)
                 widget.dnd_bind('<<Drop>>', self.on_drop)
         except Exception as error:
-            self.status.set('拖放無法啟用：'+str(error)+' · 可使用 ＋ 選檔')
+            self.status.set('拖放無法啟用：'+str(error)+' · 可使用 + 選檔')
 
     def on_drop(self, event):
         paths = self.root.tk.splitlist(event.data)
@@ -428,11 +446,14 @@ class OptiiApp(ChatApp):
     def attach_image(self, filename):
         previous = self.pending_path
         try:
-            prepare_image(filename, fast=True)
+            _, thumbnail = prepare_image(filename, fast=True)
+            thumbnail.thumbnail((128, 84), Image.Resampling.LANCZOS)
+            preview = ImageTk.PhotoImage(thumbnail, master=self.root)
             self.cancel_pdf_job()
             self.pending_path = Path(filename)
-            self.preview = None
-            self.preview_label.configure(image='', text='圖片 · '+self.pending_path.name, width=0, height=1)
+            self.preview = preview
+            self.preview_image.configure(image=preview)
+            self.preview_label.configure(text='圖片 · '+self.pending_path.name)
             self.remove_button.configure(state='normal')
             from opti_ui import show_attachment
             show_attachment(self)
@@ -522,6 +543,7 @@ class OptiiApp(ChatApp):
         previous = self.pending_path
         self.pending_path = None
         self.preview = None
+        self.preview_image.configure(image='')
         self.preview_label.configure(image='', text='', width=0, height=1)
         self.remove_button.configure(state='disabled')
         self.remove_capture_file(previous)
