@@ -1,8 +1,10 @@
 """OptiChat conversation layout and presentation widgets."""
 from datetime import datetime
+import math
 import re
 import tkinter as tk
 from tkinter import ttk
+from tkinter import font as tkfont
 
 from PIL import Image, ImageTk
 from opti_history import preview_path
@@ -322,10 +324,7 @@ def add_turn(app, turn, index, scroll=True):
     user_header.pack(anchor='e', padx=(0, 24), pady=(0, 5))
     user = app.frame(row, role='user_card', padx=15, pady=12, highlightthickness=1)
     user.pack(anchor='e', padx=(60, 24))
-    question = app.label(user, turn.get('question', ''), role='user_card', color='ink',
-                         justify='left', wraplength=650)
-    question.configure(font=(app.ui_font, 11))
-    question.pack(anchor='w')
+    selectable_text(app, user, turn.get('question', ''), 'user_card', max_width=650)
     attachment = turn.get('attachment')
     if attachment:
         add_attachment_card(app, user, turn, index)
@@ -343,12 +342,8 @@ def add_turn(app, turn, index, scroll=True):
         render_answer(app, answer_card, turn['answer'])
         app.visual_answer_var = None
     else:
-        answer_var = tk.StringVar(value='正在載入／思考…')
-        answer = app.label(answer_card, textvariable=answer_var, role='assistant_card', color='ink',
-                           justify='left', anchor='w', wraplength=730)
-        answer.configure(font=(app.ui_font, 11))
-        answer.pack(fill='x')
-        app.visual_answer_var = answer_var
+        answer = selectable_text(app, answer_card, '正在載入／思考…', 'assistant_card')
+        app.visual_answer_var = SelectableTextValue(answer)
     if scroll:
         if app.last_theme:
             paint_roles(app, app.last_theme)
@@ -387,9 +382,8 @@ def add_attachment_card(app, user, turn, index):
             icon.create_rectangle(4, 7, 38, 43, outline='#087E88', width=2)
             icon.create_oval(26, 13, 32, 19, fill='#087E88', outline='')
             icon.create_line(8, 37, 18, 26, 24, 32, 30, 24, 35, 31, fill='#087E88', width=2)
-    info = app.label(card, attachment, role='user_card', color='muted',
-                     justify='left', wraplength=460)
-    info.pack(side='left', anchor='center')
+    info = selectable_text(app, card, attachment, 'user_card', max_width=460)
+    info.pack_configure(side='left', anchor='center')
 
 
 def short_model_name(value):
@@ -405,23 +399,93 @@ def short_model_name(value):
 
 
 def render_answer(app, parent, content):
-    """Add lightweight typographic hierarchy without interpreting model HTML."""
-    for line in content.splitlines():
+    """Keep the whole response selectable while retaining heading emphasis."""
+    widget = selectable_text(app, parent, '', 'assistant_card')
+    widget.configure(state='normal')
+    for index, line in enumerate(content.split('\n')):
+        if index:
+            widget.insert('end', '\n')
         value = line.strip()
-        if not value:
-            spacer = app.frame(parent, role='assistant_card', height=9)
-            spacer.pack(fill='x')
-            continue
         heading = bool(re.match(r'^(?:#{1,4}\s+|[一二三四五六七八九十]+[、．.])', value))
         numbered = bool(re.match(r'^\d+[.、．]\s*', value))
-        if value.startswith('#'):
-            value = value.lstrip('# ').strip()
-        label = app.label(parent, value, role='assistant_card',
-                          color='accent' if numbered else 'ink', justify='left',
-                          anchor='w', wraplength=710)
-        label.configure(font=(app.ui_font, 11 if not heading else 12,
-                              'bold' if heading else 'normal'))
-        label.pack(fill='x', pady=(2, 0))
+        widget.insert('end', line, 'heading' if heading else 'numbered' if numbered else ())
+    widget.configure(state='disabled')
+    fit_text_height(widget)
+
+
+def copy_selected_text(widget):
+    try:
+        selected = widget.get('sel.first', 'sel.last')
+    except tk.TclError:
+        return 'break'
+    widget.clipboard_clear()
+    widget.clipboard_append(selected)
+    return 'break'
+
+
+def select_all_text(widget):
+    widget.tag_add('sel', '1.0', 'end-1c')
+    widget.focus_set()
+    return 'break'
+
+
+def fit_text_height(widget):
+    if not widget.winfo_exists() or widget.winfo_width() <= 1:
+        return
+    count = widget.count('1.0', 'end', 'displaylines')
+    lines = max(1, count[0] if count else 1)
+    if int(widget.cget('height')) != lines:
+        widget.configure(height=lines)
+
+
+def selectable_text(app, parent, content, role, max_width=None):
+    font = tkfont.Font(root=app.root, family=app.ui_font, size=11)
+    if max_width:
+        widest = max((font.measure(line) for line in content.split('\n')), default=0)
+        width = math.ceil(min(max_width, max(100, widest+12))/max(1, font.measure('0')))
+    else:
+        width = 1
+    widget = tk.Text(parent, width=width, height=1, wrap='word', relief='flat', bd=0,
+                     padx=0, pady=0, font=font, cursor='xterm', exportselection=False,
+                     highlightthickness=0, takefocus=True)
+    widget._opti_font = font
+    app.roles.append((widget, role, 'ink'))
+    widget.insert('1.0', content)
+    widget.configure(state='disabled')
+    widget.tag_configure('heading', font=(app.ui_font, 12, 'bold'))
+    widget.tag_configure('numbered', foreground=('#38E3EE' if app.last_theme == 'dark' else '#087E88'))
+    widget.pack(fill='x', anchor='w')
+    widget.bind('<Configure>', lambda event: widget.after_idle(lambda: fit_text_height(widget)))
+    widget.bind('<MouseWheel>', lambda event: (wheel(app, event), 'break')[1])
+    widget.bind('<Control-c>', lambda event: copy_selected_text(widget))
+    widget.bind('<Control-a>', lambda event: select_all_text(widget))
+    menu = tk.Menu(widget, tearoff=False)
+    menu.add_command(label='複製', command=lambda: copy_selected_text(widget))
+    menu.add_command(label='全選', command=lambda: select_all_text(widget))
+    def show_menu(event):
+        menu.entryconfigure(0, state='normal' if widget.tag_ranges('sel') else 'disabled')
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+        return 'break'
+    widget.bind('<Button-3>', show_menu)
+    widget.after_idle(lambda: fit_text_height(widget))
+    return widget
+
+
+class SelectableTextValue:
+    def __init__(self, widget):
+        self.widget = widget
+
+    def set(self, value):
+        if not self.widget.winfo_exists():
+            return
+        self.widget.configure(state='normal')
+        self.widget.delete('1.0', 'end')
+        self.widget.insert('1.0', value)
+        self.widget.configure(state='disabled')
+        self.widget.after_idle(lambda: fit_text_height(self.widget))
 
 
 def paint_roles(app, theme):
@@ -435,7 +499,9 @@ def paint_roles(app, theme):
         if fg:
             widget.configure(fg=p[fg])
         if isinstance(widget, tk.Text):
-            widget.configure(insertbackground=p['ink'], selectbackground=p['accent'])
+            widget.configure(insertbackground=p['ink'], selectbackground=p['accent'],
+                             selectforeground=p['bg'])
+            widget.tag_configure('numbered', foreground=p['accent'])
         if isinstance(widget, tk.Frame) and widget.cget('highlightthickness'):
             widget.configure(highlightbackground=p['accent'] if bg == 'selected' else p['line'])
         remaining.append((widget, bg, fg))

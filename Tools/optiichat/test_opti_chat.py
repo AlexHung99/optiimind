@@ -20,7 +20,7 @@ import opti_model_worker
 import opti_capture
 import opti_pdf
 import opti_history
-from opti_ui import legacy_display_turns, render_turns, short_model_name
+from opti_ui import copy_selected_text, legacy_display_turns, render_turns, short_model_name
 
 CATALOG = [
     {'name': 'gemma4:26b', 'capabilities': ['completion', 'vision', 'thinking'], 'details': {'family': 'gemma4'}},
@@ -110,6 +110,48 @@ class HistoryPresentationTests(unittest.TestCase):
                 finally:
                     app.conversation = None
                     app.quit()
+
+    def test_chat_bodies_are_read_only_selectable_and_copyable(self):
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)))
+            for method in ('start_tray', 'monitor', 'connect', 'check_updates'):
+                stack.enter_context(patch.object(opti_app.OptiiApp, method))
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                app.conversation = {'display_turns': [{'time': '2026-09-23 20:00',
+                                                       'question': '請解釋這份文件',
+                                                       'model': 'gemma4:26b · GPU',
+                                                       'answer': '第一段\n第二段\n第三段'+'長'*100}]}
+                render_turns(app)
+                root.update_idletasks()
+                def descendants(parent):
+                    for child in parent.winfo_children():
+                        yield child
+                        yield from descendants(child)
+                bodies = [widget for widget in descendants(app.visual_body) if isinstance(widget, tk.Text)]
+                self.assertEqual(len(bodies), 2)
+                question, answer = bodies
+                self.assertEqual(question.get('1.0', 'end-1c'), '請解釋這份文件')
+                self.assertEqual(answer.get('1.0', 'end-1c'), '第一段\n第二段\n第三段'+'長'*100)
+                self.assertEqual(answer.cget('state'), 'disabled')
+                self.assertGreaterEqual(int(answer.cget('height')), 4)
+                answer.tag_add('sel', '1.0', '2.3')
+                self.assertTrue(answer.bind('<Control-c>'))
+                copy_selected_text(answer)
+                self.assertEqual(root.clipboard_get(), '第一段\n第二段')
+                answer.insert('end', '不可編輯')
+                self.assertEqual(answer.get('1.0', 'end-1c'), '第一段\n第二段\n第三段'+'長'*100)
+                app.conversation['display_turns'][0]['answer'] = ''
+                render_turns(app)
+                app.visual_answer_var.set('正在回覆：第一句\n第二句')
+                root.update_idletasks()
+                self.assertEqual(app.visual_answer_var.widget.get('1.0', 'end-1c'),
+                                 '正在回覆：第一句\n第二句')
+                self.assertEqual(app.visual_answer_var.widget.cget('state'), 'disabled')
+            finally:
+                app.conversation = None
+                app.quit()
 
 
 class SpeechHandler(BaseHTTPRequestHandler):
