@@ -30,6 +30,39 @@ CATALOG = [
 
 
 class HistoryPresentationTests(unittest.TestCase):
+    def test_navigation_uses_header_settings_and_icon_search(self):
+        with ExitStack() as stack:
+            settings = deepcopy(core.DEFAULTS)
+            settings['theme'] = 'dark'
+            stack.enter_context(patch.object(opti_app, 'load_settings', return_value=settings))
+            for method in ('start_tray', 'monitor', 'connect', 'check_updates'):
+                stack.enter_context(patch.object(opti_app.OptiiApp, method))
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                history = app.history_canvas.master
+                self.assertIs(history.master.winfo_children()[0], history)
+                self.assertIs(app.settings_button.master, root.winfo_children()[0])
+                self.assertEqual(app.settings_button.cget('text'), '')
+                self.assertEqual(app.search_button.cget('text'), '')
+                self.assertTrue(app.settings_button.cget('image'))
+                self.assertTrue(app.search_button.cget('image'))
+                self.assertFalse(app.search_entry.winfo_manager())
+                app.search_button.invoke()
+                self.assertEqual(app.search_entry.winfo_manager(), 'pack')
+                app.search_var.set('測試')
+                app.search_button.invoke()
+                self.assertFalse(app.search_entry.winfo_manager())
+                self.assertEqual(app.search_var.get(), '')
+                dark_icon = app.settings_button.cget('image')
+                app.settings['theme'] = 'light'
+                app.apply_theme()
+                self.assertNotEqual(app.settings_button.cget('image'), dark_icon)
+                app.settings_button.invoke()
+                self.assertTrue(app.settings_window.winfo_exists())
+            finally:
+                app.quit()
+
     def test_image_preview_is_small_separate_from_saved_messages(self):
         with tempfile.TemporaryDirectory() as directory:
             record = opti_history.new_record()

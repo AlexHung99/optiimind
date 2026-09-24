@@ -6,12 +6,44 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import font as tkfont
 
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 from opti_history import preview_path
 
 
 def _button(parent, text, command, style='Outline.TButton', **options):
     return ttk.Button(parent, text=text, command=command, style=style, **options)
+
+
+def toolbar_icon(kind, color):
+    """Draw crisp, font-independent toolbar icons for both Windows themes."""
+    scale = 4
+    image = Image.new('RGBA', (24*scale, 24*scale))
+    draw = ImageDraw.Draw(image)
+    if kind == 'search':
+        draw.ellipse((3*scale, 3*scale, 15*scale, 15*scale), outline=color, width=2*scale)
+        draw.line((14*scale, 14*scale, 21*scale, 21*scale), fill=color, width=2*scale)
+        draw.ellipse((20*scale, 20*scale, 22*scale, 22*scale), fill=color)
+    elif kind == 'settings':
+        center = 12*scale
+        points = []
+        for tooth in range(8):
+            for offset, radius in ((-0.43, 8), (-0.27, 11), (0.27, 11), (0.43, 8)):
+                angle = 2*math.pi*(tooth+offset)/8-math.pi/2
+                points.append((center+radius*scale*math.cos(angle),
+                               center+radius*scale*math.sin(angle)))
+        draw.polygon(points, fill=color)
+        draw.ellipse((center-3*scale, center-3*scale, center+3*scale, center+3*scale),
+                     fill=(0, 0, 0, 0))
+    return image.resize((24, 24), Image.Resampling.LANCZOS)
+
+
+def refresh_toolbar_icons(app, theme):
+    from opti_app import DARK, LIGHT
+    palette = DARK if theme == 'dark' else LIGHT
+    app.toolbar_icons = {kind: ImageTk.PhotoImage(toolbar_icon(kind, palette['accent']), master=app.root)
+                         for kind in ('settings', 'search')}
+    app.settings_button.configure(image=app.toolbar_icons['settings'])
+    app.search_button.configure(image=app.toolbar_icons['search'])
 
 
 def build_ui(app):
@@ -21,7 +53,7 @@ def build_ui(app):
     app.search_var = tk.StringVar(value='')
     ttk.Style(app.root).theme_use('clam')
 
-    # Full-width brand bar, then an icon rail, history, and the main workspace.
+    # Full-width brand bar, history, and the main workspace.
     brandbar = app.frame(app.root, role='panel', height=54, padx=20)
     brandbar.pack(fill='x')
     brandbar.pack_propagate(False)
@@ -31,6 +63,8 @@ def build_ui(app):
     brand.configure(font=('Georgia', 19, 'bold'))
     brand.pack(side='left')
     app.label(brandbar, 'OptiChat · 本機 AI 工作室', role='panel', color='muted').pack(side='left', padx=22)
+    app.settings_button = ttk.Button(brandbar, command=app.open_settings, style='Icon.TButton')
+    app.settings_button.pack(side='right', pady=7)
 
     bottom = app.frame(app.root, role='panel', height=58, padx=26)
     bottom.pack(side='bottom', fill='x')
@@ -46,26 +80,22 @@ def build_ui(app):
 
     shell = app.frame(app.root, role='bg')
     shell.pack(fill='both', expand=True)
-    rail = app.frame(shell, role='rail', width=74, padx=8, pady=18)
-    rail.pack(side='left', fill='y')
-    rail.pack_propagate(False)
-    _button(rail, '對話', app.new_chat, 'Rail.TButton').pack(fill='x', pady=(0, 18))
-    _button(rail, '歷史', lambda: app.conversation_list.focus_set(), 'Rail.TButton').pack(fill='x', pady=4)
-    _button(rail, '設定', app.open_settings, 'Rail.TButton').pack(fill='x', pady=4)
 
     history = app.frame(shell, role='panel', width=248, padx=14, pady=18,
                         highlightthickness=1)
-    history.pack(side='left', fill='y', padx=(0, 12), pady=(12, 12))
+    history.pack(side='left', fill='y', padx=(12, 12), pady=(12, 12))
     history.pack_propagate(False)
     heading = app.frame(history, role='panel')
     heading.pack(fill='x')
     title = app.label(heading, '對話紀錄', role='panel')
     title.configure(font=(app.ui_font, 14, 'bold'))
     title.pack(side='left')
-    _button(heading, '搜尋', lambda: toggle_search(app)).pack(side='right')
+    app.search_button = ttk.Button(heading, command=lambda: toggle_search(app), style='Icon.TButton')
+    app.search_button.pack(side='right')
     app.new_button = _button(history, '+  新對話', app.new_chat, 'Primary.TButton')
     app.new_button.pack(fill='x', pady=(17, 8))
     app.search_entry = ttk.Entry(history, textvariable=app.search_var)
+    app.root.bind('<Control-f>', lambda event: toggle_search(app), add=True)
     app.search_var.trace_add('write', lambda *_: build_history_cards(app))
     app.conversation_list = tk.Listbox(history, exportselection=False)
     app.conversation_list.bind('<F2>', app.rename_conversation)

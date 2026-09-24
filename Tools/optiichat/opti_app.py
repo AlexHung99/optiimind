@@ -243,8 +243,9 @@ class OptiiApp(ChatApp):
         p = DARK if theme == 'dark' else LIGHT
         self.root.configure(bg=p['bg'])
         self.root.after(650, lambda chosen=theme: self.set_titlebar_theme(chosen))
-        from opti_ui import paint_roles
+        from opti_ui import paint_roles, refresh_toolbar_icons
         paint_roles(self, theme)
+        refresh_toolbar_icons(self, theme)
         self.transcript.configure(bg=p['paper'], fg=p['ink'])
         style = ttk.Style(self.root)
         style.configure('.', font=(self.ui_font, 10), background=p['bg'], foreground=p['ink'])
@@ -256,9 +257,8 @@ class OptiiApp(ChatApp):
         style.configure('Primary.TButton', padding=(11, 8), background=p['selected'], foreground=p['ink'],
                         borderwidth=1, bordercolor=p['accent'], relief='flat')
         style.map('Primary.TButton', background=[('active', p['accent'])], foreground=[('active', p['bg'])])
-        style.configure('Rail.TButton', padding=(6, 10), background=p['rail'], foreground=p['ink'], borderwidth=0,
-                        font=(self.ui_font, 10))
-        style.map('Rail.TButton', background=[('active', p['selected'])])
+        style.configure('Icon.TButton', padding=(5, 5), background=p['panel'], borderwidth=0)
+        style.map('Icon.TButton', background=[('active', p['selected'])])
         style.configure('Accent.TButton', background=p['accent'], foreground=p['bg'])
         style.configure('TEntry', fieldbackground=p['paper'], foreground=p['ink'], insertcolor=p['ink'])
         style.configure('TCombobox', fieldbackground=p['paper'], foreground=p['ink'], arrowcolor=p['ink'])
