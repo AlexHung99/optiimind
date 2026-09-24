@@ -30,6 +30,19 @@ CATALOG = [
 
 
 class HistoryPresentationTests(unittest.TestCase):
+    def test_image_preview_is_small_separate_from_saved_messages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            record = opti_history.new_record()
+            source = Image.new('RGB', (1600, 900), 'blue')
+            path = opti_history.save_preview(record['id'], 0, source, directory)
+            with Image.open(path) as preview:
+                self.assertLessEqual(preview.width, 220)
+                self.assertLessEqual(preview.height, 150)
+            self.assertLess(path.stat().st_size, 100_000)
+            self.assertEqual(source.size, (1600, 900))
+            with self.assertRaises(ValueError):
+                opti_history.preview_path('../other', 0, directory)
+
     def test_reply_heading_uses_short_model_family(self):
         examples = {'llama3.2-vision:latest · CPU': 'Llama',
                     'gemma4:26b · GPU': 'Gemma',
@@ -454,6 +467,7 @@ class CaptureTests(unittest.TestCase):
             stack.enter_context(patch.object(opti_app.OptiiApp, 'monitor'))
             stack.enter_context(patch.object(opti_app.OptiiApp, 'connect'))
             directory = Path(stack.enter_context(tempfile.TemporaryDirectory()))
+            stack.enter_context(patch.object(opti_history, 'HISTORY_DIR', directory))
             stack.enter_context(patch.object(opti_app, 'save_record', side_effect=lambda r:opti_history.save_record(r, directory)))
             stack.enter_context(patch.object(opti_app, 'list_records', side_effect=lambda:opti_history.list_records(directory)))
             root = tk.Tk()
@@ -491,6 +505,13 @@ class CaptureTests(unittest.TestCase):
                     self.assertTrue(generate.call_args.args[1][-1]['images'])
                     self.assertFalse(path.exists())
                 self.assertEqual(app.capture_files, set())
+                self.assertTrue(app.conversation['display_turns'][0]['preview'])
+                saved = opti_history.load_record(app.conversation['id'], directory)
+                self.assertTrue(saved['display_turns'][0]['preview'])
+                self.assertTrue(opti_history.preview_path(saved['id'], 0).is_file())
+                app.conversation = saved
+                render_turns(app)
+                self.assertEqual(len(app.visual_photos), 1)
             finally:
                 app.quit()
 
@@ -579,13 +600,26 @@ class PdfTests(unittest.TestCase):
                 self.assertIn('Hello PDF document', app.turn['content'])
                 self.assertIn('幫我摘要', app.turn['content'])
                 self.assertIsNone(app.pending_document)
+                self.assertTrue(app.conversation['display_turns'][0]['attachment'].startswith('PDF：'))
+                self.assertNotIn('preview', app.conversation['display_turns'][0])
+                def widgets(parent):
+                    for child in parent.winfo_children():
+                        yield child
+                        yield from widgets(child)
+                pdf_icons = [widget for widget in widgets(app.visual_body) if isinstance(widget, tk.Canvas)
+                             and any(widget.type(item) == 'text' and widget.itemcget(item, 'text') == 'PDF'
+                                     for item in widget.find_all())]
+                self.assertEqual(len(pdf_icons), 1)
                 app.set_busy(False)
                 app.attach_pdf(document, opti_pdf.render_page(path, 1), 1)
                 image_path = app.pending_path
                 self.assertEqual(app.route.get(), '自動分流')
                 self.assertTrue(image_path.is_file())
                 self.assertIn('第 1', app.prepare_turn('辨識')['content'])
-                app.clear_image()
+                with patch.object(app, 'generate'):
+                    app.send()
+                self.assertTrue(app.conversation['display_turns'][-1]['attachment'].startswith('PDF：'))
+                self.assertNotIn('preview', app.conversation['display_turns'][-1])
                 self.assertFalse(image_path.exists())
                 self.assertTrue(path.is_file())
             finally:

@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw, ImageTk
 from llama_vision_ui import ChatApp, StreamRequest, build_messages, prepare_image
 from opti_capture import RegionCapture
 from opti_pdf import PdfPicker, pdf_prompt, prepare_pdf, inspect_pdf
-from opti_history import new_record, save_record, list_records, load_record
+from opti_history import new_record, save_record, list_records, load_record, save_preview
 from opti_version import VERSION
 from opti_update import UPDATE_DIR, check_for_update
 from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch_arguments, breeze_hardware_available,
@@ -94,6 +94,8 @@ class OptiiApp(ChatApp):
         self.model_download = ModelDownload()
         self.capture_session = None
         self.capture_files = set()
+        self.pending_thumbnail = None
+        self.visual_photos = []
         self.pending_document = None
         self.pdf_image_note = ''
         self.pdf_source = None
@@ -451,10 +453,13 @@ class OptiiApp(ChatApp):
         previous = self.pending_path
         try:
             _, thumbnail = prepare_image(filename, fast=True)
+            history_thumbnail = thumbnail.copy()
+            history_thumbnail.thumbnail((220, 150), Image.Resampling.LANCZOS)
             thumbnail.thumbnail((128, 84), Image.Resampling.LANCZOS)
             preview = ImageTk.PhotoImage(thumbnail, master=self.root)
             self.cancel_pdf_job()
             self.pending_path = Path(filename)
+            self.pending_thumbnail = history_thumbnail
             self.preview = preview
             self.preview_image.configure(image=preview)
             self.preview_label.configure(text='圖片 · '+self.pending_path.name)
@@ -546,6 +551,7 @@ class OptiiApp(ChatApp):
         self.cancel_pdf_job()
         previous = self.pending_path
         self.pending_path = None
+        self.pending_thumbnail = None
         self.preview = None
         self.preview_image.configure(image='')
         self.preview_label.configure(image='', text='', width=0, height=1)
@@ -627,6 +633,7 @@ class OptiiApp(ChatApp):
             attachment = self.pdf_image_note
         elif self.pending_path:
             attachment = '圖片：'+self.pending_path.name
+        thumbnail = self.pending_thumbnail if self.pending_path and not self.pdf_image_note else None
         pending = {'role': 'user', 'content': ''}
         if self.pending_path:
             pending['images'] = ['pending']
@@ -644,9 +651,16 @@ class OptiiApp(ChatApp):
                       'question': question, 'attachment': attachment,
                       'model': self.settings[self.active_kind]['model']+' · '+self.active_device,
                       'answer': ''}
-            self.conversation.setdefault('display_turns', []).append(record)
+            turns = self.conversation.setdefault('display_turns', [])
+            if thumbnail is not None:
+                try:
+                    save_preview(self.conversation['id'], len(turns), thumbnail)
+                    record['preview'] = True
+                except OSError:
+                    pass
+            turns.append(record)
             from opti_ui import add_turn
-            add_turn(self, record)
+            add_turn(self, record, len(turns)-1)
             self.persist_conversation()
 
     def poll(self):

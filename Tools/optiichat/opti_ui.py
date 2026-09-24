@@ -4,6 +4,9 @@ import re
 import tkinter as tk
 from tkinter import ttk
 
+from PIL import Image, ImageTk
+from opti_history import preview_path
+
 
 def _button(parent, text, command, style='Outline.TButton', **options):
     return ttk.Button(parent, text=text, command=command, style=style, **options)
@@ -285,6 +288,7 @@ def render_turns(app):
         child.destroy()
     app.roles = [(widget, bg, fg) for widget, bg, fg in app.roles if widget.winfo_exists()]
     app.visual_answer_var = None
+    app.visual_photos = []
     record = app.conversation or {}
     turns = record.get('display_turns') or legacy_display_turns(record)
     if not turns:
@@ -295,8 +299,8 @@ def render_turns(app):
         welcome.configure(font=(app.ui_font, 12))
         welcome.pack(anchor='w', padx=28, pady=36)
     else:
-        for turn in turns:
-            add_turn(app, turn, scroll=False)
+        for index, turn in enumerate(turns):
+            add_turn(app, turn, index, scroll=False)
     if app.last_theme:
         paint_roles(app, app.last_theme)
     settle_chat_scroll(app, to_bottom=bool(turns))
@@ -310,7 +314,7 @@ def settle_chat_scroll(app, to_bottom=True):
     app.visual_canvas.yview_moveto(1.0 if to_bottom else 0.0)
 
 
-def add_turn(app, turn, scroll=True):
+def add_turn(app, turn, index, scroll=True):
     row = app.frame(app.visual_body, role='chat')
     row.pack(fill='x', pady=(6, 20))
     stamp = turn.get('time') or datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -324,9 +328,7 @@ def add_turn(app, turn, scroll=True):
     question.pack(anchor='w')
     attachment = turn.get('attachment')
     if attachment:
-        info = app.label(user, '附件：'+attachment, role='user_card', color='muted',
-                         justify='left', wraplength=620)
-        info.pack(anchor='w', pady=(10, 0))
+        add_attachment_card(app, user, turn, index)
     assistant = app.frame(row, role='chat')
     assistant.pack(fill='x', pady=(22, 0))
     header = app.frame(assistant, role='chat')
@@ -351,6 +353,43 @@ def add_turn(app, turn, scroll=True):
         if app.last_theme:
             paint_roles(app, app.last_theme)
         settle_chat_scroll(app)
+
+
+def add_attachment_card(app, user, turn, index):
+    attachment = turn['attachment']
+    card = app.frame(user, role='user_card', padx=9, pady=8, highlightthickness=1)
+    card.pack(anchor='w', pady=(10, 0))
+    is_pdf = attachment.startswith('PDF：')
+    photo = None
+    if not is_pdf and turn.get('preview') and app.conversation:
+        try:
+            with Image.open(preview_path(app.conversation['id'], index)) as source:
+                thumbnail = source.copy()
+            thumbnail.thumbnail((160, 108), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(thumbnail, master=app.root)
+        except (OSError, ValueError):
+            pass
+    if photo is not None:
+        app.visual_photos.append(photo)
+        picture = app.label(card, role='user_card')
+        picture.configure(image=photo)
+        picture.pack(side='left', padx=(0, 10))
+    else:
+        icon = tk.Canvas(card, width=42, height=50, bd=0, highlightthickness=0)
+        app.roles.append((icon, 'user_card', None))
+        icon.pack(side='left', padx=(0, 10))
+        if is_pdf:
+            icon.create_polygon(6, 2, 28, 2, 37, 11, 37, 48, 6, 48,
+                                fill='#FFFFFF', outline='#E34C51', width=2)
+            icon.create_line(28, 2, 28, 11, 37, 11, fill='#E34C51', width=2)
+            icon.create_text(21, 31, text='PDF', fill='#C52832', font=(app.ui_font, 9, 'bold'))
+        else:
+            icon.create_rectangle(4, 7, 38, 43, outline='#087E88', width=2)
+            icon.create_oval(26, 13, 32, 19, fill='#087E88', outline='')
+            icon.create_line(8, 37, 18, 26, 24, 32, 30, 24, 35, 31, fill='#087E88', width=2)
+    info = app.label(card, attachment, role='user_card', color='muted',
+                     justify='left', wraplength=460)
+    info.pack(side='left', anchor='center')
 
 
 def short_model_name(value):

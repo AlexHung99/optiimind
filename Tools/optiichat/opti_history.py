@@ -7,6 +7,8 @@ import re
 import tempfile
 from uuid import uuid4
 
+from PIL import Image
+
 from opti_core import DATA
 
 HISTORY_DIR = DATA/'history'
@@ -25,12 +27,37 @@ def path_for(identifier, directory=HISTORY_DIR):
     return Path(directory)/(identifier+'.json')
 
 
+def preview_path(identifier, index, directory=None):
+    if not isinstance(identifier, str) or not ID_PATTERN.fullmatch(identifier) or not isinstance(index, int) or index < 0:
+        raise ValueError('對話預覽編號無效。')
+    return Path(directory or HISTORY_DIR)/(identifier+'-'+str(index)+'.jpg')
+
+
+def save_preview(identifier, index, image, directory=None):
+    """Persist only a small, metadata-free image for a sent chat attachment."""
+    target = preview_path(identifier, index, directory)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    thumbnail = image.copy().convert('RGB')
+    thumbnail.thumbnail((220, 150), Image.Resampling.LANCZOS)
+    clean = Image.new('RGB', thumbnail.size, 'white')
+    clean.paste(thumbnail)
+    with tempfile.NamedTemporaryFile(dir=target.parent, prefix='.preview-', suffix='.jpg',
+                                     delete=False) as stream:
+        temporary = Path(stream.name)
+    try:
+        clean.save(temporary, format='JPEG', quality=78, optimize=True)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return target
+
+
 def save_record(record, directory=HISTORY_DIR):
     target = path_for(record['id'], directory)
     target.parent.mkdir(parents=True, exist_ok=True)
     record['updated'] = datetime.now().astimezone().isoformat(timespec='seconds')
-    # Images are never stored as base64; prior image turns have already been
-    # intentionally excluded by the chat model's short context window.
+    # Full images are never stored in JSON; only small visual previews are
+    # persisted separately for conversation history.
     clean = dict(record)
     clean['messages'] = [{'role':m['role'], 'content':m['content']}
                          for m in record['messages'] if m.get('role') in ('user', 'assistant')]
