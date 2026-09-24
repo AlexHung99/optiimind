@@ -86,3 +86,15 @@ def list_records(directory=HISTORY_DIR):
 
 def load_record(identifier, directory=HISTORY_DIR):
     return json.loads(path_for(identifier, directory).read_text(encoding='utf-8'))
+
+
+def delete_record(identifier, directory=None):
+    """Remove one saved conversation and only its matching image previews."""
+    folder = Path(directory or HISTORY_DIR)
+    target = path_for(identifier, folder)
+    if not target.is_file():
+        raise FileNotFoundError(target)
+    for preview in folder.glob(identifier+'-*.jpg'):
+        if re.fullmatch(re.escape(identifier)+r'-[0-9]+\.jpg', preview.name):
+            preview.unlink()
+    target.unlink()

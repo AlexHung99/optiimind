@@ -15,6 +15,7 @@ import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from tkinter import font as tkfont
+import webbrowser
 import winsound
 import winreg
 
@@ -22,7 +23,7 @@ from PIL import Image, ImageDraw, ImageTk
 from llama_vision_ui import ChatApp, StreamRequest, build_messages, prepare_image
 from opti_capture import RegionCapture
 from opti_pdf import PdfPicker, pdf_prompt, prepare_pdf, inspect_pdf
-from opti_history import new_record, save_record, list_records, load_record, save_preview
+from opti_history import new_record, save_record, list_records, load_record, save_preview, delete_record
 from opti_version import VERSION
 from opti_update import UPDATE_DIR, check_for_update
 from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch_arguments, breeze_hardware_available,
@@ -84,6 +85,7 @@ class OptiiApp(ChatApp):
         self.audio_path = None
         self.tray_icon = None
         self.settings_window = None
+        self.about_window = None
         self.roles = []
         self.active_kind = 'text'
         self.active_device = self.settings['text']['device']
@@ -217,6 +219,31 @@ class OptiiApp(ChatApp):
                     self.status.set('標題儲存失敗：'+str(error))
         return 'break'
 
+    def delete_conversation(self, identifier):
+        if self.busy or self.pdf_job:
+            return
+        record = next((item for item in self.conversation_index if item['id'] == identifier), None)
+        if record is None:
+            return
+        if not messagebox.askyesno('刪除對話',
+                                   '確定要刪除「'+record.get('title', '未命名對話')+'」嗎？\n此操作無法復原。',
+                                   parent=self.root):
+            return
+        try:
+            delete_record(identifier)
+        except OSError as error:
+            self.status.set('刪除對話失敗：'+str(error))
+            return
+        if self.conversation and self.conversation['id'] == identifier:
+            self.cancel_pdf_job()
+            self.conversation = None
+            super().new_chat()
+            self.input.delete('1.0', 'end')
+            from opti_ui import render_turns
+            render_turns(self)
+        self.refresh_conversations()
+        self.status.set('已刪除對話')
+
     def new_chat(self):
         if self.busy:
             return
@@ -276,9 +303,13 @@ class OptiiApp(ChatApp):
         self.logo_photo = ImageTk.PhotoImage(logo)
         self.logo.configure(image=self.logo_photo)
         self.conversation_list.configure(bg=p['panel'], fg=p['ink'], selectbackground=p['selected'], selectforeground=p['ink'])
+        self.history_context_menu.configure(bg=p['panel'], fg=p['ink'], activebackground=p['selected'],
+                                            activeforeground=p['ink'], font=(self.ui_font, 10))
         self.refresh_conversations()
         if self.settings_window and self.settings_window.winfo_exists():
             self.settings_window.apply_theme(theme)
+        if self.about_window and self.about_window.winfo_exists():
+            self.about_window.apply_theme(theme)
 
     def set_titlebar_theme(self, theme, window=None):
         window = window or self.root
@@ -911,6 +942,13 @@ class OptiiApp(ChatApp):
         self.settings_window = SettingsWindow(self)
         self.apply_theme()
 
+    def open_about(self):
+        if self.about_window and self.about_window.winfo_exists():
+            self.about_window.lift()
+            return
+        self.about_window = AboutWindow(self)
+        self.about_window.apply_theme(self.last_theme or self.resolved_theme())
+
     def show(self):
         if self.capture_session:
             self.capture_session.cancel()
@@ -951,6 +989,52 @@ class OptiiApp(ChatApp):
             except OSError as error:
                 (UPDATE_DIR/'last-error.txt').write_text('離開時更新啟動失敗：'+str(error), encoding='utf-8')
         super().close()
+
+
+class AboutWindow(tk.Toplevel):
+    SITE_URL = 'https://optiimind.com/'
+    DOWNLOAD_URL = 'https://optiimind.com/Tools/optiichat/#download'
+
+    def __init__(self, app):
+        super().__init__(app.root)
+        self.app = app
+        self.title('關於 OptiChat')
+        self.resizable(False, False)
+        self.transient(app.root)
+        self.body = tk.Frame(self, padx=28, pady=22)
+        self.body.pack(fill='both', expand=True)
+        self.heading = tk.Label(self.body, text='OptiChat', font=(app.ui_font, 19, 'bold'), anchor='w')
+        self.heading.pack(anchor='w')
+        self.version = tk.Label(self.body, text='版本 '+VERSION+' · Optiimind', font=(app.ui_font, 10))
+        self.version.pack(anchor='w', pady=(5, 18))
+        self.site_button = ttk.Button(self.body, text='開啟官網  ↗', style='Outline.TButton',
+                                      command=lambda: webbrowser.open(self.SITE_URL))
+        self.site_button.pack(fill='x', pady=(0, 8))
+        self.download_button = ttk.Button(self.body, text='下載 OptiChat  ↗', style='Primary.TButton',
+                                          command=lambda: webbrowser.open(self.DOWNLOAD_URL))
+        self.download_button.pack(fill='x')
+        self.close_button = ttk.Button(self.body, text='關閉', command=self.destroy)
+        self.close_button.pack(anchor='e', pady=(20, 0))
+        self.center_on_parent()
+
+    def center_on_parent(self):
+        parent = self.app.root
+        parent.update_idletasks()
+        width, height = 420, 260
+        x = parent.winfo_rootx()+(parent.winfo_width()-width)//2
+        y = parent.winfo_rooty()+(parent.winfo_height()-height)//2
+        screen_x, screen_y = self.winfo_vrootx(), self.winfo_vrooty()
+        x = max(screen_x, min(x, screen_x+self.winfo_vrootwidth()-width))
+        y = max(screen_y, min(y, screen_y+self.winfo_vrootheight()-height))
+        self.geometry(f'{width}x{height}+{x}+{y}')
+
+    def apply_theme(self, theme):
+        p = DARK if theme == 'dark' else LIGHT
+        self.configure(bg=p['bg'])
+        self.body.configure(bg=p['panel'])
+        self.heading.configure(bg=p['panel'], fg=p['ink'])
+        self.version.configure(bg=p['panel'], fg=p['muted'])
+        self.app.root.after(100, lambda chosen=theme: self.app.set_titlebar_theme(chosen, self))
 
 
 class SettingsWindow(tk.Toplevel):

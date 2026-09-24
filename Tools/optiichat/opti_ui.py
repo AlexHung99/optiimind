@@ -23,6 +23,10 @@ def toolbar_icon(kind, color):
         draw.ellipse((3*scale, 3*scale, 15*scale, 15*scale), outline=color, width=2*scale)
         draw.line((14*scale, 14*scale, 21*scale, 21*scale), fill=color, width=2*scale)
         draw.ellipse((20*scale, 20*scale, 22*scale, 22*scale), fill=color)
+    elif kind == 'about':
+        draw.ellipse((3*scale, 3*scale, 21*scale, 21*scale), outline=color, width=2*scale)
+        draw.rounded_rectangle((11*scale, 6*scale, 13*scale, 14*scale), radius=scale, fill=color)
+        draw.ellipse((11*scale, 17*scale, 13*scale, 19*scale), fill=color)
     elif kind == 'settings':
         center = 12*scale
         points = []
@@ -41,8 +45,9 @@ def refresh_toolbar_icons(app, theme):
     from opti_app import DARK, LIGHT
     palette = DARK if theme == 'dark' else LIGHT
     app.toolbar_icons = {kind: ImageTk.PhotoImage(toolbar_icon(kind, palette['accent']), master=app.root)
-                         for kind in ('settings', 'search')}
+                         for kind in ('settings', 'search', 'about')}
     app.settings_button.configure(image=app.toolbar_icons['settings'])
+    app.about_button.configure(image=app.toolbar_icons['about'])
     app.search_button.configure(image=app.toolbar_icons['search'])
 
 
@@ -65,6 +70,8 @@ def build_ui(app):
     app.label(brandbar, 'OptiChat · 本機 AI 工作室', role='panel', color='muted').pack(side='left', padx=22)
     app.settings_button = ttk.Button(brandbar, command=app.open_settings, style='Icon.TButton')
     app.settings_button.pack(side='right', pady=7)
+    app.about_button = ttk.Button(brandbar, command=app.open_about, style='Icon.TButton')
+    app.about_button.pack(side='right', padx=(0, 10), pady=7)
 
     bottom = app.frame(app.root, role='panel', height=58, padx=26)
     bottom.pack(side='bottom', fill='x')
@@ -98,6 +105,7 @@ def build_ui(app):
     app.root.bind('<Control-f>', lambda event: toggle_search(app), add=True)
     app.search_var.trace_add('write', lambda *_: build_history_cards(app))
     app.conversation_list = tk.Listbox(history, exportselection=False)
+    app.history_context_menu = tk.Menu(history, tearoff=False)
     app.conversation_list.bind('<F2>', app.rename_conversation)
     app.root.bind('<F2>', app.rename_conversation, add=True)
     history_scroll = ttk.Scrollbar(history)
@@ -113,8 +121,7 @@ def build_ui(app):
         app.history_canvas.configure(scrollregion=app.history_canvas.bbox('all')))
     app.history_canvas.bind('<Configure>', lambda event:
         app.history_canvas.itemconfigure(history_window, width=event.width))
-    _button(history, '重新命名', app.rename_conversation).pack(fill='x', pady=(8, 4))
-    _button(history, '重新檢查模型', app.refresh_models).pack(fill='x')
+    _button(history, '重新檢查模型', app.refresh_models).pack(fill='x', pady=(8, 0))
 
     center = app.frame(shell, role='bg')
     center.pack(side='left', fill='both', expand=True, padx=(0, 12), pady=(12, 12))
@@ -265,15 +272,14 @@ def build_history_cards(app):
                         command=lambda i=index: choose_history(app, i))
         app.roles.append((btn, role, 'ink'))
         btn.pack(side='left', fill='x', expand=True)
-        menu = tk.Button(row, text='...', relief='flat', bd=0, padx=1,
-                         command=lambda i=index: rename_history(app, i))
-        app.roles.append((menu, role, 'muted'))
-        menu.pack(side='right')
+        for widget in (card, row, btn):
+            widget.bind('<Button-3>', lambda event, i=index: show_history_menu(app, i, event))
         created = record.get('created', '')[:16].replace('T', ' ')
         if created and name != created:
             stamp = app.label(card, created, role=role, color='muted')
             stamp.configure(font=(app.ui_font, 9))
             stamp.pack(anchor='w', padx=2)
+            stamp.bind('<Button-3>', lambda event, i=index: show_history_menu(app, i, event))
     if app.last_theme:
         paint_roles(app, app.last_theme)
 
@@ -313,6 +319,19 @@ def rename_history(app, index):
     app.conversation_list.selection_clear(0, 'end')
     app.conversation_list.selection_set(index)
     app.rename_conversation()
+
+
+def show_history_menu(app, index, event):
+    menu = app.history_context_menu
+    menu.delete(0, 'end')
+    menu.add_command(label='重新命名', command=lambda: rename_history(app, index))
+    menu.add_command(label='刪除對話',
+                     command=lambda: app.delete_conversation(app.conversation_index[index]['id']))
+    try:
+        menu.tk_popup(event.x_root, event.y_root)
+    finally:
+        menu.grab_release()
+    return 'break'
 
 
 def render_turns(app):

@@ -20,7 +20,7 @@ import opti_model_worker
 import opti_capture
 import opti_pdf
 import opti_history
-from opti_ui import copy_selected_text, legacy_display_turns, render_turns, short_model_name
+from opti_ui import copy_selected_text, legacy_display_turns, render_turns, short_model_name, show_history_menu
 
 CATALOG = [
     {'name': 'gemma4:26b', 'capabilities': ['completion', 'vision', 'thinking'], 'details': {'family': 'gemma4'}},
@@ -30,6 +30,62 @@ CATALOG = [
 
 
 class HistoryPresentationTests(unittest.TestCase):
+    def test_delete_record_removes_only_its_previews(self):
+        with tempfile.TemporaryDirectory() as directory:
+            records = [opti_history.new_record(), opti_history.new_record()]
+            for record in records:
+                opti_history.save_record(record, directory)
+                opti_history.save_preview(record['id'], 0, Image.new('RGB', (30, 30)), directory)
+            opti_history.delete_record(records[0]['id'], directory)
+            self.assertFalse(opti_history.path_for(records[0]['id'], directory).exists())
+            self.assertFalse(opti_history.preview_path(records[0]['id'], 0, directory).exists())
+            self.assertTrue(opti_history.path_for(records[1]['id'], directory).exists())
+            self.assertTrue(opti_history.preview_path(records[1]['id'], 0, directory).exists())
+            with self.assertRaises(ValueError):
+                opti_history.delete_record('../outside', directory)
+
+    def test_history_context_menu_renames_and_deletes_active_chat(self):
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)))
+            for method in ('start_tray', 'monitor', 'connect', 'check_updates'):
+                stack.enter_context(patch.object(opti_app.OptiiApp, method))
+            directory = Path(stack.enter_context(tempfile.TemporaryDirectory()))
+            store = directory/'history'
+            stack.enter_context(patch.object(opti_history, 'HISTORY_DIR', store))
+            stack.enter_context(patch.object(opti_app, 'save_record', side_effect=lambda r: opti_history.save_record(r, store)))
+            stack.enter_context(patch.object(opti_app, 'list_records', side_effect=lambda: opti_history.list_records(store)))
+            stack.enter_context(patch.object(opti_app, 'delete_record', side_effect=lambda i: opti_history.delete_record(i, store)))
+            record = opti_history.new_record()
+            opti_history.save_record(record, store)
+            preview = opti_history.save_preview(record['id'], 0, Image.new('RGB', (30, 30)), store)
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                app.conversation = record
+                app.refresh_conversations()
+                card = app.history_items.winfo_children()[0]
+                self.assertTrue(card.bind('<Button-3>'))
+                self.assertTrue(card.winfo_children()[0].winfo_children()[0].bind('<Button-3>'))
+                with patch.object(app.history_context_menu, 'tk_popup'):
+                    show_history_menu(app, 0, SimpleNamespace(x_root=10, y_root=10))
+                self.assertEqual(app.history_context_menu.entrycget(0, 'label'), '重新命名')
+                self.assertEqual(app.history_context_menu.entrycget(1, 'label'), '刪除對話')
+                with patch.object(opti_app.simpledialog, 'askstring', return_value='新標題'):
+                    app.history_context_menu.invoke(0)
+                self.assertEqual(opti_history.load_record(record['id'], store)['title'], '新標題')
+                with patch.object(opti_app.messagebox, 'askyesno', return_value=False):
+                    app.history_context_menu.invoke(1)
+                self.assertTrue(opti_history.path_for(record['id'], store).exists())
+                with patch.object(opti_app.messagebox, 'askyesno', return_value=True):
+                    app.history_context_menu.invoke(1)
+                self.assertIsNone(app.conversation)
+                self.assertFalse(opti_history.path_for(record['id'], store).exists())
+                self.assertFalse(preview.exists())
+                self.assertEqual(app.conversation_list.size(), 0)
+            finally:
+                app.quit()
+            self.assertEqual(opti_history.list_records(store), [])
+
     def test_navigation_uses_header_settings_and_icon_search(self):
         with ExitStack() as stack:
             settings = deepcopy(core.DEFAULTS)
@@ -43,9 +99,12 @@ class HistoryPresentationTests(unittest.TestCase):
                 history = app.history_canvas.master
                 self.assertIs(history.master.winfo_children()[0], history)
                 self.assertIs(app.settings_button.master, root.winfo_children()[0])
+                self.assertIs(app.about_button.master, app.settings_button.master)
                 self.assertEqual(app.settings_button.cget('text'), '')
+                self.assertEqual(app.about_button.cget('text'), '')
                 self.assertEqual(app.search_button.cget('text'), '')
                 self.assertTrue(app.settings_button.cget('image'))
+                self.assertTrue(app.about_button.cget('image'))
                 self.assertTrue(app.search_button.cget('image'))
                 self.assertFalse(app.search_entry.winfo_manager())
                 app.search_button.invoke()
@@ -60,6 +119,16 @@ class HistoryPresentationTests(unittest.TestCase):
                 self.assertNotEqual(app.settings_button.cget('image'), dark_icon)
                 app.settings_button.invoke()
                 self.assertTrue(app.settings_window.winfo_exists())
+                app.about_button.invoke()
+                self.assertTrue(app.about_window.winfo_exists())
+                self.assertLess(app.about_button.winfo_rootx(), app.settings_button.winfo_rootx())
+                self.assertEqual(app.about_window.heading.cget('text'), 'OptiChat')
+                with patch.object(opti_app.webbrowser, 'open') as open_url:
+                    app.about_window.site_button.invoke()
+                    app.about_window.download_button.invoke()
+                self.assertEqual([call.args[0] for call in open_url.call_args_list],
+                                 [opti_app.AboutWindow.SITE_URL, opti_app.AboutWindow.DOWNLOAD_URL])
+                self.assertEqual(app.about_window.body.cget('bg'), opti_app.LIGHT['panel'])
             finally:
                 app.quit()
 
