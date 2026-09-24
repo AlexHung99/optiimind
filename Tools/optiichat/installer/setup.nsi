@@ -15,7 +15,7 @@ VIAddVersionKey "FileDescription" "OptiChat Setup"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "LegalCopyright" "Optiimind"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TEXT "安裝 OptiChat 本機 AI 工作室。$\r$\n$\r$\n已包含 Python 與介面套件，安裝後會建立桌面捷徑。首次啟動會引導準備 Ollama；大型模型另行下載。$\r$\n$\r$\n程式會每天檢查更新，背景下載後於下次啟動套用。可於設定關閉。$\r$\n$\r$\n此版本尚未申請程式碼簽章。"
+!define MUI_WELCOMEPAGE_TEXT "安裝 OptiChat 本機 AI 工作室。$\r$\n$\r$\n已包含 Python 與介面套件，安裝後會建立桌面捷徑。首次啟動會引導準備 Ollama；大型模型另行下載。$\r$\n$\r$\n每次啟動會從 R2 檢查並安裝新版；離線時仍可使用現有版本，恢復連線後重試。$\r$\n$\r$\n此版本尚未申請程式碼簽章。"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN

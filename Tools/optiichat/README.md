@@ -39,9 +39,9 @@ Windows 本機 AI 聊天工作室：Ollama 文字／圖片聊天、框選截圖�
 
 ## 自動更新
 
-預設每天檢查一次此 GitHub 儲存庫的 `update.json`，背景下載更新 ZIP、驗證 SHA-256 和檔案清單。從系統匣選「結束程式」後重新開啟，啟動檔會等待舊程序退出，再套用更新；按視窗右上角 × 只會隱藏，無法更新。可在設定關閉自動檢查，或使用「立即檢查更新」。
+每次啟動都向 OptiChat R2 網域讀取 `update.json`，有新版就下載 ZIP、驗證 SHA-256 和檔案清單，套用後才啟動。程式執行中每 15 分鐘重試，背景下載的更新會在系統匣「結束程式」後自動套用；按視窗右上角 × 只會隱藏。離線時仍可使用現有版本，恢復連線後繼續檢查。自動更新不可關閉，設定中保留手動「立即檢查更新」。
 
-更新只更換發行包的程式檔案；使用者設定、語音輸出與模型保留。寫入前備份舊檔，寫入失敗時嘗試還原；偵測到本機修改時停止覆蓋。備份與更新紀錄位於 `%LOCALAPPDATA%\OptiiChat\updates`。來源以 HTTPS GitHub 儲存庫與 SHA-256 驗證，**沒有額外程式碼簽章**。
+更新只更換發行包的程式檔案；使用者設定、語音輸出與模型保留。寫入前備份舊檔，寫入失敗時嘗試還原；偵測到本機修改時停止覆蓋。備份與更新紀錄位於 `%LOCALAPPDATA%\OptiiChat\updates`。來源限定 HTTPS `optiichat-update.optiimind.com`，並以 SHA-256 驗證，**沒有額外程式碼簽章**。
 
 EXE 內含的 Python 執行環境不隨小版本 ZIP 更新；若未來更換 Python，需下載新版 EXE。套件需求變更時，更新器使用內含 pip 安裝。
 
@@ -55,8 +55,8 @@ Git clone 的開發者若修改程式，應以 Git 更新；自動更新不會�
    python -m unittest test_opti_update test_opti_chat test_llama_vision_ui -v
    python opti_release.py
    ```
-3. 提交程式碼、`package-files.json`、`downloads/OptiiChat-版本.zip`、`update.json` 至此儲存庫 `main`。
-4. 保留舊版下載包。更新檢查使用新 manifest，EXE 下載按鈕另外讀取 `installer.json`。
+3. 先將 `downloads/OptiiChat-版本.zip` 上傳到 `optiichat-downloads` R2 bucket，驗證公開 URL 的 SHA-256，再將 `r2-update.json` 上傳為 R2 的 `update.json`。manifest 必須最後發佈。
+4. 提交程式碼、`package-files.json`、ZIP 及 `r2-update.json`。GitHub `update.json` 保留 1.3.5 過渡版，供仍使用舊版更新器的用戶先切換到 R2；往後不再更新此過渡檔。
 
 `opti_release.py` 只打包明列的程式、測試、說明與品牌素材，排除設定、暫存、使用者音檔、模型權重及 Git 資訊。若新增新的檔案類型，請同步維護 `opti_update.safe_name` 的允許清單。
 
@@ -68,7 +68,7 @@ Git clone 的開發者若修改程式，應以 Git 更新；自動更新不會�
 python installer/build.py --makensis C:\tools\nsis-3.12\makensis.exe
 ```
 
-若安裝檔改由 Cloudflare R2 提供，建置時加上 `--download-base-url https://下載用的.optiimind.com`，並替換為實際啟用的自訂網域。上傳 EXE 到對應的 R2 bucket 後，確認公開網址的檔案大小與 SHA-256 和 `installer.json` 一致，再發佈 manifest。下載頁會使用 `installer.json` 的 `url`，因此只有完成上傳與驗證後才切換網址。
+建置時加上 `--download-base-url https://optiichat-update.optiimind.com`。上傳 EXE 到對應的 R2 bucket 後，確認公開網址的檔案大小與 SHA-256 和 `installer.json` 一致，再發佈網站的 `installer.json`。下載頁會使用該 manifest 的 `url`。
 
 工具只複製 Python 標準發行目錄，排除原有 site-packages，再依鎖定版本從 PyPI 安裝套件，不包含個人環境、設定或模型。輸出 EXE、`installer.json` 與 `.installer-build` 暫存。提交 EXE 與 manifest，暫存不提交。Python 與套件授權檔保留在執行環境內。
 
@@ -79,7 +79,7 @@ python installer/build.py --makensis C:\tools\nsis-3.12\makensis.exe
 - 一般 Ollama：本機 `11434`；Llama 3.2 Vision 相容服務：CPU `11435`／Vulkan `11436`。
 - 使用 `OLLAMA_MODELS` 環境變數或 Ollama 預設模型目錄。
 - 設定／音訊：`%LOCALAPPDATA%\OptiiChat`；聊天紀錄只在記憶體。
-- 網路用於安裝相依套件、模型下載、GitHub 更新，以及使用者自行指定的 Breeze 服務。
+- 網路用於安裝相依套件、模型下載、R2 更新，以及使用者自行指定的 Breeze 服務。
 - 官網 Logo 來源見 [opti_assets/README.md](opti_assets/README.md)。Breeze 權重與自架產出受其研究及非商業授權限制；本儲存庫不散布該模型。
 
 43 項自動測試涵蓋聊天串流、截圖、歷史對話呈現、模型初始化、語音串接與更新驗證／還原，包括常駐程序退出與重新啟動的更新等待。測試不代表所有硬體組合皆可執行所有模型。

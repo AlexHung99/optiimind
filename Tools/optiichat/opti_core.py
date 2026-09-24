@@ -39,6 +39,8 @@ def validate_settings(value):
                 result[key].update({k: v for k, v in value[key].items() if k in result[key]})
             else:
                 result[key] = value[key]
+    # Updates are mandatory when online. Preserve old settings files but ignore opt-outs.
+    result['auto_update'] = True
     if result['theme'] not in ('system', 'light', 'dark'):
         raise ValueError('主題必須是跟隨系統、亮色或暗色。')
     for kind in ('text', 'vision'):

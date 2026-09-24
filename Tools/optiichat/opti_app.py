@@ -102,6 +102,7 @@ class OptiiApp(ChatApp):
         self.conversation_index = []
         self.scrollbar_images = {}
         self.update_busy = False
+        self.update_on_exit_started = False
         self.update_status = tk.StringVar(root, value='目前版本 '+VERSION)
         super().__init__(root)
         root.title('OptiChat · 本機 AI 工作室')
@@ -831,17 +832,18 @@ class OptiiApp(ChatApp):
         self.root.after(100, self.poll_extra)
 
     def check_updates(self, force=False):
-        if self.closed or self.update_busy or (not force and not self.settings['auto_update']):
+        if not force and not self.closed:
+            self.root.after(15 * 60 * 1000, self.check_updates)
+        if self.closed or self.update_busy:
             return
         error_file = UPDATE_DIR/'last-error.txt'
         if not force and error_file.exists():
-            self.update_status.set('上次更新未套用：'+error_file.read_text(encoding='utf-8'))
-            return
+            self.update_status.set('上次更新檢查：'+error_file.read_text(encoding='utf-8'))
         self.update_busy = True
         self.update_status.set('正在檢查更新…')
         def run():
             try:
-                result = check_for_update(force=force)
+                result = check_for_update(force=True)
             except Exception as error:
                 result = '更新檢查未完成：'+str(error)
             self.extra.put(('update', result))
@@ -922,6 +924,14 @@ class OptiiApp(ChatApp):
         self.stop_speech()
         if self.tray_icon:
             self.tray_icon.stop()
+        if (not self.update_on_exit_started and (UPDATE_DIR/'pending.json').is_file()
+                and Path(__file__).with_name('package-files.json').is_file()):
+            self.update_on_exit_started = True
+            try:
+                subprocess.Popen([sys.executable, str(Path(__file__).with_name('opti_bootstrap.py')), '--apply-only'],
+                                 cwd=Path(__file__).resolve().parent, creationflags=subprocess.CREATE_NO_WINDOW)
+            except OSError as error:
+                (UPDATE_DIR/'last-error.txt').write_text('離開時更新啟動失敗：'+str(error), encoding='utf-8')
         super().close()
 
 
@@ -949,11 +959,10 @@ class SettingsWindow(tk.Toplevel):
         self.check(general, '關閉視窗時收至右下角系統匣', 'tray')
         self.check(general, '模型完成回覆後自動朗讀', 'auto_speak')
         self.check(general, '預設快速圖片模式（560 px）', 'fast_image')
-        self.check(general, '啟動時自動檢查及下載更新', 'auto_update')
-        self.note(general, '新版下載後，請從系統匣選「結束程式」再重新開啟，更新會在啟動前套用。\n按視窗右上角 × 只會隱藏；更新保留設定與模型。')
+        self.note(general, '每次啟動都從 R2 檢查更新；有新版會先驗證並套用。\n離線時仍可使用目前版本，連線恢復後會重試。系統匣「結束程式」也會套用已下載更新。')
         ttk.Label(general, textvariable=app.update_status, wraplength=680).pack(anchor='w', pady=8)
         ttk.Button(general, text='立即檢查更新', command=lambda: app.check_updates(True)).pack(anchor='w')
-        self.note(general, '系統匣右鍵可開啟設定或結束程式。\n聊天紀錄只存於記憶體，結束程式即清除。\nCPU／GPU 數值是整台電腦的即時使用率。\n\n介面與原始標誌取自 optiimind.com，為你的本機工具。')
+        self.note(general, '系統匣右鍵可開啟設定或結束程式。\n聊天紀錄儲存在本機，不會因結束程式而清除。\nCPU／GPU 數值是整台電腦的即時使用率。\n\n介面與原始標誌取自 optiimind.com，為你的本機工具。')
         models = self.tab(notebook, '聊天模型')
         self.model_combos = {}
         self.model_notice = tk.StringVar(value='讀取已安裝模型中…')

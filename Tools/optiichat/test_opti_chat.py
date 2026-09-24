@@ -107,6 +107,9 @@ class CoreTests(unittest.TestCase):
             config['theme'] = 'light'
             core.save_settings(config, path)
             self.assertEqual(core.load_settings(path), config)
+            config['auto_update'] = False
+            self.assertTrue(core.save_settings(config, path)['auto_update'])
+            self.assertTrue(core.load_settings(path)['auto_update'])
             config['speech']['provider'] = 'breeze'
             with self.assertRaisesRegex(ValueError, 'CUDA'):
                 core.save_settings(config, path)

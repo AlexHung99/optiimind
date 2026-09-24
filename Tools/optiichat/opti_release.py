@@ -1,13 +1,14 @@
-"""Maintainer utility: build a versioned ZIP plus its GitHub update manifest."""
+"""Maintainer utility: build a versioned ZIP and its R2 update manifest."""
+import argparse
 import ast
 import json
 from pathlib import Path
 import zipfile
-from opti_update import digest, safe_name, unpack_verified
+from opti_update import UPDATE_ORIGIN, digest, safe_name, unpack_verified
 from opti_version import VERSION
 
 
-def build(root=None):
+def build(root=None, bridge_github=False):
     root = Path(root or Path(__file__).resolve().parent)
     names = ['Start-OptiiChat.cmd', 'Start-Llama32-UI.cmd', 'Start-Llama32-Vision.cmd',
              'Install-OptiiChat.cmd', 'README.md', 'OptiiChat-使用說明.md', 'opti-requirements.txt',
@@ -36,10 +37,15 @@ def build(root=None):
     checksum = digest(archive.read_bytes())
     unpack_verified(archive.read_bytes(), checksum, VERSION)
     manifest = {'version': VERSION, 'sha256': checksum,
-                'url': f'https://raw.githubusercontent.com/AlexHung99/optiimind/main/Tools/optiichat/downloads/{archive.name}'}
-    (root/'update.json').write_text(json.dumps(manifest, indent=2)+'\n', encoding='utf-8')
+                'url': f'{UPDATE_ORIGIN}/{archive.name}'}
+    (root/'r2-update.json').write_text(json.dumps(manifest, indent=2)+'\n', encoding='utf-8')
+    if bridge_github:
+        legacy = dict(manifest, url=f'https://raw.githubusercontent.com/AlexHung99/optiimind/main/Tools/optiichat/downloads/{archive.name}')
+        (root/'update.json').write_text(json.dumps(legacy, indent=2)+'\n', encoding='utf-8')
     print(json.dumps({'archive': str(archive), 'bytes': archive.stat().st_size, **manifest}, ensure_ascii=True))
 
 
 if __name__ == '__main__':
-    build()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--bridge-github', action='store_true', help='Publish a one-time GitHub manifest for pre-R2 clients')
+    build(bridge_github=parser.parse_args().bridge_github)

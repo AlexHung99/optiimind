@@ -1,4 +1,4 @@
-"""Versioned, hash-checked source updates; applied by the launcher before Tk starts."""
+"""Versioned, hash-checked R2 updates; applied by the launcher before Tk starts."""
 import hashlib
 import io
 import json
@@ -13,8 +13,9 @@ import zipfile
 
 from opti_version import VERSION
 
-UPDATE_URL = 'https://raw.githubusercontent.com/AlexHung99/optiimind/main/Tools/optiichat/update.json'
-DOWNLOAD_PREFIX = '/AlexHung99/optiimind/main/Tools/optiichat/downloads/'
+UPDATE_ORIGIN = 'https://optiichat-update.optiimind.com'
+UPDATE_URL = UPDATE_ORIGIN+'/update.json'
+DOWNLOAD_PREFIX = '/'
 UPDATE_DIR = Path(os.environ.get('LOCALAPPDATA', Path.home()))/'OptiiChat'/'updates'
 MAX_ZIP = 25 * 1024 * 1024
 MAX_EXPANDED = 60 * 1024 * 1024
@@ -43,9 +44,11 @@ def atomic_write(path, data):
 
 
 def fetch_bytes(url, limit):
-    with urlopen(Request(url, headers={'User-Agent': 'OptiiChat/'+VERSION}), timeout=25) as response:
-        if urlparse(response.url).scheme != 'https':
-            raise ValueError('更新下載必須使用 HTTPS。')
+    with urlopen(Request(url, headers={'User-Agent': 'OptiiChat/'+VERSION,
+                                       'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache'}), timeout=25) as response:
+        requested, actual = urlparse(url), urlparse(response.url)
+        if actual.scheme != 'https' or actual.netloc != requested.netloc or actual.path != requested.path:
+            raise ValueError('更新下載跳轉至非預期來源。')
         result = response.read(limit + 1)
     if len(result) > limit:
         raise ValueError('更新檔案超過大小限制。')
@@ -99,22 +102,26 @@ def check_for_update(current=VERSION, directory=None, force=False):
     directory = Path(directory or UPDATE_DIR)
     directory.mkdir(parents=True, exist_ok=True)
     pending = directory/'pending.json'
+    item = None
     if pending.exists():
         item = json.loads(pending.read_text(encoding='utf-8'))
-        if version_tuple(item['version']) > version_tuple(current) and not force:
-            return '新版 '+item['version']+' 已下載；從系統匣「結束程式」後重新開啟即可套用。'
     checked = directory/'last-check'
-    if not force and checked.exists() and time.time()-checked.stat().st_mtime < 24*3600:
-        return '已啟用自動更新（每天檢查一次）。'
-    manifest = json.loads(fetch_bytes(UPDATE_URL, 65536))
+    # Do not skip the manifest because a previous check or pending ZIP exists.
+    manifest = json.loads(fetch_bytes(UPDATE_URL+'?t='+str(time.time_ns()), 65536))
     version = manifest.get('version')
     if version_tuple(version) <= version_tuple(current):
         checked.touch()
         return '目前已是最新版本 '+current+'。'
     url = manifest.get('url', '')
     parsed = urlparse(url)
-    if parsed.scheme != 'https' or parsed.netloc != 'raw.githubusercontent.com' or parsed.path != DOWNLOAD_PREFIX+'OptiiChat-'+version+'.zip' or parsed.query or parsed.fragment:
-        raise ValueError('更新來源不是指定的 Optiimind 儲存庫。')
+    if parsed.scheme != 'https' or parsed.netloc != urlparse(UPDATE_ORIGIN).netloc or parsed.path != DOWNLOAD_PREFIX+'OptiiChat-'+version+'.zip' or parsed.query or parsed.fragment:
+        raise ValueError('更新來源不是指定的 OptiChat R2 網域。')
+    if (item and item.get('version') == version and item.get('sha256') == manifest.get('sha256')
+            and item.get('archive') == 'OptiiChat-'+version+'.zip'):
+        archive = directory/item['archive']
+        if archive.is_file() and archive.stat().st_size <= MAX_ZIP and digest(archive.read_bytes()) == item['sha256']:
+            checked.touch()
+            return '新版 '+version+' 已下載；從系統匣「結束程式」後重新開啟即可套用。'
     data = fetch_bytes(url, MAX_ZIP)
     unpack_verified(data, manifest.get('sha256', ''), version)
     filename = 'OptiiChat-'+version+'.zip'

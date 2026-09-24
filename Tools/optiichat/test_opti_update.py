@@ -90,7 +90,7 @@ class UpdateTests(unittest.TestCase):
 
     def stage(self, directory):
         data, files = archive()
-        manifest = {'version': '1.1.0', 'sha256': update.digest(data), 'url': 'https://raw.githubusercontent.com'+update.DOWNLOAD_PREFIX+'OptiiChat-1.1.0.zip'}
+        manifest = {'version': '1.1.0', 'sha256': update.digest(data), 'url': update.UPDATE_ORIGIN+'/OptiiChat-1.1.0.zip'}
         with patch.object(update, 'fetch_bytes', side_effect=[json.dumps(manifest).encode(), data]):
             message = update.check_for_update('1.0.0', directory, True)
         self.assertIn('已下載', message)
@@ -164,6 +164,51 @@ class UpdateTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 update.check_for_update('1.0.0', temp, True)
             self.assertEqual(fetch.call_count, 1)
+
+    def test_startup_always_checks_and_applies_pending_update(self):
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(bootstrap, 'UPDATE_DIR', Path(temp)), \
+             patch.object(bootstrap, 'ready_to_update', return_value=True), \
+             patch.object(bootstrap, 'check_for_update', return_value='新版已下載') as check, \
+             patch.object(bootstrap, 'apply_pending', return_value=True) as apply:
+            self.assertTrue(bootstrap.apply_waiting_update(Path(temp)))
+            check.assert_called_once_with(force=True)
+            apply.assert_called_once()
+
+    def test_offline_startup_uses_old_version_and_retries_later(self):
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(bootstrap, 'UPDATE_DIR', Path(temp)), \
+             patch.object(bootstrap, 'ready_to_update', return_value=True), \
+             patch.object(bootstrap, 'check_for_update', side_effect=OSError('offline')) as check, \
+             patch.object(bootstrap, 'apply_pending', return_value=False) as apply:
+            self.assertTrue(bootstrap.apply_waiting_update(Path(temp)))
+            self.assertIn('offline', (Path(temp)/'last-error.txt').read_text(encoding='utf-8'))
+            check.assert_called_once_with(force=True)
+            apply.assert_called_once()
+
+    def test_staged_archive_is_not_downloaded_twice(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            data, _ = archive()
+            manifest = {'version': '1.1.0', 'sha256': update.digest(data),
+                        'url': update.UPDATE_ORIGIN+'/OptiiChat-1.1.0.zip'}
+            (directory/'OptiiChat-1.1.0.zip').write_bytes(data)
+            (directory/'pending.json').write_text(json.dumps({
+                'version': '1.1.0', 'sha256': manifest['sha256'], 'archive': 'OptiiChat-1.1.0.zip'}))
+            with patch.object(update, 'fetch_bytes', return_value=json.dumps(manifest).encode()) as fetch:
+                self.assertIn('已下載', update.check_for_update('1.0.0', directory, True))
+            self.assertEqual(fetch.call_count, 1)
+
+    def test_previous_check_does_not_hide_new_manifest(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            (directory/'last-check').touch()
+            data, _ = archive()
+            manifest = {'version': '1.1.0', 'sha256': update.digest(data),
+                        'url': update.UPDATE_ORIGIN+'/OptiiChat-1.1.0.zip'}
+            with patch.object(update, 'fetch_bytes', side_effect=[json.dumps(manifest).encode(), data]) as fetch:
+                self.assertIn('已下載', update.check_for_update('1.0.0', directory))
+            self.assertEqual(fetch.call_count, 2)
 
     def test_same_or_older_version_does_not_download(self):
         for version in ('1.0.0', '0.9.0'):
