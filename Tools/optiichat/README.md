@@ -4,11 +4,11 @@ Windows 本機 AI 聊天工作室：Ollama 文字／圖片聊天、框選截圖�
 
 - **介紹與下載：** https://optiimind.com/Tools/optiichat/
 - **程式碼：** 本目錄
-- **目前版本：** 1.3.3
+- **目前版本：** 1.3.6
 
 ## 安裝
 
-1. 從介紹頁下載 `OptiChat-Setup-1.3.3.exe`，執行安裝精靈；不需要自行安裝 Python。
+1. 從介紹頁下載 `OptiChat-Setup-1.3.6.exe`，執行安裝精靈；不需要自行安裝 Python。
 2. 安裝包含獨立 Python 3.14.3、介面、PDF 及朗讀套件，放在 `%LOCALAPPDATA%\OptiiChat\python`；程式在同一資料夾下的 `app`。為保留舊版設定與更新相容性，內部資料夾名稱沿用 OptiiChat。
 3. 自動建立桌面與開始功能表「OptiChat」捷徑。雙擊即可開啟。
 4. 初次啟動若尚未安裝 Ollama，會顯示官方下載入口；完成 Ollama 安裝後按「繼續」。缺少 Vision 相容服務時會下載官方 0.24.0 Windows ZIP（約 2.1 GB），驗證官方 SHA-256，並安裝 CPU／Vulkan 檔案。
@@ -29,6 +29,7 @@ Windows 本機 AI 聊天工作室：Ollama 文字／圖片聊天、框選截圖�
 ## 使用
 
 - 主視窗採深色青藍聊天版面：左側快捷列與歷史對話、中間對話卡片、上方狀態列、下方靠左輸入與 CPU／GPU 資源列。左側清單顯示完整日期時間標題；舊版對話也會以問答卡片呈現。可在設定改為亮色或跟隨 Windows。
+- AI 回覆標頭以金色顯示簡短模型家族名稱（例如 Llama、Gemma）；完整模型名稱仍保留在對話資料中。
 - 設定 → 聊天模型：選已安裝模型及 CPU／GPU。圖片選單只列支援 vision 的模型。
 - 左側「＋ 新對話」開始新聊天；歷史清單以首次對話時間命名，可選取並按「重新命名」（或 F2）修改。紀錄存在本機 `%LOCALAPPDATA%\OptiiChat\history`，重啟後仍可讀取。歷史圖片只保存文字註記，不保存圖片副本；重新分析圖片時需重新附加。
 - 按輸入框旁「+」選圖片／PDF，或直接拖入聊天區。旁邊的「截圖」或程式內 `Ctrl+Shift+S` 可框選畫面，放開後圖片會顯示在輸入框預覽；Esc／右鍵取消。
@@ -56,7 +57,7 @@ Git clone 的開發者若修改程式，應以 Git 更新；自動更新不會�
    python opti_release.py
    ```
 3. 先將 `downloads/OptiiChat-版本.zip` 上傳到 `optiichat-downloads` R2 bucket，驗證公開 URL 的 SHA-256，再將 `r2-update.json` 上傳為 R2 的 `update.json`。manifest 必須最後發佈。
-4. 提交程式碼、`package-files.json`、ZIP 及 `r2-update.json`。GitHub `update.json` 保留 1.3.5 過渡版，供仍使用舊版更新器的用戶先切換到 R2；往後不再更新此過渡檔。
+4. 提交程式碼、`package-files.json`、ZIP 及 `r2-update.json`。GitHub `update.json` 保留過渡版，供仍使用舊版更新器的用戶先切換到 R2。
 
 `opti_release.py` 只打包明列的程式、測試、說明與品牌素材，排除設定、暫存、使用者音檔、模型權重及 Git 資訊。若新增新的檔案類型，請同步維護 `opti_update.safe_name` 的允許清單。
 

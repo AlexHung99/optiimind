@@ -329,10 +329,12 @@ def add_turn(app, turn, scroll=True):
         info.pack(anchor='w', pady=(10, 0))
     assistant = app.frame(row, role='chat')
     assistant.pack(fill='x', pady=(22, 0))
-    header = app.label(assistant, turn.get('model', '本機模型')+'    '+stamp,
-                       role='chat', color='accent', anchor='w')
-    header.configure(font=(app.ui_font, 10, 'bold'))
+    header = app.frame(assistant, role='chat')
     header.pack(anchor='w', padx=10, pady=(0, 6))
+    model_label = app.label(header, short_model_name(turn.get('model')), role='chat', color='gold')
+    model_label.configure(font=(app.ui_font, 10, 'bold'))
+    model_label.pack(side='left')
+    app.label(header, '    '+stamp, role='chat', color='muted').pack(side='left')
     answer_card = app.frame(assistant, role='assistant_card', padx=20, pady=17, highlightthickness=1)
     answer_card.pack(fill='x', padx=(25, 145))
     if turn.get('answer'):
@@ -349,6 +351,18 @@ def add_turn(app, turn, scroll=True):
         if app.last_theme:
             paint_roles(app, app.last_theme)
         settle_chat_scroll(app)
+
+
+def short_model_name(value):
+    """Show only the model family in reply headings; keep the full saved ID."""
+    model = str(value or '').split(' · ', 1)[0].rsplit('/', 1)[-1].split(':', 1)[0]
+    for prefix, label in (('mllama', 'Llama'), ('llama', 'Llama'), ('gemma', 'Gemma'),
+                          ('qwen', 'Qwen'), ('deepseek', 'DeepSeek'), ('mistral', 'Mistral'),
+                          ('phi', 'Phi'), ('gpt', 'GPT'), ('llava', 'LLaVA')):
+        if model.lower().startswith(prefix):
+            return label
+    match = re.match(r'[^\W\d_]+', model, re.UNICODE)
+    return match.group().capitalize() if match else '本機模型'
 
 
 def render_answer(app, parent, content):

@@ -20,7 +20,7 @@ import opti_model_worker
 import opti_capture
 import opti_pdf
 import opti_history
-from opti_ui import legacy_display_turns, render_turns
+from opti_ui import legacy_display_turns, render_turns, short_model_name
 
 CATALOG = [
     {'name': 'gemma4:26b', 'capabilities': ['completion', 'vision', 'thinking'], 'details': {'family': 'gemma4'}},
@@ -30,6 +30,16 @@ CATALOG = [
 
 
 class HistoryPresentationTests(unittest.TestCase):
+    def test_reply_heading_uses_short_model_family(self):
+        examples = {'llama3.2-vision:latest · CPU': 'Llama',
+                    'gemma4:26b · GPU': 'Gemma',
+                    'hf.co/example/Qwen3-VL:latest · GPU': 'Qwen',
+                    'deepseek-r1:8b': 'DeepSeek',
+                    '': '本機模型'}
+        for saved_model, expected in examples.items():
+            with self.subTest(saved_model=saved_model):
+                self.assertEqual(short_model_name(saved_model), expected)
+
     def test_legacy_pdf_chat_uses_saved_messages_without_showing_document_prompt(self):
         record = {'title': '2026-09-23 20:00', 'created': '2026-09-23T20:00:00+08:00',
                   'messages': [
@@ -63,6 +73,30 @@ class HistoryPresentationTests(unittest.TestCase):
             finally:
                 app.conversation = None
                 app.quit()
+
+    def test_reply_heading_uses_gold_in_both_themes(self):
+        for theme, palette in [('light', opti_app.LIGHT), ('dark', opti_app.DARK)]:
+            with self.subTest(theme=theme), ExitStack() as stack:
+                settings = deepcopy(core.DEFAULTS)
+                settings['theme'] = theme
+                stack.enter_context(patch.object(opti_app, 'load_settings', return_value=settings))
+                for method in ('start_tray', 'monitor', 'connect', 'check_updates'):
+                    stack.enter_context(patch.object(opti_app.OptiiApp, method))
+                root = tk.Tk()
+                app = opti_app.OptiiApp(root)
+                try:
+                    app.conversation = {'display_turns': [{'time': '2026-09-23 20:00',
+                                                           'question': '你好',
+                                                           'model': 'llama3.2-vision:latest · CPU',
+                                                           'answer': '您好'}]}
+                    render_turns(app)
+                    labels = [widget for widget in app.roles if isinstance(widget[0], tk.Label)]
+                    model = next(widget[0] for widget in labels if widget[0].cget('text') == 'Llama')
+                    self.assertEqual(model.cget('fg'), palette['gold'])
+                    self.assertNotIn('llama3.2-vision', [widget[0].cget('text') for widget in labels])
+                finally:
+                    app.conversation = None
+                    app.quit()
 
 
 class SpeechHandler(BaseHTTPRequestHandler):

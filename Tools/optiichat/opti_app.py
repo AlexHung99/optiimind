@@ -32,10 +32,10 @@ from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch
 ASSETS = Path(__file__).with_name('opti_assets')
 LIGHT = dict(bg='#EAF3F5', rail='#DFEBEF', panel='#F7FBFD', chat='#FFFFFF',
              user_card='#E3F8FA', assistant_card='#F3F8FA', input='#FFFFFF', selected='#C6F1F3',
-             paper='#FFFFFF', ink='#142A38', muted='#647D8E', line='#B8D1D9', accent='#087E88', gold='#087E88')
+             paper='#FFFFFF', ink='#142A38', muted='#647D8E', line='#B8D1D9', accent='#087E88', gold='#986200')
 DARK = dict(bg='#091720', rail='#0A1925', panel='#102330', chat='#0D1C27',
             user_card='#103344', assistant_card='#172D3A', input='#142B39', selected='#0A3D4B',
-            paper='#132735', ink='#EDF4FA', muted='#9DAFBE', line='#29495B', accent='#38E3EE', gold='#38E3EE')
+            paper='#132735', ink='#EDF4FA', muted='#9DAFBE', line='#29495B', accent='#38E3EE', gold='#F3CA68')
 
 
 def ui_font_family(root):
@@ -585,7 +585,8 @@ class OptiiApp(ChatApp):
 
     def assistant_name(self, turn):
         kind, *_ = route_messages(self.settings, build_messages(self.history, turn), self.route_mode())
-        return self.settings[kind]['model'] + ' · ' + self.settings[kind]['device']
+        from opti_ui import short_model_name
+        return short_model_name(self.settings[kind]['model'])
 
     def create_request(self, messages):
         kind, host, model, options, routed = route_messages(self.settings, messages, self.route_mode(), self.catalog)
