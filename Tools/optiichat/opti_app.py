@@ -277,15 +277,18 @@ class OptiiApp(ChatApp):
         self.logo.configure(image=self.logo_photo)
         self.conversation_list.configure(bg=p['panel'], fg=p['ink'], selectbackground=p['selected'], selectforeground=p['ink'])
         self.refresh_conversations()
+        if self.settings_window and self.settings_window.winfo_exists():
+            self.settings_window.apply_theme(theme)
 
-    def set_titlebar_theme(self, theme):
-        if self.closed or not self.root.winfo_exists():
+    def set_titlebar_theme(self, theme, window=None):
+        window = window or self.root
+        if self.closed or not window.winfo_exists():
             return
         try:
             dark = ctypes.c_int(theme == 'dark')
             ctypes.windll.user32.GetParent.argtypes = [ctypes.c_void_p]
             ctypes.windll.user32.GetParent.restype = ctypes.c_void_p
-            child = ctypes.c_void_p(self.root.winfo_id())
+            child = ctypes.c_void_p(window.winfo_id())
             hwnd = ctypes.windll.user32.GetParent(child) or child.value
             ctypes.windll.dwmapi.DwmSetWindowAttribute(
                 ctypes.c_void_p(hwnd), 20,
@@ -955,18 +958,17 @@ class SettingsWindow(tk.Toplevel):
         super().__init__(app.root)
         self.app = app
         self.title('OptiChat 設定')
-        self.geometry('860x790')
-        self.minsize(780, 710)
+        self.minsize(720, 600)
         self.transient(app.root)
         self.vars = {}
         self.native_voices = []
-        controls = ttk.Frame(self, padding=12)
+        controls = ttk.Frame(self, padding=12, style='SettingsFooter.TFrame')
         controls.pack(side='bottom', fill='x')
-        ttk.Button(controls, text='儲存設定', style='Accent.TButton', command=self.save).pack(side='right')
-        ttk.Button(controls, text='取消', command=self.destroy).pack(side='right', padx=8)
+        ttk.Button(controls, text='儲存設定', style='SettingsAccent.TButton', command=self.save).pack(side='right')
+        ttk.Button(controls, text='取消', style='Settings.TButton', command=self.destroy).pack(side='right', padx=8)
         self.notice = tk.StringVar(value='設定儲存後，下次生成時生效。')
-        ttk.Label(controls, textvariable=self.notice).pack(side='left')
-        notebook = ttk.Notebook(self)
+        ttk.Label(controls, textvariable=self.notice, style='SettingsFooter.TLabel').pack(side='left')
+        notebook = ttk.Notebook(self, style='Settings.TNotebook')
         notebook.pack(fill='both', expand=True, padx=14, pady=14)
         general = self.tab(notebook, '外觀與常駐')
         self.field(general, '主題', 'theme', ['system', 'light', 'dark'])
@@ -975,16 +977,20 @@ class SettingsWindow(tk.Toplevel):
         self.check(general, '模型完成回覆後自動朗讀', 'auto_speak')
         self.check(general, '預設快速圖片模式（560 px）', 'fast_image')
         self.note(general, '每次啟動都從 R2 檢查更新；有新版會先驗證並套用。\n離線時仍可使用目前版本，連線恢復後會重試。系統匣「結束程式」也會套用已下載更新。')
-        ttk.Label(general, textvariable=app.update_status, wraplength=680).pack(anchor='w', pady=8)
-        ttk.Button(general, text='立即檢查更新', command=lambda: app.check_updates(True)).pack(anchor='w')
+        ttk.Label(general, textvariable=app.update_status, wraplength=680,
+                  style='SettingsMuted.TLabel').pack(anchor='w', pady=8)
+        ttk.Button(general, text='立即檢查更新', style='Settings.TButton',
+                   command=lambda: app.check_updates(True)).pack(anchor='w')
         self.note(general, '系統匣右鍵可開啟設定或結束程式。\n聊天紀錄儲存在本機，不會因結束程式而清除。\nCPU／GPU 數值是整台電腦的即時使用率。\n\n介面與原始標誌取自 optiimind.com，為你的本機工具。')
         models = self.tab(notebook, '聊天模型')
         self.model_combos = {}
         self.model_notice = tk.StringVar(value='讀取已安裝模型中…')
-        ttk.Button(models, text='重新整理已安裝模型', command=self.app.refresh_models).pack(anchor='e')
-        ttk.Label(models, textvariable=self.model_notice, wraplength=700).pack(anchor='w', pady=6)
+        ttk.Button(models, text='重新整理已安裝模型', style='Settings.TButton',
+                   command=self.app.refresh_models).pack(anchor='e')
+        ttk.Label(models, textvariable=self.model_notice, wraplength=700,
+                  style='SettingsMuted.TLabel').pack(anchor='w', pady=6)
         for key, title in [('text', '文字聊天模型'), ('vision', '圖片理解模型')]:
-            box = ttk.LabelFrame(models, text=title, padding=12)
+            box = ttk.LabelFrame(models, text=title, padding=12, style='Settings.TLabelframe')
             box.pack(fill='x', pady=8)
             self.model_combos[key] = self.field(box, '已安裝模型', key+'.model', [])
             self.field(box, '運算裝置', key+'.device', ['CPU', 'GPU'])
@@ -1000,21 +1006,25 @@ class SettingsWindow(tk.Toplevel):
         self.device_widget = self.field(speech, '語音運算裝置', 'speech.device', ['CPU', 'GPU'])
         self.device_widget.configure(state='disabled')
         self.note(speech, 'Windows 使用 CPU，可直接朗讀，不需另外下載語音模型。')
-        self.native_box = ttk.LabelFrame(speech, text='Windows 本機語音', padding=10)
+        self.native_box = ttk.LabelFrame(speech, text='Windows 本機語音', padding=10,
+                                         style='Settings.TLabelframe')
         self.native_box.pack(fill='x', pady=8)
         self.voice_combo = self.field(self.native_box, '已安裝聲音', 'speech.voice_id', [''])
         self.field(self.native_box, '語速（80～350）', 'speech.rate')
         self.field(self.native_box, '音量（0～1）', 'speech.volume')
         self.breeze_box = None
         if app.breeze_available:
-            self.breeze_box = ttk.LabelFrame(speech, text='Breeze-TTS-2', padding=10)
+            self.breeze_box = ttk.LabelFrame(speech, text='Breeze-TTS-2', padding=10,
+                                             style='Settings.TLabelframe')
             self.breeze_box.pack(fill='x', pady=8)
             self.field(self.breeze_box, '服務網址', 'speech.endpoint')
-            ttk.Button(self.breeze_box, text='測試服務 / health', command=self.health).pack(anchor='e')
+            ttk.Button(self.breeze_box, text='測試服務 / health', style='Settings.TButton',
+                       command=self.health).pack(anchor='e')
             self.field(self.breeze_box, 'Voice Design / Clone', 'speech.mode', ['design', 'clone'])
             self.field(self.breeze_box, '聲音描述 / Direction', 'speech.instruction')
             self.field(self.breeze_box, 'Clone 參考音檔', 'speech.ref_audio')
-            ttk.Button(self.breeze_box, text='選擇參考音檔', command=self.choose_reference).pack(anchor='e')
+            ttk.Button(self.breeze_box, text='選擇參考音檔', style='Settings.TButton',
+                       command=self.choose_reference).pack(anchor='e')
             self.field(self.breeze_box, '音檔正確逐字稿', 'speech.ref_text')
             self.field(self.breeze_box, 'CFG Scale（>0）', 'speech.cfg_scale')
             self.field(self.breeze_box, 'Seed', 'speech.seed')
@@ -1023,22 +1033,74 @@ class SettingsWindow(tk.Toplevel):
             self.note(advanced, '以下是官方服務啟動參數，需要在服務端重啟才生效。\n儲存設定只保存選項，不會遠端更改已執行的服務。')
             for key in ['fast_all', 'fast_text_encoder', 'fast_backbone_prefill', 'fast_backbone_decode', 'fast_depth_decoder', 'fast_codec']:
                 self.check(advanced, '--'+key.replace('_', '-'), 'speech.'+key)
-            ttk.Button(advanced, text='複製服務啟動命令', command=self.copy_command).pack(anchor='w', pady=14)
+            ttk.Button(advanced, text='複製服務啟動命令', style='Settings.TButton',
+                       command=self.copy_command).pack(anchor='w', pady=14)
             self.note(advanced, '將命令中的 PATH_TO_BREEZE_TTS_2 替換成模型目錄。\n預設 eager 約需 7.7 GiB，建議 12 GB GPU；fast-all 建議 24 GB。\n\n官方 API 固定值：max_new_tokens=1500、max_seq_len=2048、\nrepetition_penalty=1.1。這些不是可傳入的請求參數。\n輸出格式：24 kHz / mono / 16-bit PCM（本程式封裝為 WAV）。\n\n權重與產出限研究及非商業使用，詳見模型授權。\n完整安裝方式見 OptiiChat-使用說明.md。')
         self.provider_changed()
         self.set_models(app.catalog if app.catalog_loaded else None)
         threading.Thread(target=self.load_voices, daemon=True).start()
+        self.apply_theme(app.last_theme or app.resolved_theme())
+        self.center_on_parent()
+
+    def center_on_parent(self):
+        self.app.root.update_idletasks()
+        self.update_idletasks()
+        screen_x, screen_y = self.winfo_vrootx(), self.winfo_vrooty()
+        screen_width, screen_height = self.winfo_vrootwidth(), self.winfo_vrootheight()
+        width = min(860, max(720, screen_width-80))
+        height = min(790, max(600, screen_height-80))
+        parent = self.app.root
+        x = parent.winfo_rootx()+(parent.winfo_width()-width)//2
+        y = parent.winfo_rooty()+(parent.winfo_height()-height)//2
+        x = max(screen_x, min(x, screen_x+screen_width-width))
+        y = max(screen_y, min(y, screen_y+screen_height-height))
+        self.geometry(f'{width}x{height}+{x}+{y}')
+
+    def apply_theme(self, theme):
+        p = DARK if theme == 'dark' else LIGHT
+        self.configure(bg=p['bg'])
+        style = ttk.Style(self)
+        style.configure('SettingsFooter.TFrame', background=p['panel'])
+        style.configure('SettingsPage.TFrame', background=p['paper'])
+        style.configure('Settings.TLabel', background=p['paper'], foreground=p['ink'])
+        style.configure('SettingsMuted.TLabel', background=p['paper'], foreground=p['muted'])
+        style.configure('SettingsFooter.TLabel', background=p['panel'], foreground=p['muted'])
+        style.configure('Settings.TCheckbutton', background=p['paper'], foreground=p['ink'])
+        style.map('Settings.TCheckbutton', background=[('active', p['paper'])],
+                  foreground=[('disabled', p['muted'])])
+        style.configure('Settings.TLabelframe', background=p['paper'], bordercolor=p['line'])
+        style.configure('Settings.TLabelframe.Label', background=p['paper'], foreground=p['accent'],
+                        font=(self.app.ui_font, 10, 'bold'))
+        style.configure('Settings.TEntry', fieldbackground=p['input'], foreground=p['ink'],
+                        insertcolor=p['ink'], bordercolor=p['line'])
+        style.configure('Settings.TCombobox', fieldbackground=p['input'], foreground=p['ink'],
+                        background=p['panel'], arrowcolor=p['accent'], bordercolor=p['line'])
+        style.map('Settings.TCombobox', fieldbackground=[('readonly', p['input'])],
+                  foreground=[('readonly', p['ink']), ('disabled', p['muted'])])
+        style.configure('Settings.TButton', background=p['panel'], foreground=p['ink'],
+                        bordercolor=p['line'], padding=(10, 7), relief='flat')
+        style.map('Settings.TButton', background=[('active', p['selected'])])
+        style.configure('SettingsAccent.TButton', background=p['accent'], foreground=p['bg'],
+                        bordercolor=p['accent'], padding=(12, 7), relief='flat')
+        style.map('SettingsAccent.TButton', background=[('active', p['selected'])],
+                  foreground=[('active', p['ink'])])
+        style.configure('Settings.TNotebook', background=p['bg'], bordercolor=p['line'])
+        style.configure('Settings.TNotebook.Tab', background=p['panel'], foreground=p['muted'],
+                        padding=(16, 10), bordercolor=p['line'])
+        style.map('Settings.TNotebook.Tab', background=[('selected', p['paper']), ('active', p['selected'])],
+                  foreground=[('selected', p['accent']), ('active', p['ink'])])
+        self.app.root.after(100, lambda chosen=theme: self.app.set_titlebar_theme(chosen, self))
 
     def tab(self, notebook, title):
-        outer = ttk.Frame(notebook)
+        outer = ttk.Frame(notebook, style='SettingsPage.TFrame')
         notebook.add(outer, text=title)
         canvas = tk.Canvas(outer, highlightthickness=0)
-        self.app.roles.append((canvas, 'bg', None))
+        self.app.roles.append((canvas, 'paper', None))
         bar = ttk.Scrollbar(outer, orient='vertical', command=canvas.yview)
         bar.pack(side='right', fill='y')
         canvas.pack(fill='both', expand=True)
         canvas.configure(yscrollcommand=bar.set)
-        body = ttk.Frame(canvas, padding=16)
+        body = ttk.Frame(canvas, padding=16, style='SettingsPage.TFrame')
         item = canvas.create_window((0, 0), window=body, anchor='nw')
         body.bind('<Configure>', lambda _: canvas.configure(scrollregion=canvas.bbox('all')))
         canvas.bind('<Configure>', lambda event: canvas.itemconfigure(item, width=event.width))
@@ -1057,19 +1119,23 @@ class SettingsWindow(tk.Toplevel):
         return var
 
     def field(self, parent, title, key, choices=None):
-        row = ttk.Frame(parent)
+        row = ttk.Frame(parent, style='SettingsPage.TFrame')
         row.pack(fill='x', pady=4)
-        ttk.Label(row, text=title, width=24).pack(side='left')
+        ttk.Label(row, text=title, width=24, style='Settings.TLabel').pack(side='left')
         var = self.variable(key)
-        widget = ttk.Entry(row, textvariable=var) if choices is None else ttk.Combobox(row, textvariable=var, values=choices, state='readonly')
+        widget = (ttk.Entry(row, textvariable=var, style='Settings.TEntry') if choices is None
+                  else ttk.Combobox(row, textvariable=var, values=choices,
+                                    state='readonly', style='Settings.TCombobox'))
         widget.pack(side='left', fill='x', expand=True)
         return widget
 
     def note(self, parent, text):
-        ttk.Label(parent, text=text, wraplength=700, justify='left').pack(anchor='w', pady=10)
+        ttk.Label(parent, text=text, wraplength=700, justify='left',
+                  style='SettingsMuted.TLabel').pack(anchor='w', pady=10)
 
     def check(self, parent, title, key):
-        ttk.Checkbutton(parent, text=title, variable=self.variable(key, True)).pack(anchor='w', pady=7)
+        ttk.Checkbutton(parent, text=title, variable=self.variable(key, True),
+                        style='Settings.TCheckbutton').pack(anchor='w', pady=7)
 
     def provider_changed(self):
         if not self.app.breeze_available:

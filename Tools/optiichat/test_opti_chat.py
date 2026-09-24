@@ -320,6 +320,40 @@ class CoreTests(unittest.TestCase):
 
 
 class DesktopTests(unittest.TestCase):
+    def test_settings_open_centered_and_follow_main_theme(self):
+        settings = deepcopy(core.DEFAULTS)
+        settings['theme'] = 'dark'
+        with patch.object(opti_app, 'load_settings', return_value=settings), \
+             patch.object(opti_app.OptiiApp, 'start_tray'), \
+             patch.object(opti_app.OptiiApp, 'monitor'), \
+             patch.object(opti_app.OptiiApp, 'connect'), \
+             patch.object(opti_app.OptiiApp, 'check_updates'), \
+             patch.object(opti_app.SettingsWindow, 'load_voices'):
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                root.geometry('1050x740+0+0')
+                root.update()
+                app.open_settings()
+                root.update()
+                dialog = app.settings_window
+                main_center = root.winfo_rootx()+root.winfo_width()/2
+                dialog_center = dialog.winfo_rootx()+dialog.winfo_width()/2
+                self.assertLess(abs(main_center-dialog_center), 25)
+                self.assertEqual(dialog.cget('bg'), opti_app.DARK['bg'])
+                style = opti_app.ttk.Style(dialog)
+                self.assertEqual(style.lookup('SettingsPage.TFrame', 'background'), opti_app.DARK['paper'])
+                self.assertEqual(style.lookup('Settings.TNotebook.Tab', 'foreground', ('selected',)),
+                                 opti_app.DARK['accent'])
+                app.settings['theme'] = 'light'
+                app.apply_theme()
+                self.assertEqual(dialog.cget('bg'), opti_app.LIGHT['bg'])
+                self.assertEqual(style.lookup('SettingsPage.TFrame', 'background'), opti_app.LIGHT['paper'])
+                self.assertEqual(style.lookup('Settings.TNotebook.Tab', 'foreground', ('selected',)),
+                                 opti_app.LIGHT['accent'])
+            finally:
+                app.quit()
+
     def test_unsupported_breeze_ui_is_absent_and_saved_provider_falls_back(self):
         saved = deepcopy(core.DEFAULTS)
         saved['speech'].update(provider='breeze', device='GPU', instruction='保留聲音設定')
