@@ -1,9 +1,9 @@
 {
-  "version": "1.3.16",
+  "version": "1.3.17",
   "files": {
     "Install-OptiiChat.cmd": "e2c1d12eafd73ab94f2d01c5bfb2390955bf8ad8944f02599455904ba3635c92",
-    "OptiiChat-使用說明.md": "2c73be2028976c47a469dcbfb94335de9c1db335cdb36c285dce13158a2b4c71",
-    "README.md": "b87c53004a2c0596a77bc9c1a36eba1757f50c281b9315de7d4a7962d9604fc1",
+    "OptiiChat-使用說明.md": "6538df9354f38d5a07950422677758f7e266be6538c86ac26210cc437936f271",
+    "README.md": "65e54aac99416ab46ace78d069a291c62aafa1bef1a09dc7e803c60704ae60f0",
     "Start-Llama32-UI.cmd": "ecd3cdf2b10af9133a420bfe4767f3fc410d0f8f62c578329738c4e08d0dcddd",
     "Start-Llama32-Vision.cmd": "017deecb1c03037d018531c69707c8cc1e5d789bcb4f95b59070df42a8d397df",
     "Start-OptiiChat.cmd": "a8ee7b83d03d3eda1f613f81991285fd45c9a24d06d03e380d4adbe34a015213",
@@ -24,12 +24,12 @@
     "opti_release.py": "200f5c96d3b9351cbde51e6341a0114de35483871fc056ee253daef23eb63d7f",
     "opti_setup.py": "487f8879603e9612c65a9d88259d8bda5722586c67d3eaa2e00df8a88dbb9969",
     "opti_speech_worker.py": "b32b079e15168433482d0d8e006824f9e15d7dda394814a8e005f9f60d6a4e4d",
-    "opti_ui.py": "4547614c94fe68ab2a72f33c105eaf79a51cac3f432078ee22bde00e716fb798",
+    "opti_ui.py": "e47024a6609f3bf6787635c52477b5aa03bcbcdd0a5a3790067dac2d54a7e407",
     "opti_update.py": "160e5c4c6a903b304a10e17398f264e4d4577c255aba4b02b3bfcbc39bd5e809",
-    "opti_version.py": "5d0a14e7c9ed2ebb1b32bedc3d8791c49bd9f128e335d7adb863d83da96142a3",
+    "opti_version.py": "36d5f3e2015aaab212590050fae612a219289872284f88083304021b7104d5e5",
     "start_llama32_vision.py": "215bebba6ac8040f974e35e0a9ea9728c648d4b7804d6f2b1bb03aaa2f4b3310",
     "test_llama_vision_ui.py": "d5ee3a7a8333fe088526eec7cf40cde0a2562d9a52ca0e59e4d284b0e6a8a49e",
-    "test_opti_chat.py": "3d72139a869b086e58a7543f31abfa67c40e4c957fc79698f85280a2764583e7",
+    "test_opti_chat.py": "e20b18f34ddd574f955e329a3353a1d22af455e0fed7a74479020bc162cc2313",
     "test_opti_update.py": "b84e6ef018253abe380ee24acb90bf2a7baaf46f139c1763694cc1742f2163ed"
   }
 }

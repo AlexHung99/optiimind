@@ -4,11 +4,11 @@ Windows 本機 AI 聊天工具：Ollama 文字／圖片聊天、框選截圖、�
 
 - **介紹與下載：** https://optiimind.com/Tools/optiichat/
 - **程式碼：** 本目錄
-- **目前版本：** 1.3.16
+- **目前版本：** 1.3.17
 
 ## 安裝
 
-1. 從介紹頁下載 `OptiChat-Setup-1.3.16.exe`，執行安裝精靈；不需要自行安裝 Python。
+1. 從介紹頁下載 `OptiChat-Setup-1.3.17.exe`，執行安裝精靈；不需要自行安裝 Python。
 2. 安裝包含獨立 Python 3.14.3、介面、PDF 及朗讀套件，放在 `%LOCALAPPDATA%\OptiiChat\python`；程式在同一資料夾下的 `app`。為保留舊版設定與更新相容性，內部資料夾名稱沿用 OptiiChat。
 3. 自動建立桌面與開始功能表「OptiChat」捷徑。雙擊即可開啟。
 4. 初次啟動若尚未安裝 Ollama，會顯示官方下載入口；完成 Ollama 安裝後按「繼續」。缺少 Vision 相容服務時會下載官方 0.24.0 Windows ZIP（約 2.1 GB），驗證官方 SHA-256，並安裝 CPU／Vulkan 檔案。
@@ -36,7 +36,7 @@ Windows 本機 AI 聊天工具：Ollama 文字／圖片聊天、框選截圖、�
 - 按輸入框旁「+」選圖片／PDF，或直接拖入聊天區。旁邊的「截圖」或程式內 `Ctrl+Shift+S` 可框選畫面，放開後圖片會顯示在輸入框預覽；Esc／右鍵取消。
 - `Ctrl+Enter` 傳送。關閉視窗預設收至系統匣；首次關閉會提示圖示可能位於 Windows 右下角的「^」隱藏圖示區。若系統匣啟動失敗，視窗會留在工作列供重新開啟。從系統匣選「結束程式」才真正離開。
 - 啟動時偵測 NVIDIA 顯存；未達單卡 12 GB 建議配置或無法偵測時，隱藏 Breeze、Voice Design／Clone 與服務參數頁，改用 Windows 朗讀。原有聲音描述與參考音檔設定保留。符合硬體條件仍須另外啟動相容的 Breeze 服務。
-- Windows 語音可直接朗讀與匯出 WAV。Breeze-TTS-2 僅提供 API 串接，需要另行啟動官方 CUDA 服務；不包含模型權重。
+- 下方的手動朗讀、停止語音與匯出 WAV 按鈕目前隱藏；設定內仍可開啟回覆後自動朗讀。Breeze-TTS-2 僅提供 API 串接，需要另行啟動官方 CUDA 服務；不包含模型權重。
 - 完整說明見 [OptiiChat-使用說明.md](OptiiChat-使用說明.md)。
 
 ## 自動更新

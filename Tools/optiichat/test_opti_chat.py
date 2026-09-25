@@ -549,7 +549,8 @@ class DesktopTests(unittest.TestCase):
                 self.assertEqual(config['speech']['instruction'], '保留聲音設定')
                 self.assertEqual(str(dialog.voice_combo['state']), 'readonly')
                 self.assertEqual(saved['speech']['provider'], 'breeze')
-                self.assertTrue(app.speak_button.winfo_ismapped())
+                self.assertFalse(app.speech_controls.winfo_ismapped())
+                self.assertEqual(app.speak_button.master, app.speech_controls)
             finally:
                 app.quit()
 
