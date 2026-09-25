@@ -481,6 +481,32 @@ class CoreTests(unittest.TestCase):
 
 
 class DesktopTests(unittest.TestCase):
+    def test_update_notice_fits_status_banner_at_window_sizes(self):
+        with patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)), \
+             patch.object(opti_app.OptiiApp, 'start_tray'), \
+             patch.object(opti_app.OptiiApp, 'monitor'), \
+             patch.object(opti_app.OptiiApp, 'connect'), \
+             patch.object(opti_app.OptiiApp, 'check_updates'):
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                app.status.set('新版 1.3.21 已下載；從系統匣「結束程式」後重新開啟即可套用。')
+                for width in (1050, 1410):
+                    root.geometry(f'{width}x740')
+                    root.update()
+                    self.assertGreaterEqual(app.status_label.winfo_height(),
+                                            app.status_label.winfo_reqheight())
+                    self.assertGreaterEqual(app.status_banner.winfo_height(), 64)
+                    self.assertGreater(int(app.status_label.cget('wraplength')), 470)
+                app.status.set('新版已下載；從系統匣結束程式後重新開啟。' * 5)
+                root.geometry('1050x740')
+                root.update()
+                self.assertGreater(app.status_banner.winfo_height(), 64)
+                self.assertGreaterEqual(app.status_label.winfo_height(),
+                                        app.status_label.winfo_reqheight())
+            finally:
+                app.quit()
+
     def test_settings_download_tab_refreshes_model_choices_without_switching_selection(self):
         with patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)), \
              patch.object(opti_app.OptiiApp, 'start_tray'), \

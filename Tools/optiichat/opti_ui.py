@@ -126,9 +126,20 @@ def build_ui(app):
     center.pack(side='left', fill='both', expand=True, padx=(0, 12), pady=(12, 12))
     toolbar = app.frame(center, role='panel', height=64, padx=16, highlightthickness=1)
     toolbar.pack(fill='x')
-    toolbar.pack_propagate(False)
-    app.label(toolbar, textvariable=app.status, role='panel', color='accent',
-              wraplength=470, justify='left').pack(side='left', fill='x', expand=True)
+    toolbar.grid_columnconfigure(0, weight=1)
+    toolbar.grid_rowconfigure(0, minsize=64)
+    status_label = app.label(toolbar, textvariable=app.status, role='panel', color='accent',
+                             anchor='w', justify='left', wraplength=1000)
+    status_label.grid(row=0, column=0, sticky='ew', pady=12)
+    app.status_banner = toolbar
+    app.status_label = status_label
+
+    def fit_status(event):
+        width = max(160, event.width - 40)
+        if int(status_label.cget('wraplength')) != width:
+            status_label.configure(wraplength=width)
+
+    toolbar.bind('<Configure>', fit_status)
     app.root.bind('<Control-Shift-S>', app.take_screenshot)
 
     app.composer = app.frame(center, role='bg', height=128)

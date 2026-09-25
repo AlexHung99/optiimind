@@ -1,9 +1,9 @@
 {
-  "version": "1.3.19",
+  "version": "1.3.21",
   "files": {
     "Install-OptiiChat.cmd": "e2c1d12eafd73ab94f2d01c5bfb2390955bf8ad8944f02599455904ba3635c92",
     "OptiiChat-使用說明.md": "ae75e1546efffc589280b3f81c970755ec65de5e88351203bd34ac84279cbc53",
-    "README.md": "cefa8308c9c3aafcd0b2bd5ab5ffcb98b374f1e90fbc6f20175cb43ad0573248",
+    "README.md": "ac79bca34aa4f5e3a708ed0ddd619509ea2777d74bb95b4a00aadc8aff3b2cb2",
     "Start-Llama32-UI.cmd": "ecd3cdf2b10af9133a420bfe4767f3fc410d0f8f62c578329738c4e08d0dcddd",
     "Start-Llama32-Vision.cmd": "017deecb1c03037d018531c69707c8cc1e5d789bcb4f95b59070df42a8d397df",
     "Start-OptiiChat.cmd": "a8ee7b83d03d3eda1f613f81991285fd45c9a24d06d03e380d4adbe34a015213",
@@ -24,12 +24,12 @@
     "opti_release.py": "200f5c96d3b9351cbde51e6341a0114de35483871fc056ee253daef23eb63d7f",
     "opti_setup.py": "7abeb1db24197505d4317d821a48ac47c91a668990237c9b99d293e7680f1d9c",
     "opti_speech_worker.py": "b32b079e15168433482d0d8e006824f9e15d7dda394814a8e005f9f60d6a4e4d",
-    "opti_ui.py": "65db9410c5d6adad8438ae5ed3ca0d4feb19e8ba62d1f0e0397e434e42c4bb3c",
+    "opti_ui.py": "bfd581e6d93229ad4c0d36d0b7f628a5cd24c17e10ac6a3426236fc0f60ee00b",
     "opti_update.py": "160e5c4c6a903b304a10e17398f264e4d4577c255aba4b02b3bfcbc39bd5e809",
-    "opti_version.py": "8b879945148a94af27351f759e23c7b7e621a6c9bbcdeba24a60975ebd79d598",
+    "opti_version.py": "4ba3d1f62b55782c650f1d0cf18b644f69aae52c5502da8a31ca0f2ace7ffe14",
     "start_llama32_vision.py": "215bebba6ac8040f974e35e0a9ea9728c648d4b7804d6f2b1bb03aaa2f4b3310",
     "test_llama_vision_ui.py": "d5ee3a7a8333fe088526eec7cf40cde0a2562d9a52ca0e59e4d284b0e6a8a49e",
-    "test_opti_chat.py": "456fdaeb89057665e041b2578f8d027310d5a8f1923160d7b0ede44d1417dadc",
+    "test_opti_chat.py": "d1a47559b3385dbf738ad13825a45fb2f6e71898939d4568d8529ba4c41293a0",
     "test_opti_update.py": "74ce39e48bc813e36424ca91bb57b5988284cf74f01012eabb97a7f64f55681b"
   }
 }
