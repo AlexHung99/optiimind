@@ -15,6 +15,31 @@ def _button(parent, text, command, style='Outline.TButton', **options):
     return ttk.Button(parent, text=text, command=command, style=style, **options)
 
 
+def fit_scroll_region(canvas):
+    """Ignore the small bottom padding when the contents otherwise fit."""
+    box = canvas.bbox('all')
+    if box:
+        left, top, right, bottom = box
+        viewport = max(1, canvas.winfo_height())
+        if bottom - top <= viewport + 12:
+            bottom = top + viewport
+        canvas.configure(scrollregion=(left, top, right, bottom))
+
+
+def auto_scrollbar(canvas, bar):
+    """Keep the scrollbar visible only while the canvas can actually scroll."""
+    def changed(first, last):
+        bar.set(first, last)
+        needed = float(first) > 0.0001 or float(last) < 0.9999
+        visible = bool(bar.winfo_manager())
+        if needed and not visible:
+            bar.pack(side='right', fill='y', before=canvas)
+        elif visible and not needed:
+            bar.pack_forget()
+
+    canvas.configure(yscrollcommand=changed)
+
+
 def toolbar_icon(kind, color):
     """Draw crisp, font-independent toolbar icons for both Windows themes."""
     scale = 4
@@ -111,18 +136,20 @@ def build_ui(app):
     app.conversation_list.bind('<F2>', app.rename_conversation)
     app.root.bind('<F2>', app.rename_conversation, add=True)
     history_scroll = ttk.Scrollbar(history)
-    app.history_canvas = tk.Canvas(history, highlightthickness=0, bd=0,
-                                   yscrollcommand=history_scroll.set)
+    app.history_scroll = history_scroll
+    app.history_canvas = tk.Canvas(history, highlightthickness=0, bd=0)
     app.roles.append((app.history_canvas, 'panel', None))
-    history_scroll.pack(side='right', fill='y')
     app.history_canvas.pack(fill='both', expand=True)
     history_scroll.configure(command=app.history_canvas.yview)
+    auto_scrollbar(app.history_canvas, history_scroll)
     app.history_items = app.frame(app.history_canvas, role='panel')
     history_window = app.history_canvas.create_window((0, 0), window=app.history_items, anchor='nw')
     app.history_items.bind('<Configure>', lambda _:
-        app.history_canvas.configure(scrollregion=app.history_canvas.bbox('all')))
-    app.history_canvas.bind('<Configure>', lambda event:
-        app.history_canvas.itemconfigure(history_window, width=event.width))
+        fit_scroll_region(app.history_canvas))
+    def resize_history(event):
+        app.history_canvas.itemconfigure(history_window, width=event.width)
+        fit_scroll_region(app.history_canvas)
+    app.history_canvas.bind('<Configure>', resize_history)
     center = app.frame(shell, role='bg')
     center.pack(side='left', fill='both', expand=True, padx=(0, 12), pady=(12, 12))
     toolbar = app.frame(center, role='panel', height=64, padx=16, highlightthickness=1)
@@ -196,18 +223,20 @@ def build_ui(app):
     app.visual_surface = app.frame(center, role='chat', highlightthickness=1)
     app.visual_surface.pack(fill='both', expand=True, pady=(12, 0))
     chat_scroll = ttk.Scrollbar(app.visual_surface)
-    chat_scroll.pack(side='right', fill='y')
-    app.visual_canvas = tk.Canvas(app.visual_surface, bd=0, highlightthickness=0,
-                                  yscrollcommand=chat_scroll.set)
+    app.chat_scroll = chat_scroll
+    app.visual_canvas = tk.Canvas(app.visual_surface, bd=0, highlightthickness=0)
     app.roles.append((app.visual_canvas, 'chat', None))
     app.visual_canvas.pack(fill='both', expand=True)
     chat_scroll.configure(command=app.visual_canvas.yview)
+    auto_scrollbar(app.visual_canvas, chat_scroll)
     app.visual_body = app.frame(app.visual_canvas, role='chat', padx=18, pady=15)
     chat_window = app.visual_canvas.create_window((0, 0), window=app.visual_body, anchor='nw')
     app.visual_body.bind('<Configure>', lambda _:
-        app.visual_canvas.configure(scrollregion=app.visual_canvas.bbox('all')))
-    app.visual_canvas.bind('<Configure>', lambda event:
-        app.visual_canvas.itemconfigure(chat_window, width=event.width))
+        fit_scroll_region(app.visual_canvas))
+    def resize_chat(event):
+        app.visual_canvas.itemconfigure(chat_window, width=event.width)
+        fit_scroll_region(app.visual_canvas)
+    app.visual_canvas.bind('<Configure>', resize_chat)
     app.root.bind('<MouseWheel>', lambda event: wheel(app, event), add=True)
     app.visual_answer_var = None
     app.write('從一句話開始，或按 + 加入圖片、PDF。\n\n', 'note')
@@ -356,6 +385,9 @@ def build_history_cards(app):
             excerpt.bind('<Button-1>', lambda event, i=index: choose_history(app, i))
     if query and not matches:
         app.label(app.history_items, '沒有符合的對話', role='panel', color='muted').pack(anchor='w', pady=12)
+    if not app.history_items.winfo_children():
+        # Tk keeps the last requested frame height after its final child is removed.
+        app.history_items.configure(height=1)
     if app.last_theme:
         paint_roles(app, app.last_theme)
 
@@ -470,7 +502,7 @@ def settle_chat_scroll(app, to_bottom=True):
     # The canvas still has the previous conversation's scroll range until Tk
     # finishes laying out the replacement cards.
     app.visual_body.update_idletasks()
-    app.visual_canvas.configure(scrollregion=app.visual_canvas.bbox('all'))
+    fit_scroll_region(app.visual_canvas)
     app.visual_canvas.yview_moveto(1.0 if to_bottom else 0.0)
 
 

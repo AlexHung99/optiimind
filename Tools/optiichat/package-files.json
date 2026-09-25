@@ -1,15 +1,15 @@
 {
-  "version": "1.3.22",
+  "version": "1.3.23",
   "files": {
     "Install-OptiiChat.cmd": "e2c1d12eafd73ab94f2d01c5bfb2390955bf8ad8944f02599455904ba3635c92",
     "OptiiChat-使用說明.md": "ae75e1546efffc589280b3f81c970755ec65de5e88351203bd34ac84279cbc53",
-    "README.md": "2d9f9be86b395676d63b61887ee6ee347c74c4dcd2199bed16865949437b8fb2",
+    "README.md": "36e1da5752772c1b18650d2b5d65a2185ac0d24c5f572f2be52114daa6154fb5",
     "Start-Llama32-UI.cmd": "ecd3cdf2b10af9133a420bfe4767f3fc410d0f8f62c578329738c4e08d0dcddd",
     "Start-Llama32-Vision.cmd": "017deecb1c03037d018531c69707c8cc1e5d789bcb4f95b59070df42a8d397df",
     "Start-OptiiChat.cmd": "a8ee7b83d03d3eda1f613f81991285fd45c9a24d06d03e380d4adbe34a015213",
     "llama_vision_ui.py": "c5bd7b44a574a274daad47bd189d376c84df47b287c711b11e78da8bf0dad57a",
     "opti-requirements.txt": "383b2840ce11ed1bcc361e865a9f9dea1921eb42e93addc6ce178bffce076400",
-    "opti_app.py": "321f1a4b77f2b1b828db23281e06d5fce4ea21e30f9b88c4dcdb374d578057b1",
+    "opti_app.py": "e0ef1d0f901e100ea46b70fbf69cead73fc222cf39013abf173ad637455237c8",
     "opti_assets/README.md": "1060956c9b5e516df73fc79ce376caf0db5fc59e53ba75df1035afe3d6be903b",
     "opti_assets/logo-black.png": "70f9791934aaf76539270b27a41f7247c0d28f8b42d15415db9d9da409c10233",
     "opti_assets/logo-teal.png": "e824c6d518147277b3842ea1fb40150baf1dd5a06d07c8baadfbef175df4f4ed",
@@ -24,12 +24,12 @@
     "opti_release.py": "200f5c96d3b9351cbde51e6341a0114de35483871fc056ee253daef23eb63d7f",
     "opti_setup.py": "7abeb1db24197505d4317d821a48ac47c91a668990237c9b99d293e7680f1d9c",
     "opti_speech_worker.py": "b32b079e15168433482d0d8e006824f9e15d7dda394814a8e005f9f60d6a4e4d",
-    "opti_ui.py": "bb6ac2b235e4c389005150e6a24750842d563107cd1af116358ea9dd639754d2",
+    "opti_ui.py": "ad72d4ff49e71767d189bcedbf7a789089069482298abb3b2f4417fcbfcdc7a3",
     "opti_update.py": "160e5c4c6a903b304a10e17398f264e4d4577c255aba4b02b3bfcbc39bd5e809",
-    "opti_version.py": "2567ab362a12f388cd0aefd4487898ff7ff8a01562a64aae97f4f2c0b1981829",
+    "opti_version.py": "a55fbe346b166343e0c1d9c60b3f192de3716dd2359bc0548f01e4081b2953fe",
     "start_llama32_vision.py": "215bebba6ac8040f974e35e0a9ea9728c648d4b7804d6f2b1bb03aaa2f4b3310",
     "test_llama_vision_ui.py": "d5ee3a7a8333fe088526eec7cf40cde0a2562d9a52ca0e59e4d284b0e6a8a49e",
-    "test_opti_chat.py": "a2dca130c9447aac870150ac77f43a1ebc2a953c6bbc700395c380a3edc26b00",
+    "test_opti_chat.py": "48e90175b1baf24ce51245a7846cce0878bffd6deb95151d3acfef6615b20603",
     "test_opti_update.py": "74ce39e48bc813e36424ca91bb57b5988284cf74f01012eabb97a7f64f55681b"
   }
 }

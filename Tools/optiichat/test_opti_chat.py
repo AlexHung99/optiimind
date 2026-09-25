@@ -524,6 +524,69 @@ class CoreTests(unittest.TestCase):
 
 
 class DesktopTests(unittest.TestCase):
+    def test_scrollbars_follow_actual_history_chat_and_settings_overflow(self):
+        records = []
+        with patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)), \
+             patch.object(opti_app, 'list_records', side_effect=lambda: records), \
+             patch.object(opti_app.OptiiApp, 'start_tray'), \
+             patch.object(opti_app.OptiiApp, 'monitor'), \
+             patch.object(opti_app.OptiiApp, 'connect'), \
+             patch.object(opti_app.OptiiApp, 'check_updates'), \
+             patch.object(opti_app.SettingsWindow, 'load_voices'):
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                root.geometry('1050x740')
+                root.update()
+                self.assertFalse(app.history_scroll.winfo_ismapped())
+                self.assertFalse(app.chat_scroll.winfo_ismapped())
+                app.visual_canvas.yview_scroll(2, 'units')
+                self.assertEqual(app.visual_canvas.yview(), (0.0, 1.0))
+
+                records.extend(opti_history.new_record() for _ in range(40))
+                app.refresh_conversations()
+                root.update()
+                self.assertTrue(app.history_scroll.winfo_ismapped())
+                records.clear()
+                app.refresh_conversations()
+                root.update()
+                self.assertFalse(app.history_scroll.winfo_ismapped())
+
+                app.conversation = opti_history.new_record()
+                app.conversation['display_turns'] = [{'question': '你好', 'answer': '您好'}]
+                render_turns(app)
+                root.update()
+                self.assertFalse(app.chat_scroll.winfo_ismapped())
+                app.conversation['display_turns'][0]['answer'] = '詳細內容。' * 700
+                render_turns(app)
+                root.update()
+                self.assertTrue(app.chat_scroll.winfo_ismapped())
+                app.conversation['display_turns'][0]['answer'] = '您好'
+                render_turns(app)
+                root.update()
+                self.assertFalse(app.chat_scroll.winfo_ismapped())
+                self.assertEqual(app.visual_canvas.yview(), (0.0, 1.0))
+
+                app.open_settings()
+                dialog = app.settings_window
+                root.update()
+                self.assertFalse(dialog.tab_scrollbars['外觀與常駐'].winfo_ismapped())
+                notebook = next(widget for widget in dialog.winfo_children()
+                                if isinstance(widget, opti_app.ttk.Notebook))
+                models = next(tab for tab in notebook.tabs() if notebook.tab(tab, 'text') == '聊天模型')
+                notebook.select(models)
+                root.update()
+                self.assertFalse(dialog.tab_scrollbars['聊天模型'].winfo_ismapped())
+                dialog.geometry('720x600')
+                root.update()
+                self.assertTrue(dialog.tab_scrollbars['聊天模型'].winfo_ismapped())
+                dialog.geometry('900x900')
+                root.update()
+                self.assertFalse(dialog.tab_scrollbars['聊天模型'].winfo_ismapped())
+            finally:
+                app.conversation = None
+                app.quit()
+
     def test_update_notice_fits_status_banner_at_window_sizes(self):
         with patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)), \
              patch.object(opti_app.OptiiApp, 'start_tray'), \

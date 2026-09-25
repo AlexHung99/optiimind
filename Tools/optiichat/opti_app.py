@@ -1177,6 +1177,8 @@ class SettingsWindow(tk.Toplevel):
         self.minsize(720, 600)
         self.transient(app.root)
         self.vars = {}
+        self.tab_canvases = {}
+        self.tab_scrollbars = {}
         self.native_voices = []
         controls = ttk.Frame(self, padding=12, style='SettingsFooter.TFrame')
         controls.pack(side='bottom', fill='x')
@@ -1339,18 +1341,23 @@ class SettingsWindow(tk.Toplevel):
         self.app.root.after(100, lambda chosen=theme: self.app.set_titlebar_theme(chosen, self))
 
     def tab(self, notebook, title):
+        from opti_ui import auto_scrollbar, fit_scroll_region
         outer = ttk.Frame(notebook, style='SettingsPage.TFrame')
         notebook.add(outer, text=title)
         canvas = tk.Canvas(outer, highlightthickness=0)
         self.app.roles.append((canvas, 'paper', None))
         bar = ttk.Scrollbar(outer, orient='vertical', command=canvas.yview)
-        bar.pack(side='right', fill='y')
+        self.tab_canvases[title] = canvas
+        self.tab_scrollbars[title] = bar
         canvas.pack(fill='both', expand=True)
-        canvas.configure(yscrollcommand=bar.set)
+        auto_scrollbar(canvas, bar)
         body = ttk.Frame(canvas, padding=16, style='SettingsPage.TFrame')
         item = canvas.create_window((0, 0), window=body, anchor='nw')
-        body.bind('<Configure>', lambda _: canvas.configure(scrollregion=canvas.bbox('all')))
-        canvas.bind('<Configure>', lambda event: canvas.itemconfigure(item, width=event.width))
+        body.bind('<Configure>', lambda _: fit_scroll_region(canvas))
+        def resize(event):
+            canvas.itemconfigure(item, width=event.width)
+            fit_scroll_region(canvas)
+        canvas.bind('<Configure>', resize)
         def wheel(event):
             if str(event.widget).startswith(str(outer)):
                 canvas.yview_scroll(-int(event.delta/120), 'units')
