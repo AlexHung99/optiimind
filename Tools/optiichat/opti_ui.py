@@ -606,7 +606,7 @@ def selectable_text(app, parent, content, role, max_width=None):
     widget.tag_configure('heading', font=(app.ui_font, 12, 'bold'))
     widget.tag_configure('numbered', foreground=('#38E3EE' if app.last_theme == 'dark' else '#087E88'))
     widget.pack(fill='x', anchor='w')
-    widget.bind('<Configure>', lambda event: widget.after_idle(lambda: fit_text_height(widget)))
+    widget.bind('<Configure>', lambda event=None: widget.after_idle(lambda: fit_text_height(widget)))
     widget.bind('<MouseWheel>', lambda event: (wheel(app, event), 'break')[1])
     widget.bind('<Control-c>', lambda event: copy_selected_text(widget))
     widget.bind('<Control-a>', lambda event: select_all_text(widget))

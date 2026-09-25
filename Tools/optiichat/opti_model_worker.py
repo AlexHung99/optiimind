@@ -4,9 +4,9 @@ import sys
 from urllib.request import Request, urlopen
 
 
-def main():
+def main(model='llama3.2-vision'):
     request = Request('http://127.0.0.1:11434/api/pull',
-                      data=json.dumps({'model': 'llama3.2-vision', 'stream': True}).encode(),
+                      data=json.dumps({'model': model, 'stream': True}).encode(),
                       headers={'Content-Type': 'application/json'})
     with urlopen(request, timeout=120) as response:
         for line in response:
@@ -22,7 +22,7 @@ def main():
 
 if __name__ == '__main__':
     try:
-        sys.exit(main())
+        sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else 'llama3.2-vision'))
     except Exception as error:
         print(json.dumps({'error': str(error)}, ensure_ascii=True), flush=True)
         sys.exit(1)

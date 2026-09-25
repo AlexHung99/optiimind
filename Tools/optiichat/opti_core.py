@@ -4,6 +4,7 @@ import json
 import math
 import mimetypes
 import os
+import re
 import shutil
 from pathlib import Path
 import subprocess
@@ -156,9 +157,20 @@ def select_installed_defaults(settings, catalog):
     return result
 
 
+def validate_model_name(value):
+    if not isinstance(value, str):
+        raise ValueError('請輸入 Ollama 模型名稱，例如 llama3.2-vision 或 model:tag。')
+    name = value.strip()
+    if (len(name) > 200 or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/-]*(?::[A-Za-z0-9][A-Za-z0-9._-]*)?', name)
+            or any(part in ('', '.', '..') for part in name.split(':', 1)[0].split('/'))):
+        raise ValueError('請輸入 Ollama 模型名稱，例如 llama3.2-vision 或 model:tag。')
+    return name
+
+
 class ModelDownload:
     """Isolate blocking registry I/O so closing/cancelling never blocks Tk."""
-    def __init__(self):
+    def __init__(self, model='llama3.2-vision'):
+        self.model = validate_model_name(model)
         self.cancelled = threading.Event()
         self.process = None
 
@@ -170,7 +182,7 @@ class ModelDownload:
     def pull(self, emit):
         if self.cancelled.is_set():
             raise RuntimeError('模型下載已取消。')
-        self.process = subprocess.Popen([sys.executable, '-u', str(Path(__file__).with_name('opti_model_worker.py'))],
+        self.process = subprocess.Popen([sys.executable, '-u', str(Path(__file__).with_name('opti_model_worker.py')), self.model],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8',
             env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         if self.cancelled.is_set():

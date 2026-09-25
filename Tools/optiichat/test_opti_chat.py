@@ -481,6 +481,51 @@ class CoreTests(unittest.TestCase):
 
 
 class DesktopTests(unittest.TestCase):
+    def test_settings_download_tab_refreshes_model_choices_without_switching_selection(self):
+        with patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)), \
+             patch.object(opti_app.OptiiApp, 'start_tray'), \
+             patch.object(opti_app.OptiiApp, 'monitor'), \
+             patch.object(opti_app.OptiiApp, 'connect'), \
+             patch.object(opti_app.OptiiApp, 'check_updates'), \
+             patch.object(opti_app.SettingsWindow, 'load_voices'), \
+             patch.object(opti_app.OptiiApp, 'download_catalog_model'):
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                app.ready, app.model_loading = True, False
+                app.catalog, app.catalog_loaded = CATALOG, True
+                app.open_settings()
+                dialog = app.settings_window
+                notebooks = [widget for widget in dialog.winfo_children()
+                             if isinstance(widget, opti_app.ttk.Notebook)]
+                self.assertIn('下載模型', [notebooks[0].tab(tab, 'text') for tab in notebooks[0].tabs()])
+                selected = dialog.vars['text.model'].get()
+                dialog.download_model.set('example/model:4b')
+                self.assertTrue(app.start_catalog_download(dialog.download_model.get()))
+                self.assertEqual(str(dialog.download_button.cget('state')), 'disabled')
+                job = app.catalog_download_job
+                app.extra.put(('catalog_pull_progress', (job,
+                    {'status': 'pulling', 'completed': 50, 'total': 100})))
+                app.poll_extra()
+                self.assertEqual(app.catalog_download_percent, 50)
+                self.assertIn('50%', dialog.download_status.get())
+                new_catalog = CATALOG + [{'name': 'example/model:4b', 'capabilities': ['completion']}]
+                app.extra.put(('catalog_pull_ready', (job, new_catalog)))
+                app.poll_extra()
+                self.assertIsNone(app.catalog_download_job)
+                self.assertIn('example/model:4b', dialog.model_combos['text']['values'])
+                self.assertEqual(dialog.vars['text.model'].get(), selected)
+                self.assertEqual(str(dialog.download_button.cget('state')), 'normal')
+                self.assertTrue(app.start_catalog_download('example/cancel:latest'))
+                cancelled = app.catalog_download_job
+                app.stop_catalog_download()
+                self.assertTrue(cancelled.cancelled.is_set())
+                app.extra.put(('catalog_pull_error', (cancelled, 'cancelled')))
+                app.poll_extra()
+                self.assertEqual(dialog.download_status.get(), '模型下載已取消。')
+            finally:
+                app.quit()
+
     def test_settings_open_centered_and_follow_main_theme(self):
         settings = deepcopy(core.DEFAULTS)
         settings['theme'] = 'dark'
@@ -680,6 +725,38 @@ class ModelSetupTests(unittest.TestCase):
         self.assertEqual(json.loads(request.data), {'model': 'llama3.2-vision', 'stream': True})
         self.assertEqual(request.full_url, 'http://127.0.0.1:11434/api/pull')
         self.assertEqual(result, 0)
+
+    def test_custom_model_name_is_validated_and_sent_to_local_pull_api(self):
+        self.assertEqual(core.validate_model_name(' hf.co/owner/model:Q4_K_M '), 'hf.co/owner/model:Q4_K_M')
+        for invalid in (None, '', 'has spaces', '../escape', 'https://example.com/model'):
+            with self.assertRaises(ValueError):
+                core.validate_model_name(invalid)
+        stream = io.BytesIO(b'{"status":"success"}\n')
+        with patch.object(opti_model_worker, 'urlopen', return_value=stream) as open_request, \
+             patch('sys.stdout', new_callable=io.StringIO):
+            self.assertEqual(opti_model_worker.main('example/model:4b'), 0)
+        self.assertEqual(json.loads(open_request.call_args.args[0].data)['model'], 'example/model:4b')
+
+    def test_background_pull_passes_chosen_model_to_worker(self):
+        process = Mock(returncode=0)
+        process.stdout = io.StringIO('{"status":"success"}\n')
+        process.poll.return_value = 0
+        job = core.ModelDownload('example/model:4b')
+        with patch.object(core.subprocess, 'Popen', return_value=process) as launch:
+            job.pull(Mock())
+        self.assertEqual(launch.call_args.args[0][-1], 'example/model:4b')
+
+    def test_download_worker_refreshes_catalog_after_success(self):
+        app = SimpleNamespace(extra=queue.Queue())
+        job = Mock(model='example/model:4b')
+        job.pull.side_effect = lambda emit: emit({'status': 'success'})
+        catalog = [{'name': 'example/model:4b', 'capabilities': ['completion']}]
+        with patch.object(opti_app, 'ensure_model_service') as service, \
+             patch.object(opti_app, 'installed_models', return_value=catalog):
+            opti_app.OptiiApp.download_catalog_model(app, job)
+        service.assert_called_once_with('text', 'CPU')
+        self.assertEqual(app.extra.get_nowait()[0], 'catalog_pull_progress')
+        self.assertEqual(app.extra.get_nowait(), ('catalog_pull_ready', (job, catalog)))
 
     def test_pull_truncation_is_not_success_and_cancel_prevents_spawn(self):
         with patch.object(opti_model_worker, 'urlopen', return_value=io.BytesIO(b'{"status":"pulling"}\n')), \

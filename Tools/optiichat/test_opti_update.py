@@ -31,7 +31,9 @@ class UpdateTests(unittest.TestCase):
         original_tk = opti_setup.tk.Tk
         def guarded_root():
             root = original_tk()
-            root.after(3000, root.destroy)
+            timeout = root.after(3000, root.destroy)
+            root.bind('<Destroy>', lambda event: root.after_cancel(timeout)
+                      if event.widget is root else None, add=True)
             return root
         with patch.object(opti_setup.tk, 'Tk', side_effect=guarded_root), \
              patch.object(opti_setup, 'install_ollama') as ollama, \

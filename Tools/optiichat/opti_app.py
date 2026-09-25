@@ -28,7 +28,8 @@ from opti_version import VERSION
 from opti_update import UPDATE_DIR, check_for_update
 from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch_arguments, breeze_hardware_available,
                        ensure_model_service, json_request, load_settings, route_messages, save_settings,
-                       ModelDownload, initialize_models, model_choices, model_service_kind, select_installed_defaults)
+                       ModelDownload, initialize_models, installed_models, model_choices, model_service_kind,
+                       select_installed_defaults, validate_model_name)
 
 ASSETS = Path(__file__).with_name('opti_assets')
 LIGHT = dict(bg='#EAF3F5', rail='#DFEBEF', panel='#F7FBFD', chat='#FFFFFF',
@@ -97,6 +98,9 @@ class OptiiApp(ChatApp):
         self.catalog_loaded = False
         self.model_loading = True
         self.model_download = ModelDownload()
+        self.catalog_download_job = None
+        self.catalog_download_status = '輸入模型名稱後按「下載模型」。'
+        self.catalog_download_percent = 0
         self.capture_session = None
         self.capture_files = set()
         self.pending_thumbnail = None
@@ -607,7 +611,7 @@ class OptiiApp(ChatApp):
         self.capture_button.configure(state='disabled' if busy or self.capture_session else 'normal')
 
     def refresh_models(self):
-        if self.model_loading or self.busy or self.speech_job:
+        if self.model_loading or self.busy or self.speech_job or self.catalog_download_job:
             return
         self.model_loading = True
         self.ready = False
@@ -616,6 +620,73 @@ class OptiiApp(ChatApp):
         self.stop_button.configure(text='停止初始化', state='normal')
         self.status.set('正在檢查本機模型…')
         threading.Thread(target=self.connect, daemon=True).start()
+
+    def update_catalog_download_ui(self):
+        if self.settings_window and self.settings_window.winfo_exists():
+            self.settings_window.set_download_state(self.catalog_download_job is not None,
+                self.catalog_download_status, self.catalog_download_percent)
+
+    def start_catalog_download(self, name):
+        try:
+            name = validate_model_name(name)
+        except ValueError as error:
+            self.catalog_download_status = str(error)
+            self.update_catalog_download_ui()
+            return False
+        if self.catalog_download_job:
+            self.catalog_download_status = '已有模型正在下載；請先等待或取消。'
+            self.update_catalog_download_ui()
+            return False
+        if self.model_loading or self.busy or self.speech_job:
+            self.catalog_download_status = '請先等待目前的模型初始化或回覆完成。'
+            self.update_catalog_download_ui()
+            return False
+        job = ModelDownload(name)
+        self.catalog_download_job = job
+        self.catalog_download_status = f'正在準備下載 {name}…'
+        self.catalog_download_percent = 0
+        self.update_catalog_download_ui()
+        threading.Thread(target=self.download_catalog_model, args=(job,), daemon=True).start()
+        return True
+
+    def download_catalog_model(self, job):
+        try:
+            ensure_model_service('text', 'CPU')
+            job.pull(lambda event: self.extra.put(('catalog_pull_progress', (job, event))))
+            catalog = installed_models()
+            expected = {job.model}
+            if ':' not in job.model:
+                expected.add(job.model+':latest')
+            if not any(item['name'] in expected for item in catalog):
+                raise RuntimeError('下載結束，但重新整理清單後找不到這個模型。')
+            self.extra.put(('catalog_pull_ready', (job, catalog)))
+        except Exception as error:
+            self.extra.put(('catalog_pull_error', (job, str(error))))
+
+    def stop_catalog_download(self):
+        if self.catalog_download_job:
+            self.catalog_download_job.cancel()
+            self.catalog_download_status = '正在取消模型下載…'
+            self.update_catalog_download_ui()
+
+    def accept_model_catalog(self, catalog):
+        self.catalog = catalog
+        updated = select_installed_defaults(self.settings, catalog)
+        try:
+            if not self.config_error and (updated != self.settings or not (DATA/'settings.json').exists()):
+                save_settings(updated)
+        except Exception as error:
+            self.write('預設模型設定無法保存：'+str(error)+'\n', 'error')
+        self.settings = updated
+        self.catalog_loaded = True
+        if not self.ready and model_choices(catalog, 'text'):
+            self.model_loading = False
+            self.ready = True
+            self.stop_button.configure(text='停止回覆')
+            self.set_busy(False)
+            self.apply_theme()
+        if self.settings_window and self.settings_window.winfo_exists():
+            self.settings_window.set_models(catalog)
 
     def stop(self):
         if self.model_loading:
@@ -712,23 +783,9 @@ class OptiiApp(ChatApp):
                     completed = value.get('completed', 0)
                     self.status.set(f'下載 llama3.2-vision · {completed / total:.0%} · {completed/1024**3:.2f}/{total/1024**3:.2f} GiB' if total else value.get('status', '正在下載…'))
                 elif kind == 'models_ready':
-                    self.catalog = value
-                    updated = select_installed_defaults(self.settings, value)
-                    try:
-                        if not self.config_error and (updated != self.settings or not (DATA/'settings.json').exists()):
-                            save_settings(updated)
-                    except Exception as error:
-                        self.write('預設模型設定無法保存：'+str(error)+'\n', 'error')
-                    self.settings = updated
-                    self.catalog_loaded = True
                     self.model_loading = False
-                    self.ready = True
+                    self.accept_model_catalog(value)
                     self.status.set(f'● 已就緒 · 已安裝 {len(value)} 個模型')
-                    self.stop_button.configure(text='停止回覆')
-                    self.set_busy(False)
-                    self.apply_theme()
-                    if self.settings_window and self.settings_window.winfo_exists():
-                        self.settings_window.set_models(value)
                 elif kind == 'models_error':
                     self.model_loading = False
                     self.status.set('模型初始化未完成 · 請到「設定 → 聊天模型」重新整理')
@@ -878,6 +935,39 @@ class OptiiApp(ChatApp):
                 elif kind == 'voices':
                     if self.settings_window and self.settings_window.winfo_exists():
                         self.settings_window.set_voices(value)
+                elif kind == 'catalog_pull_progress':
+                    job, event = value
+                    if self.catalog_download_job is not job:
+                        continue
+                    total, completed = event.get('total') or 0, event.get('completed') or 0
+                    if event.get('status') == 'success':
+                        self.catalog_download_status = f'{job.model} 下載完成，正在更新模型清單…'
+                    elif isinstance(total, (int, float)) and total > 0 and isinstance(completed, (int, float)):
+                        self.catalog_download_percent = max(0, min(100, round(completed / total * 100)))
+                        self.catalog_download_status = (f'{job.model} · 目前檔案 {self.catalog_download_percent}% · '
+                            f'{completed/1024**3:.2f}/{total/1024**3:.2f} GiB')
+                    else:
+                        self.catalog_download_status = f'{job.model} · {event.get("status", "正在下載…")}'
+                    self.update_catalog_download_ui()
+                elif kind == 'catalog_pull_ready':
+                    job, catalog = value
+                    if self.catalog_download_job is not job:
+                        continue
+                    self.catalog_download_job = None
+                    self.catalog_download_percent = 100
+                    self.accept_model_catalog(catalog)
+                    self.catalog_download_status = f'{job.model} 已下載；可到「聊天模型」選擇。'
+                    self.status.set(self.catalog_download_status)
+                    self.update_catalog_download_ui()
+                elif kind == 'catalog_pull_error':
+                    job, detail = value
+                    if self.catalog_download_job is not job:
+                        continue
+                    self.catalog_download_job = None
+                    self.catalog_download_status = ('模型下載已取消。' if job.cancelled.is_set()
+                        else '模型下載失敗：'+detail)
+                    self.status.set(self.catalog_download_status)
+                    self.update_catalog_download_ui()
                 elif kind == 'update':
                     self.update_busy = False
                     self.update_status.set(value)
@@ -994,6 +1084,8 @@ class OptiiApp(ChatApp):
         for path in tuple(self.capture_files):
             self.remove_capture_file(path)
         self.model_download.cancel()
+        if self.catalog_download_job:
+            self.catalog_download_job.cancel()
         self.stop_speech()
         if self.tray_icon:
             self.tray_icon.stop()
@@ -1100,6 +1192,33 @@ class SettingsWindow(tk.Toplevel):
             self.field(box, '最多輸出 tokens', key+'.max_tokens')
             self.field(box, 'Temperature（0～2）', key+'.temperature')
         self.note(models, '文字選單列出聊天模型；圖片選單只列出支援看圖的模型。\n首次使用若缺少預設模型，會自動從 Ollama 官方下載 llama3.2-vision。\nCPU 強制 num_gpu=0；GPU 依層數卸載，部分運算仍可能使用 RAM。\nLlama 3.2 Vision 使用相容服務；其他模型使用一般 Ollama。')
+        downloads = self.tab(notebook, '下載模型')
+        self.note(downloads, '在 Ollama 模型庫找到想用的模型名稱，貼在這裡下載。\n模型可能佔數 GB，請先查看模型頁的大小與需求。')
+        ttk.Button(downloads, text='瀏覽 Ollama 模型庫  ↗', style='Settings.TButton',
+                   command=lambda: webbrowser.open('https://ollama.com/search')).pack(anchor='w', pady=(0, 16))
+        download_row = ttk.Frame(downloads, style='SettingsPage.TFrame')
+        download_row.pack(fill='x', pady=4)
+        ttk.Label(download_row, text='模型名稱', width=24, style='Settings.TLabel').pack(side='left')
+        self.download_model = tk.StringVar(self, value='llama3.2-vision')
+        self.download_entry = ttk.Entry(download_row, textvariable=self.download_model,
+                                        style='Settings.TEntry')
+        self.download_entry.pack(side='left', fill='x', expand=True)
+        self.download_entry.bind('<Return>', lambda _: self.start_model_download())
+        download_actions = ttk.Frame(downloads, style='SettingsPage.TFrame')
+        download_actions.pack(fill='x', pady=(12, 8))
+        self.download_button = ttk.Button(download_actions, text='下載模型',
+                                          style='SettingsAccent.TButton', command=self.start_model_download)
+        self.download_button.pack(side='left')
+        self.cancel_download_button = ttk.Button(download_actions, text='取消下載',
+                                                 style='Settings.TButton', command=app.stop_catalog_download)
+        self.cancel_download_button.pack(side='left', padx=8)
+        self.download_progress = ttk.Progressbar(downloads, maximum=100, mode='determinate',
+                                                style='Settings.Horizontal.TProgressbar')
+        self.download_progress.pack(fill='x', pady=(5, 8))
+        self.download_status = tk.StringVar(self)
+        ttk.Label(downloads, textvariable=self.download_status, wraplength=700,
+                  style='SettingsMuted.TLabel').pack(anchor='w')
+        self.note(downloads, '完成後到「聊天模型」分頁，從文字或圖片模型下拉選單選擇。\n只支援 embedding 的模型不會出現在聊天選單。')
         speech = self.tab(notebook, '語音')
         self.provider_combo = provider = self.field(speech, '語音引擎', 'speech.provider',
                                                    ['windows', 'breeze'] if app.breeze_available else ['windows'])
@@ -1139,6 +1258,8 @@ class SettingsWindow(tk.Toplevel):
             self.note(advanced, '將命令中的 PATH_TO_BREEZE_TTS_2 替換成模型目錄。\n預設 eager 約需 7.7 GiB，建議 12 GB GPU；fast-all 建議 24 GB。\n\n官方 API 固定值：max_new_tokens=1500、max_seq_len=2048、\nrepetition_penalty=1.1。這些不是可傳入的請求參數。\n輸出格式：24 kHz / mono / 16-bit PCM（本程式封裝為 WAV）。\n\n權重與產出限研究及非商業使用，詳見模型授權。\n完整安裝方式見 OptiiChat-使用說明.md。')
         self.provider_changed()
         self.set_models(app.catalog if app.catalog_loaded else None)
+        self.set_download_state(app.catalog_download_job is not None,
+                                app.catalog_download_status, app.catalog_download_percent)
         threading.Thread(target=self.load_voices, daemon=True).start()
         self.apply_theme(app.last_theme or app.resolved_theme())
         self.center_on_parent()
@@ -1185,6 +1306,8 @@ class SettingsWindow(tk.Toplevel):
                         bordercolor=p['accent'], padding=(12, 7), relief='flat')
         style.map('SettingsAccent.TButton', background=[('active', p['selected'])],
                   foreground=[('active', p['ink'])])
+        style.configure('Settings.Horizontal.TProgressbar', troughcolor=p['input'],
+                        background=p['accent'], bordercolor=p['line'])
         style.configure('Settings.TNotebook', background=p['bg'], bordercolor=p['line'])
         style.configure('Settings.TNotebook.Tab', background=p['panel'], foreground=p['muted'],
                         padding=(16, 10), bordercolor=p['line'])
@@ -1315,6 +1438,16 @@ class SettingsWindow(tk.Toplevel):
         self.voice_combo.configure(values=['']+[voice['name'] for voice in voices])
         current = self.vars['speech.voice_id'].get()
         self.vars['speech.voice_id'].set(next((voice['name'] for voice in voices if voice['id'] == current), current))
+
+    def start_model_download(self):
+        self.app.start_catalog_download(self.download_model.get())
+
+    def set_download_state(self, active, status, percent):
+        self.download_status.set(status)
+        self.download_progress.configure(value=percent)
+        self.download_entry.configure(state='disabled' if active else 'normal')
+        self.download_button.configure(state='disabled' if active else 'normal')
+        self.cancel_download_button.configure(state='normal' if active else 'disabled')
 
     def set_models(self, catalog):
         if catalog is None:
