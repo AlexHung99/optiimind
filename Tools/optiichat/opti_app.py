@@ -729,7 +729,7 @@ class OptiiApp(ChatApp):
                         self.settings_window.set_models(value)
                 elif kind == 'models_error':
                     self.model_loading = False
-                    self.status.set('模型初始化未完成 · 可按「重新檢查 / 重試模型下載」')
+                    self.status.set('模型初始化未完成 · 請到「設定 → 聊天模型」重新整理')
                     self.stop_button.configure(text='停止回覆', state='disabled')
                     self.write('\n模型：'+value+'\n', 'error')
                 elif kind == 'token':

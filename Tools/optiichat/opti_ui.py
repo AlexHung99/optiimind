@@ -121,8 +121,6 @@ def build_ui(app):
         app.history_canvas.configure(scrollregion=app.history_canvas.bbox('all')))
     app.history_canvas.bind('<Configure>', lambda event:
         app.history_canvas.itemconfigure(history_window, width=event.width))
-    _button(history, '重新檢查模型', app.refresh_models).pack(fill='x', pady=(8, 0))
-
     center = app.frame(shell, role='bg')
     center.pack(side='left', fill='both', expand=True, padx=(0, 12), pady=(12, 12))
     toolbar = app.frame(center, role='panel', height=64, padx=16, highlightthickness=1)
