@@ -84,6 +84,8 @@ class OptiiApp(ChatApp):
         self.speech_job = None
         self.audio_path = None
         self.tray_icon = None
+        self.tray_hint_shown = False
+        self.tray_unavailable_warned = False
         self.settings_window = None
         self.about_window = None
         self.roles = []
@@ -109,7 +111,7 @@ class OptiiApp(ChatApp):
         self.update_on_exit_started = False
         self.update_status = tk.StringVar(root, value='目前版本 '+VERSION)
         super().__init__(root)
-        root.title('OptiChat · 本機 AI 工作室')
+        root.title('OptiChat · 本機 AI')
         root.geometry('1410x960')
         root.minsize(1050, 740)
         self.fast.set(self.settings['fast_image'])
@@ -795,19 +797,20 @@ class OptiiApp(ChatApp):
     def start_tray(self):
         try:
             import pystray
-            icon = app_icon(256, '#14161A')
+            icon = app_icon(256, '#102330')
             def action(name):
                 return lambda *_: self.extra.put((name, None))
-            self.tray_icon = pystray.Icon('OptiChat', icon, 'OptiChat · 本機 AI 工作室', pystray.Menu(
+            self.tray_icon = pystray.Icon('OptiChat', icon, 'OptiChat · 本機 AI', pystray.Menu(
                 pystray.MenuItem('開啟 OptiChat', action('show'), default=True),
                 pystray.MenuItem('設定', action('settings')),
                 pystray.MenuItem('結束程式', action('quit'))))
-            def run():
+            def ready(tray):
                 try:
-                    self.tray_icon.run()
+                    tray.visible = True
+                    self.extra.put(('tray_ready', None))
                 except Exception as error:
                     self.extra.put(('tray_error', str(error)))
-            threading.Thread(target=run, daemon=True).start()
+            self.tray_icon.run_detached(setup=ready)
         except Exception as error:
             self.extra.put(('tray_error', str(error)))
 
@@ -832,7 +835,9 @@ class OptiiApp(ChatApp):
                     self.quit()
                     return
                 elif kind == 'tray_error':
-                    self.status.set('系統匣不可用；關閉視窗將改為最小化。')
+                    self.status.set('系統匣啟動失敗；關閉視窗將留在工作列：'+str(value))
+                elif kind == 'tray_ready':
+                    self.tray_unavailable_warned = False
                 elif kind == 'pdf_progress':
                     job, note = value
                     if self.pdf_job is job and not job.is_set():
@@ -959,10 +964,20 @@ class OptiiApp(ChatApp):
     def close(self):
         if self.settings['tray']:
             if self.tray_icon and self.tray_icon.visible:
+                if not self.tray_hint_shown:
+                    self.tray_hint_shown = True
+                    messagebox.showinfo('OptiChat 常駐中',
+                                        'OptiChat 會留在右下角系統匣。\n若看不到圖示，請按「^」展開隱藏圖示；可將 OptiChat 圖示拖到通知區。',
+                                        parent=self.root)
                 if self.settings_window and self.settings_window.winfo_exists():
                     self.settings_window.destroy()
                 self.root.withdraw()
             else:
+                if not self.tray_unavailable_warned:
+                    self.tray_unavailable_warned = True
+                    messagebox.showwarning('系統匣尚未顯示',
+                                           'OptiChat 圖示尚未出現在系統匣。視窗會留在工作列，方便重新開啟。',
+                                           parent=self.root)
                 self.root.iconify()
         else:
             self.quit()

@@ -67,7 +67,7 @@ def build_ui(app):
     brand = app.label(brandbar, 'Optiimind', role='panel')
     brand.configure(font=('Georgia', 19, 'bold'))
     brand.pack(side='left')
-    app.label(brandbar, 'OptiChat · 本機 AI 工作室', role='panel', color='muted').pack(side='left', padx=22)
+    app.label(brandbar, 'OptiChat · 本機 AI', role='panel', color='muted').pack(side='left', padx=22)
     app.settings_button = ttk.Button(brandbar, command=app.open_settings, style='Icon.TButton')
     app.settings_button.pack(side='right', pady=7)
     app.about_button = ttk.Button(brandbar, command=app.open_about, style='Icon.TButton')

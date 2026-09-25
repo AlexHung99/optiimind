@@ -10,6 +10,7 @@ from unittest.mock import patch, Mock
 import wave
 import io
 import json
+import queue
 from contextlib import ExitStack
 from types import SimpleNamespace
 from PIL import Image
@@ -30,6 +31,17 @@ CATALOG = [
 
 
 class HistoryPresentationTests(unittest.TestCase):
+    def test_tray_starts_detached_and_reports_when_visible(self):
+        app = object.__new__(opti_app.OptiiApp)
+        app.extra = queue.Queue()
+        with patch('pystray.Icon') as icon_class:
+            app.start_tray()
+            tray = icon_class.return_value
+            tray.run_detached.assert_called_once()
+            tray.run_detached.call_args.kwargs['setup'](tray)
+            self.assertTrue(tray.visible)
+            self.assertEqual(app.extra.get_nowait(), ('tray_ready', None))
+
     def test_delete_record_removes_only_its_previews(self):
         with tempfile.TemporaryDirectory() as directory:
             records = [opti_history.new_record(), opti_history.new_record()]
@@ -99,6 +111,7 @@ class HistoryPresentationTests(unittest.TestCase):
                 history = app.history_canvas.master
                 self.assertIs(history.master.winfo_children()[0], history)
                 self.assertIs(app.settings_button.master, root.winfo_children()[0])
+                self.assertNotIn('工作室', root.title())
                 self.assertIs(app.about_button.master, app.settings_button.master)
                 self.assertEqual(app.settings_button.cget('text'), '')
                 self.assertEqual(app.about_button.cget('text'), '')
@@ -493,12 +506,22 @@ class DesktopTests(unittest.TestCase):
                 self.assertEqual(config['speech']['provider'], 'breeze')
                 dialog.destroy()
                 app.tray_icon = Mock(visible=True)
-                app.close()
+                with patch.object(opti_app.messagebox, 'showinfo') as tray_hint:
+                    app.close()
+                tray_hint.assert_called_once()
                 root.update()
                 self.assertEqual(root.state(), 'withdrawn')
                 app.show()
                 root.update()
                 self.assertEqual(root.state(), 'normal')
+                app.tray_icon = None
+                with patch.object(opti_app.messagebox, 'showwarning') as tray_warning:
+                    app.close()
+                tray_warning.assert_called_once()
+                root.update()
+                self.assertEqual(root.state(), 'iconic')
+                app.show()
+                root.update()
                 root.geometry('980x740')
                 root.update()
                 self.assertGreater(app.input.winfo_height(), 40)
