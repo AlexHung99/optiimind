@@ -21,7 +21,7 @@ import opti_model_worker
 import opti_capture
 import opti_pdf
 import opti_history
-from opti_ui import copy_selected_text, legacy_display_turns, render_turns, short_model_name, show_history_menu, search_preview
+from opti_ui import copy_selected_text, legacy_display_turns, render_turns, short_model_name, show_history_menu, search_preview, search_match
 
 CATALOG = [
     {'name': 'gemma4:26b', 'capabilities': ['completion', 'vision', 'thinking'], 'details': {'family': 'gemma4'}},
@@ -36,12 +36,16 @@ class HistoryPresentationTests(unittest.TestCase):
             {'question': '請比較兩顆行星', 'answer': '土星有明顯的環。', 'attachment': 'PDF：planets.pdf'}]}
         self.assertIn('土星', search_preview(current, '土星'))
         self.assertIn('planets.pdf', search_preview(current, 'planets.pdf'))
+        self.assertEqual(search_match(current, 'planets.pdf')['field'], 'attachment')
+        self.assertEqual(search_match(current, '土星')['turn'], 0)
+        self.assertEqual(search_match(current, '土星')['field'], 'answer')
         self.assertEqual(search_preview(current, '2026-09-25'), '')
         self.assertIsNone(search_preview(current, '木星'))
         legacy = {'title': '舊紀錄', 'messages': [
             {'role': 'user', 'content': '請整理報告\n\nPDF：report.pdf\n隱藏的 PDF 原文'},
             {'role': 'assistant', 'content': '摘要提到能源使用。'}]}
         self.assertIn('能源', search_preview(legacy, '能源'))
+        self.assertEqual(search_match(legacy, '能源')['turn'], 0)
         self.assertIsNone(search_preview(legacy, '隱藏的 PDF 原文'))
         legacy['transcript'] = '完整可見的舊對話內容'
         self.assertIn('舊對話', search_preview(legacy, '舊對話'))
@@ -57,7 +61,10 @@ class HistoryPresentationTests(unittest.TestCase):
             stack.enter_context(patch.object(opti_app, 'load_record', side_effect=lambda i: opti_history.load_record(i, store)))
             target, other = opti_history.new_record(), opti_history.new_record()
             target['title'] = '天文筆記'
-            target['display_turns'] = [{'question': '請說明土星', 'answer': '土星有環。'}]
+            target['display_turns'] = [
+                {'question': f'請說明第 {index+1} 項',
+                 'answer': ('一般說明。' * 28 + '\n') * 3 + ('土星有環。' if index in (1, 6) else '')}
+                for index in range(8)]
             other['title'] = '每日事項'
             other['display_turns'] = [{'question': '整理會議', 'answer': '已整理。'}]
             for record in (target, other):
@@ -65,15 +72,41 @@ class HistoryPresentationTests(unittest.TestCase):
             root = tk.Tk()
             app = opti_app.OptiiApp(root)
             try:
+                root.geometry('1100x740')
+                root.update()
                 app.search_var.set('土星')
                 cards = app.history_items.winfo_children()
                 self.assertEqual(len(cards), 1)
-                self.assertTrue(any('土星' in child.cget('text') for child in cards[0].winfo_children()
-                                    if isinstance(child, tk.Label)))
-                cards[0].winfo_children()[0].winfo_children()[0].invoke()
+                excerpt = next(child for child in cards[0].winfo_children()
+                               if isinstance(child, tk.Label) and '土星' in child.cget('text'))
+                root.update()
+                excerpt.event_generate('<Button-1>')
+                root.update()
                 self.assertEqual(app.conversation['id'], target['id'])
+                first = app.visual_turn_widgets[1]['answer']
+                later = app.visual_turn_widgets[6]['answer']
+                self.assertTrue(first.tag_ranges('search_match'))
+                self.assertFalse(later.tag_ranges('search_match'))
+                self.assertLess(app.visual_canvas.yview()[0], 0.5)
+                line = first.dlineinfo(first.search('土星', '1.0'))
+                self.assertIsNotNone(line)
+                screen_y = first.winfo_rooty() + line[1] - app.visual_canvas.winfo_rooty()
+                self.assertGreaterEqual(screen_y, 0)
+                self.assertLess(screen_y, app.visual_canvas.winfo_height())
+                app.visual_canvas.yview_moveto(1.0)
+                current_card = app.history_items.winfo_children()[0]
+                current_excerpt = next(child for child in current_card.winfo_children()
+                                       if isinstance(child, tk.Label) and '土星' in child.cget('text'))
+                current_excerpt.event_generate('<Button-1>')
+                root.update()
+                self.assertLess(app.visual_canvas.yview()[0], 0.5)
                 app.search_var.set('不存在的詞')
+                self.assertFalse(first.tag_ranges('search_match'))
                 self.assertEqual(app.history_items.winfo_children()[0].cget('text'), '沒有符合的對話')
+                app.search_var.set('天文筆記')
+                app.visual_canvas.yview_moveto(1.0)
+                app.history_items.winfo_children()[0].winfo_children()[0].winfo_children()[0].invoke()
+                self.assertEqual(app.visual_canvas.yview()[0], 0.0)
             finally:
                 app.quit()
 

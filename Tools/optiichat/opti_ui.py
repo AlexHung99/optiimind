@@ -1,6 +1,5 @@
 """OptiChat conversation layout and presentation widgets."""
 from datetime import datetime
-from itertools import chain
 import math
 import re
 import tkinter as tk
@@ -249,31 +248,60 @@ def wheel(app, event):
     canvas.yview_scroll(-int(event.delta/120), 'units')
 
 
-def search_preview(record, query):
-    """Return a short match from visible chat content, or None when absent."""
+def search_match(record, query):
+    """Find the first visible message containing query, in conversation order."""
+    query = query.casefold().strip()
     if not query:
-        return ''
-    title = record.get('title', '')
-    if isinstance(title, str) and query in title.casefold():
-        return ''
+        return None
     turns = record.get('display_turns') or legacy_display_turns(record)
-    fields = (turn.get(key, '') for turn in turns if isinstance(turn, dict)
-              for key in ('question', 'answer', 'attachment'))
-    for value in chain(fields, (record.get('transcript', ''),)):
-        if not isinstance(value, str):
+    for index, turn in enumerate(turns):
+        if not isinstance(turn, dict):
             continue
-        visible = ' '.join(value.split())
+        for field in ('question', 'attachment', 'answer'):
+            value = turn.get(field, '')
+            if not isinstance(value, str):
+                continue
+            visible = ' '.join(value.split())
+            position = visible.casefold().find(query)
+            if position >= 0:
+                start = max(0, position - 24)
+                end = min(len(visible), position + len(query) + 48)
+                preview = ('…' if start else '') + visible[start:end] + ('…' if end < len(visible) else '')
+                return {'turn': index, 'field': field, 'preview': preview}
+    transcript = record.get('transcript', '')
+    if isinstance(transcript, str):
+        visible = ' '.join(transcript.split())
         position = visible.casefold().find(query)
         if position >= 0:
             start = max(0, position - 24)
             end = min(len(visible), position + len(query) + 48)
-            return ('…' if start else '') + visible[start:end] + ('…' if end < len(visible) else '')
+            preview = ('…' if start else '') + visible[start:end] + ('…' if end < len(visible) else '')
+            return {'turn': None, 'field': 'transcript', 'preview': preview}
+    title = record.get('title', '')
+    if isinstance(title, str) and query in title.casefold():
+        return {'turn': None, 'field': 'title', 'preview': ''}
     return None
+
+
+def search_preview(record, query):
+    """Return a short match from visible chat content, or None when absent."""
+    if not query:
+        return ''
+    match = search_match(record, query)
+    return None if match is None else match['preview']
+
+
+def clear_search_highlight(app):
+    for turn in getattr(app, 'visual_turn_widgets', ()):
+        for widget in turn.values():
+            if widget and widget.winfo_exists():
+                widget.tag_remove('search_match', '1.0', 'end')
 
 
 def build_history_cards(app):
     if not hasattr(app, 'history_items'):
         return
+    clear_search_highlight(app)
     for child in app.history_items.winfo_children():
         child.destroy()
     app.roles = [(widget, bg, fg) for widget, bg, fg in app.roles if widget.winfo_exists()]
@@ -300,17 +328,21 @@ def build_history_cards(app):
         btn.pack(side='left', fill='x', expand=True)
         for widget in (card, row, btn):
             widget.bind('<Button-3>', lambda event, i=index: show_history_menu(app, i, event))
+        for widget in (card, row):
+            widget.bind('<Button-1>', lambda event, i=index: choose_history(app, i))
         created = record.get('created', '')[:16].replace('T', ' ')
         if created and name != created:
             stamp = app.label(card, created, role=role, color='muted')
             stamp.configure(font=(app.ui_font, 9))
             stamp.pack(anchor='w', padx=2)
             stamp.bind('<Button-3>', lambda event, i=index: show_history_menu(app, i, event))
+            stamp.bind('<Button-1>', lambda event, i=index: choose_history(app, i))
         if preview:
             excerpt = app.label(card, preview, role=role, color='muted',
                                 wraplength=190, justify='left', anchor='w')
             excerpt.pack(fill='x', padx=2, pady=(4, 0))
             excerpt.bind('<Button-3>', lambda event, i=index: show_history_menu(app, i, event))
+            excerpt.bind('<Button-1>', lambda event, i=index: choose_history(app, i))
     if query and not matches:
         app.label(app.history_items, '沒有符合的對話', role='panel', color='muted').pack(anchor='w', pady=12)
     if app.last_theme:
@@ -343,9 +375,41 @@ def legacy_display_turns(record):
 
 
 def choose_history(app, index):
+    identifier = app.conversation_index[index]['id']
     app.conversation_list.selection_clear(0, 'end')
     app.conversation_list.selection_set(index)
     app.select_conversation()
+    if app.conversation and app.conversation['id'] == identifier:
+        scroll_to_search_match(app)
+
+
+def scroll_to_search_match(app):
+    query = app.search_var.get().strip()
+    if not query or not app.conversation:
+        return
+    match = search_match(app.conversation, query)
+    if not match:
+        return
+    clear_search_highlight(app)
+    app.visual_body.update_idletasks()
+    turn = match['turn']
+    if turn is None or turn >= len(app.visual_turn_widgets):
+        app.visual_canvas.yview_moveto(0.0)
+        return
+    widget = app.visual_turn_widgets[turn].get(match['field'])
+    if not widget or not widget.winfo_exists():
+        app.visual_canvas.yview_moveto(0.0)
+        return
+    position = widget.search(query, '1.0', nocase=True, stopindex='end')
+    offset = 0
+    if position:
+        widget.tag_add('search_match', position, f'{position}+{len(query)}c')
+        widget.tag_configure('search_match', background='#F3CA68', foreground='#142A38')
+        line = widget.dlineinfo(position)
+        if line:
+            offset = line[1]
+    y = widget.winfo_rooty() - app.visual_body.winfo_rooty() + offset
+    app.visual_canvas.yview_moveto(max(0, y - 32) / max(1, app.visual_body.winfo_height()))
 
 
 def rename_history(app, index):
@@ -373,6 +437,7 @@ def render_turns(app):
     app.roles = [(widget, bg, fg) for widget, bg, fg in app.roles if widget.winfo_exists()]
     app.visual_answer_var = None
     app.visual_photos = []
+    app.visual_turn_widgets = []
     record = app.conversation or {}
     turns = record.get('display_turns') or legacy_display_turns(record)
     if not turns:
@@ -406,10 +471,11 @@ def add_turn(app, turn, index, scroll=True):
     user_header.pack(anchor='e', padx=(0, 24), pady=(0, 5))
     user = app.frame(row, role='user_card', padx=15, pady=12, highlightthickness=1)
     user.pack(anchor='e', padx=(60, 24))
-    selectable_text(app, user, turn.get('question', ''), 'user_card', max_width=650)
+    user_text = selectable_text(app, user, turn.get('question', ''), 'user_card', max_width=650)
     attachment = turn.get('attachment')
+    attachment_text = None
     if attachment:
-        add_attachment_card(app, user, turn, index)
+        attachment_text = add_attachment_card(app, user, turn, index)
     assistant = app.frame(row, role='chat')
     assistant.pack(fill='x', pady=(22, 0))
     header = app.frame(assistant, role='chat')
@@ -421,11 +487,13 @@ def add_turn(app, turn, index, scroll=True):
     answer_card = app.frame(assistant, role='assistant_card', padx=20, pady=17, highlightthickness=1)
     answer_card.pack(fill='x', padx=(25, 145))
     if turn.get('answer'):
-        render_answer(app, answer_card, turn['answer'])
+        answer_text = render_answer(app, answer_card, turn['answer'])
         app.visual_answer_var = None
     else:
-        answer = selectable_text(app, answer_card, '正在載入／思考…', 'assistant_card')
-        app.visual_answer_var = SelectableTextValue(answer)
+        answer_text = selectable_text(app, answer_card, '正在載入／思考…', 'assistant_card')
+        app.visual_answer_var = SelectableTextValue(answer_text)
+    app.visual_turn_widgets.append({'question': user_text, 'attachment': attachment_text,
+                                    'answer': answer_text})
     if scroll:
         if app.last_theme:
             paint_roles(app, app.last_theme)
@@ -466,6 +534,7 @@ def add_attachment_card(app, user, turn, index):
             icon.create_line(8, 37, 18, 26, 24, 32, 30, 24, 35, 31, fill='#087E88', width=2)
     info = selectable_text(app, card, attachment, 'user_card', max_width=460)
     info.pack_configure(side='left', anchor='center')
+    return info
 
 
 def short_model_name(value):
@@ -493,6 +562,7 @@ def render_answer(app, parent, content):
         widget.insert('end', line, 'heading' if heading else 'numbered' if numbered else ())
     widget.configure(state='disabled')
     fit_text_height(widget)
+    return widget
 
 
 def copy_selected_text(widget):
