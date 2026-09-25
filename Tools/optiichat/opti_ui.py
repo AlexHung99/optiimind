@@ -1,5 +1,6 @@
 """OptiChat conversation layout and presentation widgets."""
 from datetime import datetime
+from itertools import chain
 import math
 import re
 import tkinter as tk
@@ -248,6 +249,28 @@ def wheel(app, event):
     canvas.yview_scroll(-int(event.delta/120), 'units')
 
 
+def search_preview(record, query):
+    """Return a short match from visible chat content, or None when absent."""
+    if not query:
+        return ''
+    title = record.get('title', '')
+    if isinstance(title, str) and query in title.casefold():
+        return ''
+    turns = record.get('display_turns') or legacy_display_turns(record)
+    fields = (turn.get(key, '') for turn in turns if isinstance(turn, dict)
+              for key in ('question', 'answer', 'attachment'))
+    for value in chain(fields, (record.get('transcript', ''),)):
+        if not isinstance(value, str):
+            continue
+        visible = ' '.join(value.split())
+        position = visible.casefold().find(query)
+        if position >= 0:
+            start = max(0, position - 24)
+            end = min(len(visible), position + len(query) + 48)
+            return ('…' if start else '') + visible[start:end] + ('…' if end < len(visible) else '')
+    return None
+
+
 def build_history_cards(app):
     if not hasattr(app, 'history_items'):
         return
@@ -256,9 +279,12 @@ def build_history_cards(app):
     app.roles = [(widget, bg, fg) for widget, bg, fg in app.roles if widget.winfo_exists()]
     query = app.search_var.get().casefold().strip()
     selected = app.conversation['id'] if app.conversation else None
+    matches = 0
     for index, record in enumerate(app.conversation_index):
-        if query and query not in record.get('title', '').casefold():
+        preview = search_preview(record, query)
+        if preview is None:
             continue
+        matches += 1
         active = record['id'] == selected
         role = 'selected' if active else 'panel'
         card = app.frame(app.history_items, role=role, padx=7, pady=8, highlightthickness=1 if active else 0)
@@ -280,6 +306,13 @@ def build_history_cards(app):
             stamp.configure(font=(app.ui_font, 9))
             stamp.pack(anchor='w', padx=2)
             stamp.bind('<Button-3>', lambda event, i=index: show_history_menu(app, i, event))
+        if preview:
+            excerpt = app.label(card, preview, role=role, color='muted',
+                                wraplength=190, justify='left', anchor='w')
+            excerpt.pack(fill='x', padx=2, pady=(4, 0))
+            excerpt.bind('<Button-3>', lambda event, i=index: show_history_menu(app, i, event))
+    if query and not matches:
+        app.label(app.history_items, '沒有符合的對話', role='panel', color='muted').pack(anchor='w', pady=12)
     if app.last_theme:
         paint_roles(app, app.last_theme)
 

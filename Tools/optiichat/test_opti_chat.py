@@ -21,7 +21,7 @@ import opti_model_worker
 import opti_capture
 import opti_pdf
 import opti_history
-from opti_ui import copy_selected_text, legacy_display_turns, render_turns, short_model_name, show_history_menu
+from opti_ui import copy_selected_text, legacy_display_turns, render_turns, short_model_name, show_history_menu, search_preview
 
 CATALOG = [
     {'name': 'gemma4:26b', 'capabilities': ['completion', 'vision', 'thinking'], 'details': {'family': 'gemma4'}},
@@ -31,6 +31,52 @@ CATALOG = [
 
 
 class HistoryPresentationTests(unittest.TestCase):
+    def test_search_matches_visible_chat_content_and_legacy_records(self):
+        current = {'title': '2026-09-25 10:00', 'display_turns': [
+            {'question': '請比較兩顆行星', 'answer': '土星有明顯的環。', 'attachment': 'PDF：planets.pdf'}]}
+        self.assertIn('土星', search_preview(current, '土星'))
+        self.assertIn('planets.pdf', search_preview(current, 'planets.pdf'))
+        self.assertEqual(search_preview(current, '2026-09-25'), '')
+        self.assertIsNone(search_preview(current, '木星'))
+        legacy = {'title': '舊紀錄', 'messages': [
+            {'role': 'user', 'content': '請整理報告\n\nPDF：report.pdf\n隱藏的 PDF 原文'},
+            {'role': 'assistant', 'content': '摘要提到能源使用。'}]}
+        self.assertIn('能源', search_preview(legacy, '能源'))
+        self.assertIsNone(search_preview(legacy, '隱藏的 PDF 原文'))
+        legacy['transcript'] = '完整可見的舊對話內容'
+        self.assertIn('舊對話', search_preview(legacy, '舊對話'))
+
+    def test_search_result_shows_excerpt_and_opens_matching_chat(self):
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)))
+            for method in ('start_tray', 'monitor', 'connect', 'check_updates'):
+                stack.enter_context(patch.object(opti_app.OptiiApp, method))
+            store = Path(stack.enter_context(tempfile.TemporaryDirectory()))
+            stack.enter_context(patch.object(opti_app, 'save_record', side_effect=lambda r: opti_history.save_record(r, store)))
+            stack.enter_context(patch.object(opti_app, 'list_records', side_effect=lambda: opti_history.list_records(store)))
+            stack.enter_context(patch.object(opti_app, 'load_record', side_effect=lambda i: opti_history.load_record(i, store)))
+            target, other = opti_history.new_record(), opti_history.new_record()
+            target['title'] = '天文筆記'
+            target['display_turns'] = [{'question': '請說明土星', 'answer': '土星有環。'}]
+            other['title'] = '每日事項'
+            other['display_turns'] = [{'question': '整理會議', 'answer': '已整理。'}]
+            for record in (target, other):
+                opti_history.save_record(record, store)
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                app.search_var.set('土星')
+                cards = app.history_items.winfo_children()
+                self.assertEqual(len(cards), 1)
+                self.assertTrue(any('土星' in child.cget('text') for child in cards[0].winfo_children()
+                                    if isinstance(child, tk.Label)))
+                cards[0].winfo_children()[0].winfo_children()[0].invoke()
+                self.assertEqual(app.conversation['id'], target['id'])
+                app.search_var.set('不存在的詞')
+                self.assertEqual(app.history_items.winfo_children()[0].cget('text'), '沒有符合的對話')
+            finally:
+                app.quit()
+
     def test_tray_starts_detached_and_reports_when_visible(self):
         app = object.__new__(opti_app.OptiiApp)
         app.extra = queue.Queue()
