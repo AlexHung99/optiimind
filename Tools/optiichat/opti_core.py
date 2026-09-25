@@ -200,10 +200,10 @@ class ModelDownload:
             self.process.stdout.close()
 
 
-def initialize_models(download, emit):
+def initialize_models(download, emit, ensure_default=False):
     catalog = installed_models()
-    if not catalog:
-        emit({'status': '本機沒有模型，正在從 Ollama 官方下載 llama3.2-vision（約 7.8 GB）…'})
+    if not catalog or (ensure_default and DEFAULT_MODEL not in [item['name'] for item in catalog]):
+        emit({'status': '正在從 Ollama 官方下載預設模型 llama3.2-vision（約 7.8 GB）…'})
         download.pull(emit)
         catalog = installed_models()
         if DEFAULT_MODEL not in [item['name'] for item in catalog]:

@@ -4,19 +4,19 @@ Windows 本機 AI 聊天工具：Ollama 文字／圖片聊天、框選截圖、�
 
 - **介紹與下載：** https://optiimind.com/Tools/optiichat/
 - **程式碼：** 本目錄
-- **目前版本：** 1.3.17
+- **目前版本：** 1.3.18
 
 ## 安裝
 
-1. 從介紹頁下載 `OptiChat-Setup-1.3.17.exe`，執行安裝精靈；不需要自行安裝 Python。
+1. 從介紹頁下載 `OptiChat-Setup-1.3.18.exe`，執行安裝精靈；不需要自行安裝 Python。
 2. 安裝包含獨立 Python 3.14.3、介面、PDF 及朗讀套件，放在 `%LOCALAPPDATA%\OptiiChat\python`；程式在同一資料夾下的 `app`。為保留舊版設定與更新相容性，內部資料夾名稱沿用 OptiiChat。
 3. 自動建立桌面與開始功能表「OptiChat」捷徑。雙擊即可開啟。
-4. 初次啟動若尚未安裝 Ollama，會顯示官方下載入口；完成 Ollama 安裝後按「繼續」。缺少 Vision 相容服務時會下載官方 0.24.0 Windows ZIP（約 2.1 GB），驗證官方 SHA-256，並安裝 CPU／Vulkan 檔案。
-5. 完全沒有模型時，在聊天介面自動下載 `llama3.2-vision`（約 7.8 GB）。已有模型與設定會保留。
+4. 初次啟動若缺少 Ollama，會自動下載官方安裝檔、驗證 Ollama Inc. 程式碼簽章並安裝；缺少 Vision 相容服務時會下載官方 0.24.0 Windows ZIP（約 2.1 GB），驗證官方 SHA-256，並安裝 CPU／Vulkan 檔案。下載失敗可在準備視窗重試。
+5. 首次使用若缺少 `llama3.2-vision`，即使已有其他模型，也會在聊天介面自動下載它（約 7.8 GB），並預設用於文字與圖片。已有 OptiChat 設定時保留原本選擇；連線或磁碟空間不足時顯示錯誤，可稍後重試。
 
 安裝程式目前**未經程式碼簽章**；Windows 可能顯示發行者未知。安裝本身不需要系統管理員權限，Ollama 官方安裝程式的提示以其本身為準。請預留模型空間；CPU 圖片推論可能需數分鐘。
 
-可從 Windows「已安裝的應用程式」移除 OptiChat；移除程式與內含 Python，保留設定、音訊、Ollama 與模型。更新或重新安裝前先從系統匣結束程式。ZIP 原始碼安裝仍保留，需自行準備 Python 3.11+ 與 Ollama，執行 `Install-OptiiChat.cmd`。
+可從 Windows「已安裝的應用程式」移除 OptiChat；移除程式與內含 Python，保留設定、音訊、Ollama 與模型。更新或重新安裝前先從系統匣結束程式。ZIP 原始碼安裝仍保留，需自行準備 Python 3.11+，執行 `Install-OptiiChat.cmd`；缺少 Ollama 時也會自動安裝。
 
 ## PDF
 

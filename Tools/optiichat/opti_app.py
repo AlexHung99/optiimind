@@ -75,6 +75,7 @@ class OptiiApp(ChatApp):
         except Exception as error:
             self.settings = deepcopy(DEFAULTS)
             self.config_error = str(error)
+        self.first_setup = not (DATA/'settings.json').exists()
         self.breeze_available = breeze_hardware_available()
         if not self.breeze_available:
             # Keep saved voice design/clone parameters, but never invoke the hidden engine.
@@ -358,7 +359,8 @@ class OptiiApp(ChatApp):
 
     def connect(self):
         try:
-            catalog = initialize_models(self.model_download, lambda event: self.events.put(('model_progress', event)))
+            catalog = initialize_models(self.model_download,
+                lambda event: self.events.put(('model_progress', event)), ensure_default=self.first_setup)
             if self.model_download.cancelled.is_set():
                 raise RuntimeError('模型初始化已取消。')
             self.events.put(('models_ready', catalog))
@@ -1097,7 +1099,7 @@ class SettingsWindow(tk.Toplevel):
             self.field(box, 'Context / 上下文長度', key+'.context')
             self.field(box, '最多輸出 tokens', key+'.max_tokens')
             self.field(box, 'Temperature（0～2）', key+'.temperature')
-        self.note(models, '文字選單列出聊天模型；圖片選單只列出支援看圖的模型。\n首次啟動若完全沒有模型，會自動從 Ollama 官方下載 llama3.2-vision。\nCPU 強制 num_gpu=0；GPU 依層數卸載，部分運算仍可能使用 RAM。\nLlama 3.2 Vision 使用相容服務；其他模型使用一般 Ollama。')
+        self.note(models, '文字選單列出聊天模型；圖片選單只列出支援看圖的模型。\n首次使用若缺少預設模型，會自動從 Ollama 官方下載 llama3.2-vision。\nCPU 強制 num_gpu=0；GPU 依層數卸載，部分運算仍可能使用 RAM。\nLlama 3.2 Vision 使用相容服務；其他模型使用一般 Ollama。')
         speech = self.tab(notebook, '語音')
         self.provider_combo = provider = self.field(speech, '語音引擎', 'speech.provider',
                                                    ['windows', 'breeze'] if app.breeze_available else ['windows'])

@@ -5,9 +5,12 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 import zipfile
 import opti_update as update
 import opti_bootstrap as bootstrap
+import opti_install
+import opti_setup
 from opti_install import install_app
 
 
@@ -24,6 +27,42 @@ def archive(version='1.1.0', extra=None):
 
 
 class UpdateTests(unittest.TestCase):
+    def test_first_launch_starts_missing_dependency_install_automatically(self):
+        original_tk = opti_setup.tk.Tk
+        def guarded_root():
+            root = original_tk()
+            root.after(3000, root.destroy)
+            return root
+        with patch.object(opti_setup.tk, 'Tk', side_effect=guarded_root), \
+             patch.object(opti_setup, 'install_ollama') as ollama, \
+             patch.object(opti_setup, 'install_compat') as compat:
+            self.assertTrue(opti_setup.run_setup())
+        ollama.assert_called_once()
+        compat.assert_called_once()
+
+    def test_missing_ollama_uses_verified_official_installer(self):
+        response = io.BytesIO(b'installer data')
+        response.url = opti_install.OLLAMA_SETUP_URL
+        with patch.object(opti_install, 'ollama_installed', side_effect=[False, True]), \
+             patch.object(opti_install, 'urlopen', return_value=response) as download, \
+             patch.object(opti_install, 'verify_ollama_signature') as verify, \
+             patch.object(opti_install.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run:
+            opti_install.install_ollama(progress=lambda _: None)
+        self.assertEqual(download.call_args.args[0].full_url, opti_install.OLLAMA_SETUP_URL)
+        verify.assert_called_once()
+        self.assertEqual(run.call_args.args[0][1:], ['/VERYSILENT', '/NORESTART', '/SUPPRESSMSGBOXES'])
+
+    def test_invalid_ollama_signature_stops_before_execution(self):
+        response = io.BytesIO(b'installer data')
+        response.url = opti_install.OLLAMA_SETUP_URL
+        with patch.object(opti_install, 'ollama_installed', return_value=False), \
+             patch.object(opti_install, 'urlopen', return_value=response), \
+             patch.object(opti_install, 'verify_ollama_signature', side_effect=RuntimeError('bad signature')), \
+             patch.object(opti_install.subprocess, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'bad signature'):
+                opti_install.install_ollama(progress=lambda _: None)
+        run.assert_not_called()
+
     def test_launcher_waits_for_tray_exit_when_update_is_pending(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)

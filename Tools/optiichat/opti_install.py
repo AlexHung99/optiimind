@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from urllib.request import Request, urlopen
 import venv
 import zipfile
@@ -16,6 +17,57 @@ from opti_update import atomic_write, digest, target_path, version_tuple
 ROOT = Path(__file__).resolve().parent
 LOCAL = Path(os.environ.get('LOCALAPPDATA', Path.home()))
 COMPAT = LOCAL/'Programs'/'Ollama-Llama32-Compat'
+OLLAMA_SETUP_URL = 'https://ollama.com/download/OllamaSetup.exe'
+
+
+def ollama_installed():
+    return (LOCAL/'Programs'/'Ollama'/'ollama.exe').is_file() or bool(shutil.which('ollama'))
+
+
+def verify_ollama_signature(installer):
+    script = ("$sig = Get-AuthenticodeSignature -LiteralPath $env:OPTII_OLLAMA_INSTALLER; "
+              "if ($sig.Status -ne 'Valid' -or "
+              "$sig.SignerCertificate.Subject -notmatch '(^|, )O=Ollama Inc\\.(,|$)') { exit 1 }")
+    result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script],
+        env={**os.environ, 'OPTII_OLLAMA_INSTALLER': str(installer)},
+        capture_output=True, timeout=60, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    if result.returncode:
+        raise RuntimeError('Ollama 官方安裝檔簽章驗證失敗，已停止安裝。')
+
+
+def install_ollama(progress=print, cancelled=None):
+    if ollama_installed():
+        return
+    progress('正在下載 Ollama 官方安裝檔…')
+    request = Request(OLLAMA_SETUP_URL, headers={'User-Agent': 'OptiChat-Installer'})
+    with tempfile.TemporaryDirectory(prefix='OptiChat-Ollama-') as temp:
+        installer = Path(temp)/'OllamaSetup.exe'
+        with urlopen(request, timeout=60) as response, installer.open('wb') as output:
+            if not response.url.startswith('https://'):
+                raise RuntimeError('Ollama 安裝檔下載來源不是 HTTPS。')
+            total = 0
+            while chunk := response.read(1024*1024):
+                if cancelled and cancelled.is_set():
+                    raise RuntimeError('Ollama 下載已取消。')
+                total += len(chunk)
+                if total > 4 * 1024**3:
+                    raise RuntimeError('Ollama 安裝檔超過大小限制。')
+                output.write(chunk)
+                progress(f'下載 Ollama：{total/1024**2:.0f} MB')
+        if cancelled and cancelled.is_set():
+            raise RuntimeError('Ollama 安裝已取消。')
+        progress('正在驗證 Ollama 官方程式碼簽章…')
+        verify_ollama_signature(installer)
+        progress('正在安裝 Ollama…')
+        result = subprocess.run([str(installer), '/VERYSILENT', '/NORESTART', '/SUPPRESSMSGBOXES'],
+            timeout=1800, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        if result.returncode:
+            raise RuntimeError(f'Ollama 安裝失敗（代碼 {result.returncode}）。')
+        for _ in range(120):
+            if ollama_installed():
+                return
+            time.sleep(1)
+        raise RuntimeError('Ollama 安裝程序已結束，但找不到 ollama.exe。')
 
 
 def install_app(source=ROOT, destination=None):
@@ -160,9 +212,7 @@ if (Test-Path -LiteralPath $legacyPath) {
 def main():
     if sys.platform != 'win32' or sys.version_info < (3, 11):
         raise RuntimeError('Install Python 3.11 or newer for Windows from https://www.python.org/downloads/windows/')
-    ollama = LOCAL/'Programs'/'Ollama'/'ollama.exe'
-    if not ollama.exists() and not shutil.which('ollama'):
-        raise RuntimeError('Install Ollama for Windows first: https://ollama.com/download/windows')
+    install_ollama()
     runtime = LOCAL/'OptiiChat'/'runtime'
     if not (runtime/'Scripts'/'python.exe').exists():
         venv.EnvBuilder(with_pip=True).create(runtime)

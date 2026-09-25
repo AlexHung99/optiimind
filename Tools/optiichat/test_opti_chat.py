@@ -636,6 +636,13 @@ class ModelSetupTests(unittest.TestCase):
         self.assertEqual(core.select_installed_defaults(config, CATALOG), config)
         self.assertEqual(core.DEFAULTS['text']['model'], 'llama3.2-vision:latest')
 
+    def test_first_install_downloads_default_even_when_other_models_exist(self):
+        job, emit = Mock(), Mock()
+        other_models = [item for item in CATALOG if item['name'] != core.DEFAULT_MODEL]
+        with patch.object(core, 'installed_models', side_effect=[other_models, CATALOG]):
+            self.assertEqual(core.initialize_models(job, emit, ensure_default=True), CATALOG)
+        job.pull.assert_called_once_with(emit)
+
     def test_connection_failure_is_not_empty_inventory(self):
         job = Mock()
         with patch.object(core, 'installed_models', side_effect=OSError('offline')):
