@@ -1,13 +1,14 @@
 """OptiChat conversation layout and presentation widgets."""
 from datetime import datetime
 import math
+import os
 import re
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from tkinter import font as tkfont
 
 from PIL import Image, ImageDraw, ImageTk
-from opti_history import preview_path
+from opti_history import attachment_path, preview_path
 
 
 def _button(parent, text, command, style='Outline.TButton', **options):
@@ -529,10 +530,12 @@ def add_attachment_card(app, user, turn, index):
         picture = app.label(card, role='user_card')
         picture.configure(image=photo)
         picture.pack(side='left', padx=(0, 10))
+        visual = picture
     else:
         icon = tk.Canvas(card, width=42, height=50, bd=0, highlightthickness=0)
         app.roles.append((icon, 'user_card', None))
         icon.pack(side='left', padx=(0, 10))
+        visual = icon
         if is_pdf:
             icon.create_polygon(6, 2, 28, 2, 37, 11, 37, 48, 6, 48,
                                 fill='#FFFFFF', outline='#E34C51', width=2)
@@ -544,7 +547,70 @@ def add_attachment_card(app, user, turn, index):
             icon.create_line(8, 37, 18, 26, 24, 32, 30, 24, 35, 31, fill='#087E88', width=2)
     info = selectable_text(app, card, attachment, 'user_card', max_width=460)
     info.pack_configure(side='left', anchor='center')
+    gesture = '<Double-Button-1>' if is_pdf else '<Button-1>'
+    for widget in (card, visual):
+        widget.configure(cursor='hand2')
+        widget.bind(gesture, lambda event: open_attachment(app, turn, index))
+    info.configure(cursor='hand2')
+    if is_pdf:
+        info.bind(gesture, lambda event: open_attachment(app, turn, index))
+    else:
+        # Keep normal drag-selection on the filename; a simple click opens it.
+        info.bind('<ButtonRelease-1>', lambda event: info.after_idle(
+            lambda: None if info.tag_ranges('sel') else open_attachment(app, turn, index)))
     return info
+
+
+def open_attachment(app, turn, index):
+    """Open only files belonging to the active conversation's validated ID/turn."""
+    record = app.conversation or {}
+    identifier = record.get('id')
+    kind = turn.get('attachment_kind')
+    is_pdf = kind == 'pdf' or turn.get('attachment', '').startswith('PDF：')
+    try:
+        if kind in ('pdf', 'image') and identifier:
+            path = attachment_path(identifier, index, kind)
+        elif not is_pdf and turn.get('preview') and identifier:
+            path = preview_path(identifier, index)
+        else:
+            messagebox.showinfo('原始附件未保存', '這是舊版對話，沒有保存原始 PDF；請重新附加檔案。', parent=app.root)
+            return 'break'
+        if not path.is_file():
+            messagebox.showwarning('找不到附件', '這份對話的附件檔案已不存在。', parent=app.root)
+            return 'break'
+        if is_pdf:
+            os.startfile(str(path))
+        else:
+            ImageViewer(app, path, turn.get('attachment', '圖片'))
+    except (OSError, ValueError) as error:
+        messagebox.showerror('無法開啟附件', str(error), parent=app.root)
+    return 'break'
+
+
+class ImageViewer(tk.Toplevel):
+    def __init__(self, app, path, title):
+        super().__init__(app.root)
+        self.title(title)
+        self.transient(app.root)
+        self.bind('<Escape>', lambda event: self.destroy())
+        from opti_app import DARK, LIGHT
+        palette = DARK if app.last_theme == 'dark' else LIGHT
+        self.configure(bg=palette['panel'])
+        with Image.open(path) as source:
+            image = source.convert('RGB')
+        image.thumbnail((max(320, self.winfo_screenwidth()-160),
+                         max(240, self.winfo_screenheight()-190)), Image.Resampling.LANCZOS)
+        self.photo = ImageTk.PhotoImage(image, master=self)
+        caption = tk.Label(self, text=title, bg=palette['panel'], fg=palette['ink'],
+                           font=(app.ui_font, 11), anchor='w', padx=16, pady=12)
+        caption.pack(fill='x')
+        tk.Label(self, image=self.photo, bg=palette['panel']).pack(padx=16, pady=(0, 16))
+        width, height = max(420, image.width+32), image.height+76
+        x = app.root.winfo_rootx() + max(0, (app.root.winfo_width()-width)//2)
+        y = app.root.winfo_rooty() + max(0, (app.root.winfo_height()-height)//2)
+        x = min(max(0, x), max(0, self.winfo_screenwidth()-width))
+        y = min(max(0, y), max(0, self.winfo_screenheight()-height))
+        self.geometry(f'{width}x{height}+{x}+{y}')
 
 
 def short_model_name(value):

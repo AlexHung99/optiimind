@@ -23,7 +23,8 @@ from PIL import Image, ImageDraw, ImageTk
 from llama_vision_ui import ChatApp, StreamRequest, build_messages, prepare_image
 from opti_capture import RegionCapture
 from opti_pdf import PdfPicker, pdf_prompt, prepare_pdf, inspect_pdf
-from opti_history import new_record, save_record, list_records, load_record, save_preview, delete_record
+from opti_history import (new_record, save_record, list_records, load_record, save_preview,
+                          save_attachment, delete_record)
 from opti_version import VERSION
 from opti_update import UPDATE_DIR, check_for_update
 from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch_arguments, breeze_hardware_available,
@@ -724,7 +725,7 @@ class OptiiApp(ChatApp):
             self.events.put(('finished', request.cancelled.is_set()))
 
     def send(self):
-        if not self.ready or self.model_loading:
+        if not self.ready or self.model_loading or self.busy:
             return
         if self.pdf_job:
             self.status.set('請等待 PDF 解析完成。')
@@ -735,6 +736,8 @@ class OptiiApp(ChatApp):
         if self.route_mode() == 'text' and self.pending_path:
             self.route.set('自動分流')
         question = self.input.get('1.0', 'end-1c').strip() or (self.default_prompt() if self.has_attachment() else '')
+        if not question:
+            return
         attachment = ''
         if self.pending_document:
             _, attachment = pdf_prompt(self.pending_document, '', self.settings['text'])
@@ -750,17 +753,32 @@ class OptiiApp(ChatApp):
         if self.settings[kind]['model'] not in model_choices(self.catalog, kind):
             self.status.set('目前選取的模型未安裝或不支援此功能，請在設定重新選擇。')
             return
+        attachment_kind = 'pdf' if self.pending_document or self.pdf_image_note else 'image' if self.pending_path else None
+        source = ((self.pending_document or self.pdf_source)['path'] if attachment_kind == 'pdf'
+                  else self.pending_path if attachment_kind == 'image' else None)
+        created_conversation = self.conversation is None
+        if created_conversation:
+            self.conversation = new_record()
+        turns = self.conversation.setdefault('display_turns', [])
+        saved_file = None
+        if source is not None:
+            try:
+                saved_file = save_attachment(self.conversation['id'], len(turns), source, attachment_kind)
+            except (OSError, ValueError) as error:
+                messagebox.showerror('無法儲存附件', str(error), parent=self.root)
+                if created_conversation:
+                    self.conversation = None
+                return
         was_busy = self.busy
         self._visual_error = None
         super().send()
         if not was_busy and self.busy:
-            if self.conversation is None:
-                self.conversation = new_record()
             record = {'time': datetime.now().strftime('%Y-%m-%d %H:%M'),
                       'question': question, 'attachment': attachment,
                       'model': self.settings[self.active_kind]['model']+' · '+self.active_device,
                       'answer': ''}
-            turns = self.conversation.setdefault('display_turns', [])
+            if saved_file is not None:
+                record['attachment_kind'] = attachment_kind
             if thumbnail is not None:
                 try:
                     save_preview(self.conversation['id'], len(turns), thumbnail)
@@ -771,6 +789,11 @@ class OptiiApp(ChatApp):
             from opti_ui import add_turn
             add_turn(self, record, len(turns)-1)
             self.persist_conversation()
+        else:
+            if saved_file is not None:
+                saved_file.unlink(missing_ok=True)
+            if created_conversation:
+                self.conversation = None
 
     def poll(self):
         if self.closed:

@@ -21,6 +21,7 @@ import opti_model_worker
 import opti_capture
 import opti_pdf
 import opti_history
+import opti_ui
 from opti_ui import copy_selected_text, legacy_display_turns, render_turns, short_model_name, show_history_menu, search_preview, search_match
 
 CATALOG = [
@@ -121,19 +122,33 @@ class HistoryPresentationTests(unittest.TestCase):
             self.assertTrue(tray.visible)
             self.assertEqual(app.extra.get_nowait(), ('tray_ready', None))
 
-    def test_delete_record_removes_only_its_previews(self):
+    def test_delete_record_removes_only_its_attachments(self):
         with tempfile.TemporaryDirectory() as directory:
             records = [opti_history.new_record(), opti_history.new_record()]
+            source = Path(directory)/'source.png'
+            Image.new('RGB', (600, 400), 'blue').save(source)
+            pdf = Path(directory)/'source.pdf'
+            pdf.write_bytes(b'%PDF-1.4\nlocal attachment')
             for record in records:
                 opti_history.save_record(record, directory)
                 opti_history.save_preview(record['id'], 0, Image.new('RGB', (30, 30)), directory)
+                opti_history.save_attachment(record['id'], 0, source, 'image', directory)
+                opti_history.save_attachment(record['id'], 1, pdf, 'pdf', directory)
             opti_history.delete_record(records[0]['id'], directory)
             self.assertFalse(opti_history.path_for(records[0]['id'], directory).exists())
             self.assertFalse(opti_history.preview_path(records[0]['id'], 0, directory).exists())
+            self.assertFalse(opti_history.attachment_path(records[0]['id'], 0, 'image', directory).exists())
+            self.assertFalse(opti_history.attachment_path(records[0]['id'], 1, 'pdf', directory).exists())
             self.assertTrue(opti_history.path_for(records[1]['id'], directory).exists())
             self.assertTrue(opti_history.preview_path(records[1]['id'], 0, directory).exists())
+            self.assertTrue(opti_history.attachment_path(records[1]['id'], 0, 'image', directory).exists())
+            self.assertTrue(opti_history.attachment_path(records[1]['id'], 1, 'pdf', directory).exists())
             with self.assertRaises(ValueError):
                 opti_history.delete_record('../outside', directory)
+            with self.assertRaises(ValueError):
+                opti_history.attachment_path('../outside', 0, 'pdf', directory)
+            with self.assertRaises(ValueError):
+                opti_history.attachment_path(records[1]['id'], 0, '../image', directory)
 
     def test_history_context_menu_renames_and_deletes_active_chat(self):
         with ExitStack() as stack:
@@ -236,6 +251,34 @@ class HistoryPresentationTests(unittest.TestCase):
             self.assertEqual(source.size, (1600, 900))
             with self.assertRaises(ValueError):
                 opti_history.preview_path('../other', 0, directory)
+
+    def test_saved_image_opens_after_original_is_removed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = tk.Tk()
+            try:
+                record = opti_history.new_record()
+                source = Path(directory)/'photo.png'
+                Image.new('RGB', (640, 480), 'blue').save(source)
+                with patch.object(opti_history, 'HISTORY_DIR', Path(directory)):
+                    saved = opti_history.save_attachment(record['id'], 0, source, 'image')
+                    source.unlink()
+                    with Image.open(saved) as image:
+                        self.assertEqual(image.size, (640, 480))
+                    app = SimpleNamespace(root=root, conversation=record, last_theme='dark', ui_font='Segoe UI')
+                    window = opti_ui.ImageViewer(app, saved, '圖片：photo.png')
+                    root.update()
+                    self.assertEqual(window.photo.width(), 640)
+                    self.assertEqual(window.title(), '圖片：photo.png')
+                    window.destroy()
+                    with patch.object(opti_ui, 'ImageViewer') as viewer:
+                        self.assertEqual(opti_ui.open_attachment(app,
+                            {'attachment': '圖片：photo.png', 'attachment_kind': 'image'}, 0), 'break')
+                    viewer.assert_called_once_with(app, saved, '圖片：photo.png')
+                    with patch.object(opti_ui.messagebox, 'showinfo') as notice:
+                        opti_ui.open_attachment(app, {'attachment': 'PDF：old.pdf'}, 0)
+                    notice.assert_called_once()
+            finally:
+                root.destroy()
 
     def test_reply_heading_uses_short_model_family(self):
         examples = {'llama3.2-vision:latest · CPU': 'Llama',
@@ -490,7 +533,7 @@ class DesktopTests(unittest.TestCase):
             root = tk.Tk()
             app = opti_app.OptiiApp(root)
             try:
-                app.status.set('新版 1.3.21 已下載；從系統匣「結束程式」後重新開啟即可套用。')
+                app.status.set('新版 1.3.22 已下載；從系統匣「結束程式」後重新開啟即可套用。')
                 for width in (1050, 1410):
                     root.geometry(f'{width}x740')
                     root.update()
@@ -899,10 +942,23 @@ class CaptureTests(unittest.TestCase):
                 self.assertTrue(app.conversation['display_turns'][0]['preview'])
                 saved = opti_history.load_record(app.conversation['id'], directory)
                 self.assertTrue(saved['display_turns'][0]['preview'])
+                self.assertEqual(saved['display_turns'][0]['attachment_kind'], 'image')
                 self.assertTrue(opti_history.preview_path(saved['id'], 0).is_file())
+                self.assertTrue(opti_history.attachment_path(saved['id'], 0, 'image').is_file())
                 app.conversation = saved
                 render_turns(app)
                 self.assertEqual(len(app.visual_photos), 1)
+                attachment = app.visual_turn_widgets[0]['attachment']
+                self.assertTrue(attachment.bind('<ButtonRelease-1>'))
+                with patch.object(opti_ui, 'ImageViewer') as viewer:
+                    attachment.event_generate('<ButtonRelease-1>')
+                    root.update()
+                viewer.assert_called_once()
+                attachment.tag_add('sel', '1.0', '1.2')
+                with patch.object(opti_ui, 'ImageViewer') as viewer:
+                    attachment.event_generate('<ButtonRelease-1>')
+                    root.update()
+                viewer.assert_not_called()
             finally:
                 app.quit()
 
@@ -970,6 +1026,7 @@ class PdfTests(unittest.TestCase):
             stack.enter_context(patch.object(opti_app.OptiiApp, 'monitor'))
             stack.enter_context(patch.object(opti_app.OptiiApp, 'connect'))
             directory = stack.enter_context(tempfile.TemporaryDirectory())
+            stack.enter_context(patch.object(opti_history, 'HISTORY_DIR', Path(directory)/'history'))
             stack.enter_context(patch.object(opti_app, 'save_record',
                 side_effect=lambda record: opti_history.save_record(record, Path(directory)/'history')))
             stack.enter_context(patch.object(opti_app, 'list_records',
@@ -992,7 +1049,15 @@ class PdfTests(unittest.TestCase):
                 self.assertIn('幫我摘要', app.turn['content'])
                 self.assertIsNone(app.pending_document)
                 self.assertTrue(app.conversation['display_turns'][0]['attachment'].startswith('PDF：'))
+                self.assertEqual(app.conversation['display_turns'][0]['attachment_kind'], 'pdf')
                 self.assertNotIn('preview', app.conversation['display_turns'][0])
+                stored_pdf = opti_history.attachment_path(app.conversation['id'], 0, 'pdf')
+                self.assertEqual(stored_pdf.read_bytes(), path.read_bytes())
+                attachment = app.visual_turn_widgets[0]['attachment']
+                self.assertTrue(attachment.bind('<Double-Button-1>'))
+                with patch.object(opti_ui.os, 'startfile') as open_file:
+                    opti_ui.open_attachment(app, app.conversation['display_turns'][0], 0)
+                open_file.assert_called_once_with(str(stored_pdf))
                 def widgets(parent):
                     for child in parent.winfo_children():
                         yield child
@@ -1010,7 +1075,10 @@ class PdfTests(unittest.TestCase):
                 with patch.object(app, 'generate'):
                     app.send()
                 self.assertTrue(app.conversation['display_turns'][-1]['attachment'].startswith('PDF：'))
+                self.assertEqual(app.conversation['display_turns'][-1]['attachment_kind'], 'pdf')
                 self.assertNotIn('preview', app.conversation['display_turns'][-1])
+                self.assertEqual(opti_history.attachment_path(app.conversation['id'], 1, 'pdf').read_bytes(),
+                                 path.read_bytes())
                 self.assertFalse(image_path.exists())
                 self.assertTrue(path.is_file())
             finally:
@@ -1024,6 +1092,7 @@ class PdfTests(unittest.TestCase):
             stack.enter_context(patch.object(opti_app.OptiiApp, 'connect'))
             directory = Path(stack.enter_context(tempfile.TemporaryDirectory()))
             store = directory/'history'
+            stack.enter_context(patch.object(opti_history, 'HISTORY_DIR', store))
             stack.enter_context(patch.object(opti_app, 'save_record', side_effect=lambda r:opti_history.save_record(r, store)))
             stack.enter_context(patch.object(opti_app, 'list_records', side_effect=lambda:opti_history.list_records(store)))
             stack.enter_context(patch.object(opti_app, 'load_record', side_effect=lambda i:opti_history.load_record(i, store)))
