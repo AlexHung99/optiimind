@@ -4,11 +4,11 @@ Windows 本機 AI 工具：Ollama 文字／圖片聊天、本機 Agent、框選�
 
 - **介紹與下載：** https://optiimind.com/Tools/optiichat/
 - **程式碼：** 本目錄
-- **目前版本：** 1.3.26
+- **目前版本：** 1.3.27
 
 ## 安裝
 
-1. 從介紹頁下載 `OptiChat-Setup-1.3.26.exe`，執行安裝精靈；不需要自行安裝 Python。安裝包已包含 1.3.26，日後啟動仍會自動更新。
+1. 從介紹頁下載 `OptiChat-Setup-1.3.27.exe`，執行安裝精靈；不需要自行安裝 Python。安裝包已包含 1.3.27，日後啟動仍會自動更新。
 2. 安裝包含獨立 Python 3.14.3、介面、PDF 及朗讀套件，放在 `%LOCALAPPDATA%\OptiiChat\python`；程式在同一資料夾下的 `app`。為保留舊版設定與更新相容性，內部資料夾名稱沿用 OptiiChat。
 3. 自動建立桌面與開始功能表「OptiChat」捷徑。雙擊即可開啟。
 4. 初次啟動若缺少 Ollama，會自動下載官方安裝檔、驗證 Ollama Inc. 程式碼簽章並安裝；缺少 Vision 相容服務時會下載官方 0.24.0 Windows ZIP（約 2.1 GB），驗證官方 SHA-256，並安裝 CPU／Vulkan 檔案。下載失敗可在準備視窗重試。

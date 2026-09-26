@@ -233,6 +233,12 @@ class HistoryPresentationTests(unittest.TestCase):
                 self.assertIs(history.master.winfo_children()[0], app.chat_tab.master)
                 self.assertEqual(app.chat_tab.cget('text'), '對話')
                 self.assertEqual(app.agent_tab.cget('text'), 'Agent')
+                root.update()
+                self.assertLessEqual(abs(app.chat_tab.winfo_width() - app.agent_tab.winfo_width()), 1)
+                self.assertGreaterEqual(app.agent_tab.winfo_x(),
+                                        app.chat_tab.winfo_x() + app.chat_tab.winfo_width())
+                self.assertLessEqual(app.agent_tab.winfo_x() + app.agent_tab.winfo_width(),
+                                     app.agent_tab.master.winfo_width())
                 self.assertIs(app.settings_button.master, root.winfo_children()[0])
                 self.assertNotIn('工作室', root.title())
                 self.assertIs(app.about_button.master, app.settings_button.master)

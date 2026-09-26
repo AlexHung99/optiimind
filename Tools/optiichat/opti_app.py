@@ -275,11 +275,11 @@ class OptiiApp(ChatApp):
         style.map('Primary.TButton', background=[('active', p['accent'])], foreground=[('active', p['bg'])])
         style.configure('Icon.TButton', padding=(5, 5), background=p['panel'], borderwidth=0)
         style.map('Icon.TButton', background=[('active', p['selected'])])
-        style.configure('Tab.TButton', padding=(10, 9), background=p['panel'],
+        style.configure('Tab.TButton', padding=(5, 9), background=p['panel'],
                         foreground=p['muted'], borderwidth=1, bordercolor=p['line'])
         style.map('Tab.TButton', background=[('active', p['selected'])],
                   foreground=[('active', p['ink'])])
-        style.configure('ActiveTab.TButton', padding=(10, 9), background=p['selected'],
+        style.configure('ActiveTab.TButton', padding=(5, 9), background=p['selected'],
                         foreground=p['accent'], borderwidth=1, bordercolor=p['accent'])
         style.map('ActiveTab.TButton', background=[('active', p['selected'])])
         style.configure('Accent.TButton', background=p['accent'], foreground=p['bg'])

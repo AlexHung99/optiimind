@@ -121,12 +121,14 @@ def build_ui(app):
     history.pack_propagate(False)
     tabs = app.frame(history, role='panel')
     tabs.pack(fill='x', pady=(0, 15))
+    tabs.grid_columnconfigure(0, weight=1, uniform='mode_tabs')
+    tabs.grid_columnconfigure(1, weight=1, uniform='mode_tabs')
     app.chat_tab = _button(tabs, '對話', lambda: app.agent_workspace.switch('chat'),
-                           'ActiveTab.TButton')
-    app.chat_tab.pack(side='left', fill='x', expand=True)
+                           'ActiveTab.TButton', width=5)
+    app.chat_tab.grid(row=0, column=0, sticky='ew', padx=(0, 3))
     app.agent_tab = _button(tabs, 'Agent', lambda: app.agent_workspace.switch('agent'),
-                            'Tab.TButton')
-    app.agent_tab.pack(side='left', fill='x', expand=True, padx=(5, 0))
+                            'Tab.TButton', width=5)
+    app.agent_tab.grid(row=0, column=1, sticky='ew', padx=(3, 0))
     chat_sidebar = app.frame(history, role='panel')
     chat_sidebar.pack(fill='both', expand=True)
     heading = app.frame(chat_sidebar, role='panel')
