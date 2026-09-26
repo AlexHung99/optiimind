@@ -1,10 +1,10 @@
 # OptiChat
 
-Windows 本機 AI 聊天工具：Ollama 文字／圖片聊天、框選截圖、語音朗讀、系統匣常駐、亮暗主題與自動更新。
+Windows 本機 AI 工具：Ollama 文字／圖片聊天、本機 Agent、框選截圖、語音朗讀、系統匣常駐、亮暗主題與自動更新。
 
 - **介紹與下載：** https://optiimind.com/Tools/optiichat/
 - **程式碼：** 本目錄
-- **目前版本：** 1.3.25
+- **目前版本：** 1.3.26
 
 ## 安裝
 
@@ -29,6 +29,7 @@ Windows 本機 AI 聊天工具：Ollama 文字／圖片聊天、框選截圖、�
 ## 使用
 
 - 主視窗採深色青藍聊天版面：左側歷史對話、中間對話卡片、上方狀態列、下方靠左輸入與 CPU／GPU 資源列。對話紀錄、聊天及設定分頁只在內容超出可視範圍時顯示捲軸。右上角齒輪開啟設定，左邊的驚嘆號開啟「關於 OptiChat」，可前往官網或下載頁；對話紀錄旁的放大鏡可搜尋標題、提問、回覆與附件名稱，命中內容時會顯示摘要；點選結果會開啟對話並捲到第一則命中訊息。左側清單顯示完整日期時間標題；舊版對話也會以問答卡片呈現。可在設定改為亮色或跟隨 Windows。
+- 左側對話紀錄上方可切換「對話／Agent」分頁。Agent 使用設定中的文字模型；選擇工作資料夾、輸入目標後，它會在最多六個步驟內列出、搜尋、讀取資料夾中的一般文字檔，再整理結果。每一步的工具結果與最終答覆都顯示在獨立時間軸，任務紀錄存於本機 `%LOCALAPPDATA%\OptiiChat\agents`，可從左側重新開啟、改名或刪除；執行中可停止，切回對話分頁不會中斷。第一版工具限於唯讀資料夾，不執行命令、不修改檔案，也不包含 MCP、Skill 或 Hermes 的其他整合。
 - AI 回覆標頭以金色顯示簡短模型家族名稱（例如 Llama、Gemma）；完整模型名稱仍保留在對話資料中。
 - 對話卡片中的提問、回覆及附件名稱可用滑鼠框選，按 `Ctrl+C` 或右鍵「複製」。文字區為唯讀，長篇回覆自動換行並隨內容增高。
 - 設定視窗開啟時置中於主視窗，分頁和表單跟隨主程式的亮／暗色系。設定 → 聊天模型：選已安裝模型及 CPU／GPU。圖片選單只列支援 vision 的模型。
@@ -55,7 +56,7 @@ Git clone 的開發者若修改程式，應以 Git 更新；自動更新不會�
 1. 修改程式與 `opti_version.py` 的三段式版本號，例如 `1.0.1`。
 2. 以 UI Python 環境執行：
    ```powershell
-   python -m unittest test_opti_update test_opti_chat test_llama_vision_ui -v
+   python -m unittest test_opti_update test_opti_chat test_llama_vision_ui test_opti_agent -v
    python opti_release.py
    ```
 3. 先將 `downloads/OptiiChat-版本.zip` 上傳到 `optiichat-downloads` R2 bucket，驗證公開 URL 的 SHA-256，再將 `r2-update.json` 上傳為 R2 的 `update.json`。manifest 必須最後發佈。
@@ -81,8 +82,8 @@ python installer/build.py --makensis C:\tools\nsis-3.12\makensis.exe
 
 - 一般 Ollama：本機 `11434`；Llama 3.2 Vision 相容服務：CPU `11435`／Vulkan `11436`。
 - 使用 `OLLAMA_MODELS` 環境變數或 Ollama 預設模型目錄。
-- 設定／音訊：`%LOCALAPPDATA%\OptiiChat`；聊天紀錄只在記憶體。
+- 設定／音訊：`%LOCALAPPDATA%\OptiiChat`；聊天紀錄與 Agent 任務分別儲存在 `history`、`agents`。
 - 網路用於安裝相依套件、模型下載、R2 更新，以及使用者自行指定的 Breeze 服務。
 - 官網 Logo 來源見 [opti_assets/README.md](opti_assets/README.md)。Breeze 權重與自架產出受其研究及非商業授權限制；本儲存庫不散布該模型。
 
-43 項自動測試涵蓋聊天串流、截圖、歷史對話呈現、模型初始化、語音串接與更新驗證／還原，包括常駐程序退出與重新啟動的更新等待。測試不代表所有硬體組合皆可執行所有模型。
+76 項自動測試涵蓋聊天串流、截圖、歷史對話、Agent 工具與分頁、模型初始化、語音串接及更新驗證／還原。測試不代表所有硬體組合皆可執行所有模型。

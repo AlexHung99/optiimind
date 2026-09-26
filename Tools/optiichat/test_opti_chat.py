@@ -230,7 +230,9 @@ class HistoryPresentationTests(unittest.TestCase):
             app = opti_app.OptiiApp(root)
             try:
                 history = app.history_canvas.master
-                self.assertIs(history.master.winfo_children()[0], history)
+                self.assertIs(history.master.winfo_children()[0], app.chat_tab.master)
+                self.assertEqual(app.chat_tab.cget('text'), '對話')
+                self.assertEqual(app.agent_tab.cget('text'), 'Agent')
                 self.assertIs(app.settings_button.master, root.winfo_children()[0])
                 self.assertNotIn('工作室', root.title())
                 self.assertIs(app.about_button.master, app.settings_button.master)

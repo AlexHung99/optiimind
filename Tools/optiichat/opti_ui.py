@@ -119,25 +119,35 @@ def build_ui(app):
                         highlightthickness=1)
     history.pack(side='left', fill='y', padx=(12, 12), pady=(12, 12))
     history.pack_propagate(False)
-    heading = app.frame(history, role='panel')
+    tabs = app.frame(history, role='panel')
+    tabs.pack(fill='x', pady=(0, 15))
+    app.chat_tab = _button(tabs, '對話', lambda: app.agent_workspace.switch('chat'),
+                           'ActiveTab.TButton')
+    app.chat_tab.pack(side='left', fill='x', expand=True)
+    app.agent_tab = _button(tabs, 'Agent', lambda: app.agent_workspace.switch('agent'),
+                            'Tab.TButton')
+    app.agent_tab.pack(side='left', fill='x', expand=True, padx=(5, 0))
+    chat_sidebar = app.frame(history, role='panel')
+    chat_sidebar.pack(fill='both', expand=True)
+    heading = app.frame(chat_sidebar, role='panel')
     heading.pack(fill='x')
     title = app.label(heading, '對話紀錄', role='panel')
     title.configure(font=(app.ui_font, 14, 'bold'))
     title.pack(side='left')
     app.search_button = ttk.Button(heading, command=lambda: toggle_search(app), style='Icon.TButton')
     app.search_button.pack(side='right')
-    app.new_button = _button(history, '+  新對話', app.new_chat, 'Primary.TButton')
+    app.new_button = _button(chat_sidebar, '+  新對話', app.new_chat, 'Primary.TButton')
     app.new_button.pack(fill='x', pady=(17, 8))
-    app.search_entry = ttk.Entry(history, textvariable=app.search_var)
+    app.search_entry = ttk.Entry(chat_sidebar, textvariable=app.search_var)
     app.root.bind('<Control-f>', lambda event: toggle_search(app), add=True)
     app.search_var.trace_add('write', lambda *_: build_history_cards(app))
-    app.conversation_list = tk.Listbox(history, exportselection=False)
-    app.history_context_menu = tk.Menu(history, tearoff=False)
+    app.conversation_list = tk.Listbox(chat_sidebar, exportselection=False)
+    app.history_context_menu = tk.Menu(chat_sidebar, tearoff=False)
     app.conversation_list.bind('<F2>', app.rename_conversation)
     app.root.bind('<F2>', app.rename_conversation, add=True)
-    history_scroll = ttk.Scrollbar(history)
+    history_scroll = ttk.Scrollbar(chat_sidebar)
     app.history_scroll = history_scroll
-    app.history_canvas = tk.Canvas(history, highlightthickness=0, bd=0)
+    app.history_canvas = tk.Canvas(chat_sidebar, highlightthickness=0, bd=0)
     app.roles.append((app.history_canvas, 'panel', None))
     app.history_canvas.pack(fill='both', expand=True)
     history_scroll.configure(command=app.history_canvas.yview)
@@ -152,7 +162,9 @@ def build_ui(app):
     app.history_canvas.bind('<Configure>', resize_history)
     center = app.frame(shell, role='bg')
     center.pack(side='left', fill='both', expand=True, padx=(0, 12), pady=(12, 12))
-    toolbar = app.frame(center, role='panel', height=64, padx=16, highlightthickness=1)
+    chat_center = app.frame(center, role='bg')
+    chat_center.pack(fill='both', expand=True)
+    toolbar = app.frame(chat_center, role='panel', height=64, padx=16, highlightthickness=1)
     toolbar.pack(fill='x')
     toolbar.grid_columnconfigure(0, weight=1)
     toolbar.grid_rowconfigure(0, minsize=64)
@@ -170,7 +182,7 @@ def build_ui(app):
     toolbar.bind('<Configure>', fit_status)
     app.root.bind('<Control-Shift-S>', app.take_screenshot)
 
-    app.composer = app.frame(center, role='bg', height=128)
+    app.composer = app.frame(chat_center, role='bg', height=128)
     app.composer.pack(side='bottom', fill='x', pady=(10, 0))
     app.composer.pack_propagate(False)
     actions = app.frame(app.composer, role='bg', width=190)
@@ -227,8 +239,8 @@ def build_ui(app):
 
     # The base chat controller retains the source transcript for persistence and
     # tests. The scrollable cards below are the user-visible conversation.
-    app.transcript = tk.Text(center, wrap='word', state='disabled')
-    app.visual_surface = app.frame(center, role='chat', highlightthickness=1)
+    app.transcript = tk.Text(chat_center, wrap='word', state='disabled')
+    app.visual_surface = app.frame(chat_center, role='chat', highlightthickness=1)
     app.visual_surface.pack(fill='both', expand=True, pady=(12, 0))
     chat_scroll = ttk.Scrollbar(app.visual_surface)
     app.chat_scroll = chat_scroll
@@ -247,6 +259,12 @@ def build_ui(app):
     app.visual_canvas.bind('<Configure>', resize_chat)
     app.root.bind('<MouseWheel>', lambda event: wheel(app, event), add=True)
     app.visual_answer_var = None
+
+    agent_sidebar = app.frame(history, role='panel')
+    agent_center = app.frame(center, role='bg')
+    from opti_agent_ui import AgentWorkspace
+    app.agent_workspace = AgentWorkspace(app, agent_sidebar, agent_center,
+                                          chat_sidebar, chat_center)
     app.write('從一句話開始，或按 + 加入圖片、PDF。\n\n', 'note')
     app.refresh_conversations()
     app.configure_drop()
@@ -322,6 +340,10 @@ def hide_attachment(app):
 
 
 def wheel(app, event):
+    if getattr(app, 'agent_workspace', None) and app.agent_workspace.mode == 'agent':
+        if str(event.widget).startswith(str(app.agent_workspace.list_canvas)):
+            app.agent_workspace.list_canvas.yview_scroll(-int(event.delta/120), 'units')
+        return
     canvas = app.history_canvas if str(event.widget).startswith(str(app.history_canvas)) else app.visual_canvas
     canvas.yview_scroll(-int(event.delta/120), 'units')
 

@@ -64,7 +64,8 @@ def safe_name(name):
         allowed = name in ('Start-OptiiChat.cmd', 'Start-Llama32-UI.cmd', 'Start-Llama32-Vision.cmd',
                            'Install-OptiiChat.cmd', 'README.md', 'OptiiChat-使用說明.md', 'opti-requirements.txt',
                            'package-files.json', 'llama_vision_ui.py', 'start_llama32_vision.py',
-                           'test_llama_vision_ui.py', 'test_opti_chat.py', 'test_opti_update.py') or re.fullmatch(r'opti_[a-z_]+\.py', name)
+                           'test_llama_vision_ui.py', 'test_opti_chat.py', 'test_opti_update.py',
+                           'test_opti_agent.py') or re.fullmatch(r'opti_[a-z_]+\.py', name)
     else:
         allowed = len(path.parts) == 2 and path.parts[0] == 'opti_assets' and (path.name == 'README.md' or re.fullmatch(r'logo-[a-z]+\.png', path.name))
     if not allowed:

@@ -13,7 +13,7 @@ def build(root=None, bridge_github=False):
     names = ['Start-OptiiChat.cmd', 'Start-Llama32-UI.cmd', 'Start-Llama32-Vision.cmd',
              'Install-OptiiChat.cmd', 'README.md', 'OptiiChat-使用說明.md', 'opti-requirements.txt',
              'llama_vision_ui.py', 'start_llama32_vision.py', 'test_llama_vision_ui.py',
-             'test_opti_chat.py', 'test_opti_update.py']
+             'test_opti_chat.py', 'test_opti_update.py', 'test_opti_agent.py']
     names += [path.name for path in root.glob('opti_*.py')]
     names += [path.relative_to(root).as_posix() for path in (root/'opti_assets').iterdir() if path.is_file()]
     files = {}

@@ -91,6 +91,7 @@ class OptiiApp(ChatApp):
         self.image_viewers = []
         self.update_busy = False
         self.update_on_exit_started = False
+        self.agent_workspace = None
         self.update_status = tk.StringVar(root, value='目前版本 '+VERSION)
         super().__init__(root)
         root.title('OptiChat · 本機 AI')
@@ -274,6 +275,13 @@ class OptiiApp(ChatApp):
         style.map('Primary.TButton', background=[('active', p['accent'])], foreground=[('active', p['bg'])])
         style.configure('Icon.TButton', padding=(5, 5), background=p['panel'], borderwidth=0)
         style.map('Icon.TButton', background=[('active', p['selected'])])
+        style.configure('Tab.TButton', padding=(10, 9), background=p['panel'],
+                        foreground=p['muted'], borderwidth=1, bordercolor=p['line'])
+        style.map('Tab.TButton', background=[('active', p['selected'])],
+                  foreground=[('active', p['ink'])])
+        style.configure('ActiveTab.TButton', padding=(10, 9), background=p['selected'],
+                        foreground=p['accent'], borderwidth=1, bordercolor=p['accent'])
+        style.map('ActiveTab.TButton', background=[('active', p['selected'])])
         style.configure('Accent.TButton', background=p['accent'], foreground=p['bg'])
         style.configure('TEntry', fieldbackground=p['paper'], foreground=p['ink'], insertcolor=p['ink'])
         style.configure('TCombobox', fieldbackground=p['paper'], foreground=p['ink'], arrowcolor=p['ink'])
@@ -301,6 +309,8 @@ class OptiiApp(ChatApp):
         for viewer in self.image_viewers:
             viewer.apply_theme(theme)
         self.refresh_conversations()
+        if self.agent_workspace:
+            self.agent_workspace.apply_theme(p)
         if self.settings_window and self.settings_window.winfo_exists():
             self.settings_window.apply_theme(theme)
         if self.about_window and self.about_window.winfo_exists():
@@ -590,7 +600,8 @@ class OptiiApp(ChatApp):
         self.capture_button.configure(state='disabled' if busy or self.capture_session else 'normal')
 
     def refresh_models(self):
-        if self.model_loading or self.busy or self.speech_job or self.catalog_download_job:
+        if (self.model_loading or self.busy or self.speech_job or self.catalog_download_job
+                or (self.agent_workspace and self.agent_workspace.runner)):
             return
         self.model_loading = True
         self.ready = False
@@ -704,6 +715,9 @@ class OptiiApp(ChatApp):
 
     def send(self):
         if not self.ready or self.model_loading or self.busy:
+            return
+        if self.agent_workspace and self.agent_workspace.runner:
+            self.status.set('Agent 任務執行中，請等待完成或到 Agent 分頁停止。')
             return
         if self.pdf_job:
             self.status.set('請等待 PDF 解析完成。')
@@ -974,6 +988,8 @@ class OptiiApp(ChatApp):
                     self.update_status.set(value)
                     if '已下載' in value:
                         self.status.set(value)
+                elif kind == 'agent_event' and self.agent_workspace:
+                    self.agent_workspace.handle_event(value)
         except queue.Empty:
             pass
         self.root.after(100, self.poll_extra)
@@ -1077,6 +1093,8 @@ class OptiiApp(ChatApp):
     def quit(self):
         if not self.closed:
             self.persist_conversation()
+        if self.agent_workspace:
+            self.agent_workspace.shutdown()
         self.cancel_pdf_job()
         self.shutdown.set()
         if self.capture_session:
