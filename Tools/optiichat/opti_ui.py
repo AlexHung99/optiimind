@@ -194,9 +194,17 @@ def build_ui(app):
     input_body.pack(fill='both', expand=True)
     app.input = tk.Text(input_body, height=3, wrap='word', relief='flat', bd=0, padx=8, pady=5,
                         font=(app.ui_font, 11), undo=True)
+    app.input_line_height = tkfont.Font(root=app.root, font=app.input.cget('font')).metrics('linespace')
     app.roles.append((app.input, 'input', 'ink'))
     app.input.pack(fill='both', expand=True)
+    app.input_scroll = ttk.Scrollbar(input_body, orient='vertical', command=app.input.yview)
+    app.input.configure(yscrollcommand=app.input_scroll.set)
     app.input.bind('<Control-Return>', app.keyboard_send)
+    app.input.bind('<Configure>', lambda event: schedule_composer_resize(app))
+    def scroll_input(event):
+        app.input.yview_scroll(-int(event.delta/120), 'units')
+        return 'break'
+    app.input.bind('<MouseWheel>', scroll_input)
     app.placeholder = app.label(input_body, '輸入訊息…（可貼上文字、圖片或拖曳檔案）',
                                 role='input', color='muted')
     app.placeholder.place(x=18, y=9)
@@ -252,6 +260,37 @@ def update_placeholder(app):
         app.placeholder.place_forget()
     else:
         app.placeholder.place(x=18, y=9)
+    schedule_composer_resize(app)
+
+
+def schedule_composer_resize(app):
+    if getattr(app, '_composer_resize_pending', False):
+        return
+    app._composer_resize_pending = True
+    def resize():
+        app._composer_resize_pending = False
+        if app.input.winfo_exists():
+            resize_composer(app)
+    app.input.after_idle(resize)
+
+
+def resize_composer(app):
+    """Grow the input from three to six visual rows, then scroll inside it."""
+    count = app.input.count('1.0', 'end', 'displaylines')
+    lines = max(1, count[0] if count else 1)
+    visible = min(6, max(3, lines))
+    if int(app.input.cget('height')) != visible:
+        app.input.configure(height=visible)
+    attached = bool(app.attachment_row.winfo_manager())
+    base = 208 if attached and app.pending_path and app.preview else 160 if attached else 128
+    height = base + (visible - 3) * app.input_line_height
+    if int(app.composer.cget('height')) != height:
+        app.composer.configure(height=height)
+    if lines > 6 and not app.input_scroll.winfo_manager():
+        app.input_scroll.pack(side='right', fill='y', before=app.input)
+    elif lines <= 6 and app.input_scroll.winfo_manager():
+        app.input_scroll.pack_forget()
+        app.input.yview_moveto(0.0)
 
 
 def toggle_search(app):
@@ -267,10 +306,9 @@ def show_attachment(app, pdf=False):
     app.attachment_row.pack(side='bottom', fill='x', before=app.input_body)
     if app.pending_path and app.preview:
         app.preview_image.pack(side='left', before=app.preview_label, padx=(0, 9))
-        app.composer.configure(height=208)
     else:
         app.preview_image.pack_forget()
-        app.composer.configure(height=128)
+    resize_composer(app)
     if pdf:
         app.page_button.pack(side='right', padx=5, before=app.remove_button)
     else:
@@ -280,7 +318,7 @@ def show_attachment(app, pdf=False):
 def hide_attachment(app):
     app.preview_image.pack_forget()
     app.attachment_row.pack_forget()
-    app.composer.configure(height=128)
+    resize_composer(app)
 
 
 def wheel(app, event):

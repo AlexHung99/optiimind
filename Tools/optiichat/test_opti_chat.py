@@ -524,6 +524,52 @@ class CoreTests(unittest.TestCase):
 
 
 class DesktopTests(unittest.TestCase):
+    def test_composer_grows_to_six_visual_lines_then_scrolls(self):
+        with patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)), \
+             patch.object(opti_app.OptiiApp, 'start_tray'), \
+             patch.object(opti_app.OptiiApp, 'monitor'), \
+             patch.object(opti_app.OptiiApp, 'connect'), \
+             patch.object(opti_app.OptiiApp, 'check_updates'):
+            root = tk.Tk()
+            app = opti_app.OptiiApp(root)
+            try:
+                root.geometry('1050x740')
+                for count, expected_rows in ((1, 3), (4, 4), (6, 6), (9, 6)):
+                    app.input.delete('1.0', 'end')
+                    app.input.insert('1.0', '\n'.join(['測試'] * count))
+                    root.update()
+                    self.assertEqual(int(app.input.cget('height')), expected_rows)
+                    self.assertEqual(int(app.composer.cget('height')),
+                                     128 + (expected_rows - 3) * app.input_line_height)
+                    self.assertEqual(bool(app.input_scroll.winfo_ismapped()), count > 6)
+                    if count <= 6:
+                        self.assertEqual(app.input.yview(), (0.0, 1.0))
+                    if count > 6:
+                        self.assertNotEqual(app.input_scroll.get(), (0.0, 1.0))
+                        app.input.yview_moveto(1.0)
+                        before = app.input.yview()[0]
+                        app.input.event_generate('<MouseWheel>', delta=120)
+                        root.update()
+                        self.assertLess(app.input.yview()[0], before)
+                app.input.delete('1.0', 'end')
+                app.input.insert('1.0', '長句測試 ' * 250)
+                root.update()
+                self.assertGreater(app.input.count('1.0', 'end', 'displaylines')[0], 6)
+                self.assertEqual(int(app.input.cget('height')), 6)
+                self.assertTrue(app.input_scroll.winfo_ismapped())
+                opti_ui.show_attachment(app, pdf=True)
+                root.update()
+                self.assertEqual(int(app.composer.cget('height')),
+                                 160 + 3 * app.input_line_height)
+                self.assertGreater(app.visual_canvas.winfo_height(), 250)
+                opti_ui.hide_attachment(app)
+                app.input.delete('1.0', 'end')
+                root.update()
+                self.assertEqual(int(app.composer.cget('height')), 128)
+                self.assertFalse(app.input_scroll.winfo_ismapped())
+            finally:
+                app.quit()
+
     def test_scrollbars_follow_actual_history_chat_and_settings_overflow(self):
         records = []
         with patch.object(opti_app, 'load_settings', return_value=deepcopy(core.DEFAULTS)), \
