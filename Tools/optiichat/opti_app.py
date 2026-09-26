@@ -1,6 +1,5 @@
 """OptiiChat desktop interface; all widgets are owned by the Tk thread."""
 from copy import deepcopy
-import ctypes
 from datetime import datetime
 import json
 import os
@@ -13,11 +12,9 @@ import tempfile
 import threading
 import time
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, simpledialog
-from tkinter import font as tkfont
+from tkinter import ttk, filedialog
 import webbrowser
 import winsound
-import winreg
 
 from PIL import Image, ImageDraw, ImageTk
 from llama_vision_ui import ChatApp, StreamRequest, build_messages, prepare_image
@@ -26,6 +23,7 @@ from opti_pdf import PdfPicker, pdf_prompt, prepare_pdf, inspect_pdf
 from opti_history import (new_record, save_record, list_records, load_record, save_preview,
                           save_attachment, delete_record)
 from opti_version import VERSION
+from opti_theme import LIGHT, DARK, ThemedDialog, ui_font_family, system_theme, set_titlebar_theme, center_on_parent
 from opti_update import UPDATE_DIR, check_for_update
 from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch_arguments, breeze_hardware_available,
                        ensure_model_service, json_request, load_settings, route_messages, save_settings,
@@ -33,30 +31,6 @@ from opti_core import (DEFAULTS, DATA, ResourceMonitor, SpeechJob, breeze_launch
                        select_installed_defaults, validate_model_name)
 
 ASSETS = Path(__file__).with_name('opti_assets')
-LIGHT = dict(bg='#EAF3F5', rail='#DFEBEF', panel='#F7FBFD', chat='#FFFFFF',
-             user_card='#E3F8FA', assistant_card='#F3F8FA', input='#FFFFFF', selected='#C6F1F3',
-             paper='#FFFFFF', ink='#142A38', muted='#647D8E', line='#B8D1D9', accent='#087E88', gold='#986200')
-DARK = dict(bg='#091720', rail='#0A1925', panel='#102330', chat='#0D1C27',
-            user_card='#103344', assistant_card='#172D3A', input='#142B39', selected='#0A3D4B',
-            paper='#132735', ink='#EDF4FA', muted='#9DAFBE', line='#29495B', accent='#38E3EE', gold='#F3CA68')
-
-
-def ui_font_family(root):
-    """Use an installed Traditional Chinese UI font for text throughout the app."""
-    try:
-        available = {name.casefold(): name for name in tkfont.families(root)}
-    except tk.TclError:
-        available = {}
-    for preferred in ('Microsoft JhengHei UI', 'Microsoft JhengHei', 'Noto Sans CJK TC',
-                      'Noto Sans TC', 'Arial Unicode MS', 'Segoe UI'):
-        if preferred.casefold() in available:
-            return available[preferred.casefold()]
-    try:
-        return tkfont.nametofont('TkDefaultFont', root=root).actual('family')
-    except tk.TclError:
-        return 'Segoe UI'
-
-
 def app_icon(size, background=(0, 0, 0, 0)):
     """Fit the wide brand mark inside a square Windows icon without stretching."""
     with Image.open(ASSETS/'logo-teal.png') as source:
@@ -113,6 +87,8 @@ class OptiiApp(ChatApp):
         self.conversation = None
         self.conversation_index = []
         self.scrollbar_images = {}
+        self.context_menus = []
+        self.image_viewers = []
         self.update_busy = False
         self.update_on_exit_started = False
         self.update_status = tk.StringVar(root, value='目前版本 '+VERSION)
@@ -144,6 +120,15 @@ class OptiiApp(ChatApp):
     def _build(self):
         from opti_ui import build_ui
         build_ui(self)
+
+    def alert(self, title, message, kind='info', parent=None):
+        return ThemedDialog(self, title, message, kind, parent).show()
+
+    def confirm(self, title, message, parent=None):
+        return ThemedDialog(self, title, message, 'confirm', parent).show()
+
+    def prompt(self, title, message, initial='', parent=None):
+        return ThemedDialog(self, title, message, 'prompt', parent, initial).show()
 
     def refresh_conversations(self):
         self.conversation_index = list_records()
@@ -212,7 +197,7 @@ class OptiiApp(ChatApp):
         if self.busy or not selection:
             return 'break'
         record = self.conversation_index[selection[0]]
-        name = simpledialog.askstring('重新命名對話', '對話標題：', initialvalue=record['title'], parent=self.root)
+        name = self.prompt('重新命名對話', '對話標題：', initial=record['title'])
         if name is not None and name.strip():
             name = name.strip()[:100]
             if self.conversation and self.conversation['id'] == record['id']:
@@ -233,9 +218,8 @@ class OptiiApp(ChatApp):
         record = next((item for item in self.conversation_index if item['id'] == identifier), None)
         if record is None:
             return
-        if not messagebox.askyesno('刪除對話',
-                                   '確定要刪除「'+record.get('title', '未命名對話')+'」嗎？\n此操作無法復原。',
-                                   parent=self.root):
+        if not self.confirm('刪除對話',
+                            '確定要刪除「'+record.get('title', '未命名對話')+'」嗎？\n此操作無法復原。'):
             return
         try:
             delete_record(identifier)
@@ -266,11 +250,7 @@ class OptiiApp(ChatApp):
     def resolved_theme(self):
         if self.settings['theme'] != 'system':
             return self.settings['theme']
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Themes\Personalize') as key:
-                return 'light' if winreg.QueryValueEx(key, 'AppsUseLightTheme')[0] else 'dark'
-        except OSError:
-            return 'light'
+        return system_theme()
 
     def apply_theme(self):
         theme = self.resolved_theme()
@@ -313,6 +293,13 @@ class OptiiApp(ChatApp):
         self.conversation_list.configure(bg=p['panel'], fg=p['ink'], selectbackground=p['selected'], selectforeground=p['ink'])
         self.history_context_menu.configure(bg=p['panel'], fg=p['ink'], activebackground=p['selected'],
                                             activeforeground=p['ink'], font=(self.ui_font, 10))
+        self.context_menus = [menu for menu in self.context_menus if menu.winfo_exists()]
+        for menu in self.context_menus:
+            menu.configure(bg=p['panel'], fg=p['ink'], activebackground=p['selected'],
+                           activeforeground=p['ink'], font=(self.ui_font, 10))
+        self.image_viewers = [viewer for viewer in self.image_viewers if viewer.winfo_exists()]
+        for viewer in self.image_viewers:
+            viewer.apply_theme(theme)
         self.refresh_conversations()
         if self.settings_window and self.settings_window.winfo_exists():
             self.settings_window.apply_theme(theme)
@@ -323,17 +310,7 @@ class OptiiApp(ChatApp):
         window = window or self.root
         if self.closed or not window.winfo_exists():
             return
-        try:
-            dark = ctypes.c_int(theme == 'dark')
-            ctypes.windll.user32.GetParent.argtypes = [ctypes.c_void_p]
-            ctypes.windll.user32.GetParent.restype = ctypes.c_void_p
-            child = ctypes.c_void_p(window.winfo_id())
-            hwnd = ctypes.windll.user32.GetParent(child) or child.value
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                ctypes.c_void_p(hwnd), 20,
-                ctypes.byref(dark), ctypes.sizeof(dark))
-        except (AttributeError, OSError):
-            pass
+        set_titlebar_theme(window, theme)
 
     def style_scrollbars(self, style, theme, palette):
         # Keep ttk's native dragging, page scrolling, and keyboard behavior.
@@ -390,7 +367,7 @@ class OptiiApp(ChatApp):
         self.input.focus_force()
         if error:
             self.status.set('截圖失敗；原圖片與輸入內容已保留。')
-            messagebox.showerror('無法截圖', error, parent=self.root)
+            self.alert('無法截圖', error, kind='error')
             return
         if image is None:
             self.status.set('已取消截圖')
@@ -412,7 +389,7 @@ class OptiiApp(ChatApp):
         except Exception as error:
             self.remove_capture_file(path)
             self.status.set('截圖附加失敗')
-            messagebox.showerror('無法附加截圖', str(error), parent=self.root)
+            self.alert('無法附加截圖', str(error), kind='error')
 
     def remove_capture_file(self, path):
         if path in self.capture_files:
@@ -490,7 +467,8 @@ class OptiiApp(ChatApp):
 
     def open_pdf_page(self):
         if self.pdf_source and not self.busy and not self.pdf_job:
-            PdfPicker(self.root, self.pdf_source['path'], self.attach_pdf, self.pdf_source)
+            PdfPicker(self.root, self.pdf_source['path'], self.attach_pdf, self.pdf_source,
+                      theme=self.last_theme, ui_font=self.ui_font)
 
     def attach_image(self, filename):
         previous = self.pending_path
@@ -516,7 +494,7 @@ class OptiiApp(ChatApp):
             self.page_button.configure(state='disabled')
             self.route.set('自動分流')
         except Exception as error:
-            messagebox.showerror('無法開啟圖片', str(error), parent=self.root)
+            self.alert('無法開啟圖片', str(error), kind='error')
 
     def choose_pdf(self):
         if self.busy or self.closed:
@@ -551,7 +529,7 @@ class OptiiApp(ChatApp):
                 self.status.set('PDF 頁面已附加 · 輸入問題後按傳送')
             except Exception as error:
                 self.remove_capture_file(path)
-                messagebox.showerror('無法附加 PDF', str(error), parent=self.root)
+                self.alert('無法附加 PDF', str(error), kind='error')
             return
         if not document['text']:
             return
@@ -765,7 +743,7 @@ class OptiiApp(ChatApp):
             try:
                 saved_file = save_attachment(self.conversation['id'], len(turns), source, attachment_kind)
             except (OSError, ValueError) as error:
-                messagebox.showerror('無法儲存附件', str(error), parent=self.root)
+                self.alert('無法儲存附件', str(error), kind='error')
                 if created_conversation:
                     self.conversation = None
                 return
@@ -954,7 +932,7 @@ class OptiiApp(ChatApp):
                     self.audio_status.set('語音未完成')
                     self.write('\n語音：'+detail+'\n', 'error')
                 elif kind == 'health':
-                    messagebox.showinfo('Breeze 連線測試', value, parent=self.settings_window or self.root)
+                    self.alert('Breeze 連線測試', value, parent=self.settings_window or self.root)
                 elif kind == 'voices':
                     if self.settings_window and self.settings_window.winfo_exists():
                         self.settings_window.set_voices(value)
@@ -1081,18 +1059,17 @@ class OptiiApp(ChatApp):
             if self.tray_icon and self.tray_icon.visible:
                 if not self.tray_hint_shown:
                     self.tray_hint_shown = True
-                    messagebox.showinfo('OptiChat 常駐中',
-                                        'OptiChat 會留在右下角系統匣。\n若看不到圖示，請按「^」展開隱藏圖示；可將 OptiChat 圖示拖到通知區。',
-                                        parent=self.root)
+                    self.alert('OptiChat 常駐中',
+                               'OptiChat 會留在右下角系統匣。\n若看不到圖示，請按「^」展開隱藏圖示；可將 OptiChat 圖示拖到通知區。')
                 if self.settings_window and self.settings_window.winfo_exists():
                     self.settings_window.destroy()
                 self.root.withdraw()
             else:
                 if not self.tray_unavailable_warned:
                     self.tray_unavailable_warned = True
-                    messagebox.showwarning('系統匣尚未顯示',
-                                           'OptiChat 圖示尚未出現在系統匣。視窗會留在工作列，方便重新開啟。',
-                                           parent=self.root)
+                    self.alert('系統匣尚未顯示',
+                               'OptiChat 圖示尚未出現在系統匣。視窗會留在工作列，方便重新開啟。',
+                               kind='warning')
                 self.root.iconify()
         else:
             self.quit()
@@ -1150,15 +1127,7 @@ class AboutWindow(tk.Toplevel):
         self.center_on_parent()
 
     def center_on_parent(self):
-        parent = self.app.root
-        parent.update_idletasks()
-        width, height = 420, 260
-        x = parent.winfo_rootx()+(parent.winfo_width()-width)//2
-        y = parent.winfo_rooty()+(parent.winfo_height()-height)//2
-        screen_x, screen_y = self.winfo_vrootx(), self.winfo_vrooty()
-        x = max(screen_x, min(x, screen_x+self.winfo_vrootwidth()-width))
-        y = max(screen_y, min(y, screen_y+self.winfo_vrootheight()-height))
-        self.geometry(f'{width}x{height}+{x}+{y}')
+        center_on_parent(self, self.app.root, 420, 260)
 
     def apply_theme(self, theme):
         p = DARK if theme == 'dark' else LIGHT
@@ -1292,16 +1261,10 @@ class SettingsWindow(tk.Toplevel):
     def center_on_parent(self):
         self.app.root.update_idletasks()
         self.update_idletasks()
-        screen_x, screen_y = self.winfo_vrootx(), self.winfo_vrooty()
         screen_width, screen_height = self.winfo_vrootwidth(), self.winfo_vrootheight()
         width = min(860, max(720, screen_width-80))
         height = min(790, max(600, screen_height-80))
-        parent = self.app.root
-        x = parent.winfo_rootx()+(parent.winfo_width()-width)//2
-        y = parent.winfo_rooty()+(parent.winfo_height()-height)//2
-        x = max(screen_x, min(x, screen_x+screen_width-width))
-        y = max(screen_y, min(y, screen_y+screen_height-height))
-        self.geometry(f'{width}x{height}+{x}+{y}')
+        center_on_parent(self, self.app.root, width, height)
 
     def apply_theme(self, theme):
         p = DARK if theme == 'dark' else LIGHT
@@ -1431,7 +1394,7 @@ class SettingsWindow(tk.Toplevel):
             self.app.status.set('設定已儲存')
             self.destroy()
         except Exception as error:
-            messagebox.showerror('設定未儲存', str(error), parent=self)
+            self.app.alert('設定未儲存', str(error), kind='error', parent=self)
 
     def choose_reference(self):
         path = filedialog.askopenfilename(parent=self, filetypes=[('音訊', '*.wav *.mp3 *.flac *.m4a *.ogg'), ('所有檔案', '*.*')])

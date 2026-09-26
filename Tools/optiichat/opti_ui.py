@@ -4,7 +4,7 @@ import math
 import os
 import re
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 from tkinter import font as tkfont
 
 from PIL import Image, ImageDraw, ImageTk
@@ -643,17 +643,17 @@ def open_attachment(app, turn, index):
         elif not is_pdf and turn.get('preview') and identifier:
             path = preview_path(identifier, index)
         else:
-            messagebox.showinfo('原始附件未保存', '這是舊版對話，沒有保存原始 PDF；請重新附加檔案。', parent=app.root)
+            app.alert('原始附件未保存', '這是舊版對話，沒有保存原始 PDF；請重新附加檔案。')
             return 'break'
         if not path.is_file():
-            messagebox.showwarning('找不到附件', '這份對話的附件檔案已不存在。', parent=app.root)
+            app.alert('找不到附件', '這份對話的附件檔案已不存在。', kind='warning')
             return 'break'
         if is_pdf:
             os.startfile(str(path))
         else:
             ImageViewer(app, path, turn.get('attachment', '圖片'))
     except (OSError, ValueError) as error:
-        messagebox.showerror('無法開啟附件', str(error), parent=app.root)
+        app.alert('無法開啟附件', str(error), kind='error')
     return 'break'
 
 
@@ -663,24 +663,37 @@ class ImageViewer(tk.Toplevel):
         self.title(title)
         self.transient(app.root)
         self.bind('<Escape>', lambda event: self.destroy())
-        from opti_app import DARK, LIGHT
-        palette = DARK if app.last_theme == 'dark' else LIGHT
-        self.configure(bg=palette['panel'])
+        from opti_theme import palette
+        p = palette(app.last_theme)
+        self.configure(bg=p['panel'])
         with Image.open(path) as source:
             image = source.convert('RGB')
         image.thumbnail((max(320, self.winfo_screenwidth()-160),
                          max(240, self.winfo_screenheight()-190)), Image.Resampling.LANCZOS)
         self.photo = ImageTk.PhotoImage(image, master=self)
-        caption = tk.Label(self, text=title, bg=palette['panel'], fg=palette['ink'],
-                           font=(app.ui_font, 11), anchor='w', padx=16, pady=12)
-        caption.pack(fill='x')
-        tk.Label(self, image=self.photo, bg=palette['panel']).pack(padx=16, pady=(0, 16))
+        self.caption = tk.Label(self, text=title, bg=p['panel'], fg=p['ink'],
+                                font=(app.ui_font, 11), anchor='w', padx=16, pady=12)
+        self.caption.pack(fill='x')
+        self.image_label = tk.Label(self, image=self.photo, bg=p['panel'])
+        self.image_label.pack(padx=16, pady=(0, 16))
         width, height = max(420, image.width+32), image.height+76
         x = app.root.winfo_rootx() + max(0, (app.root.winfo_width()-width)//2)
         y = app.root.winfo_rooty() + max(0, (app.root.winfo_height()-height)//2)
         x = min(max(0, x), max(0, self.winfo_screenwidth()-width))
         y = min(max(0, y), max(0, self.winfo_screenheight()-height))
         self.geometry(f'{width}x{height}+{x}+{y}')
+        if hasattr(app, 'image_viewers'):
+            app.image_viewers.append(self)
+        self.apply_theme(app.last_theme)
+
+    def apply_theme(self, theme):
+        from opti_theme import palette, set_titlebar_theme
+        p = palette(theme)
+        self.configure(bg=p['panel'])
+        self.caption.configure(bg=p['panel'], fg=p['ink'])
+        self.image_label.configure(bg=p['panel'])
+        self.update_idletasks()
+        set_titlebar_theme(self, theme)
 
 
 def short_model_name(value):
@@ -758,6 +771,12 @@ def selectable_text(app, parent, content, role, max_width=None):
     widget.bind('<Control-c>', lambda event: copy_selected_text(widget))
     widget.bind('<Control-a>', lambda event: select_all_text(widget))
     menu = tk.Menu(widget, tearoff=False)
+    from opti_theme import palette
+    p = palette(app.last_theme or 'light')
+    menu.configure(bg=p['panel'], fg=p['ink'], activebackground=p['selected'],
+                   activeforeground=p['ink'], font=(app.ui_font, 10), relief='flat')
+    if hasattr(app, 'context_menus'):
+        app.context_menus.append(menu)
     menu.add_command(label='複製', command=lambda: copy_selected_text(widget))
     menu.add_command(label='全選', command=lambda: select_all_text(widget))
     def show_menu(event):

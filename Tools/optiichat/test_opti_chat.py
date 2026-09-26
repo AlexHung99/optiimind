@@ -22,6 +22,7 @@ import opti_capture
 import opti_pdf
 import opti_history
 import opti_ui
+import opti_theme
 from opti_ui import copy_selected_text, legacy_display_turns, render_turns, short_model_name, show_history_menu, search_preview, search_match
 
 CATALOG = [
@@ -32,6 +33,32 @@ CATALOG = [
 
 
 class HistoryPresentationTests(unittest.TestCase):
+    def test_secondary_dialogs_use_main_palette_and_keep_modal_results(self):
+        root = tk.Tk()
+        root.geometry('1000x720+80+80')
+        root.update()
+        app = SimpleNamespace(root=root, last_theme='dark', ui_font=opti_theme.ui_font_family(root),
+                              resolved_theme=lambda: 'dark')
+        try:
+            dialog = opti_theme.ThemedDialog(app, '重新命名對話', '對話標題：',
+                                              'prompt', initial='舊標題')
+            root.update()
+            self.assertEqual(dialog.cget('bg'), opti_theme.DARK['bg'])
+            self.assertEqual(dialog.entry.cget('bg'), opti_theme.DARK['input'])
+            self.assertEqual(dialog.entry.get(), '舊標題')
+            dialog.entry.delete(0, 'end')
+            dialog.entry.insert(0, '新標題')
+            dialog.accept()
+            self.assertEqual(dialog.result, '新標題')
+            app.last_theme = 'light'
+            dialog = opti_theme.ThemedDialog(app, '刪除對話', '此操作無法復原。', 'confirm')
+            root.update()
+            self.assertEqual(dialog.cget('bg'), opti_theme.LIGHT['bg'])
+            dialog.cancel()
+            self.assertFalse(dialog.result)
+        finally:
+            root.destroy()
+
     def test_search_matches_visible_chat_content_and_legacy_records(self):
         current = {'title': '2026-09-25 10:00', 'display_turns': [
             {'question': '請比較兩顆行星', 'answer': '土星有明顯的環。', 'attachment': 'PDF：planets.pdf'}]}
@@ -176,13 +203,13 @@ class HistoryPresentationTests(unittest.TestCase):
                     show_history_menu(app, 0, SimpleNamespace(x_root=10, y_root=10))
                 self.assertEqual(app.history_context_menu.entrycget(0, 'label'), '重新命名')
                 self.assertEqual(app.history_context_menu.entrycget(1, 'label'), '刪除對話')
-                with patch.object(opti_app.simpledialog, 'askstring', return_value='新標題'):
+                with patch.object(app, 'prompt', return_value='新標題'):
                     app.history_context_menu.invoke(0)
                 self.assertEqual(opti_history.load_record(record['id'], store)['title'], '新標題')
-                with patch.object(opti_app.messagebox, 'askyesno', return_value=False):
+                with patch.object(app, 'confirm', return_value=False):
                     app.history_context_menu.invoke(1)
                 self.assertTrue(opti_history.path_for(record['id'], store).exists())
-                with patch.object(opti_app.messagebox, 'askyesno', return_value=True):
+                with patch.object(app, 'confirm', return_value=True):
                     app.history_context_menu.invoke(1)
                 self.assertIsNone(app.conversation)
                 self.assertFalse(opti_history.path_for(record['id'], store).exists())
@@ -264,7 +291,8 @@ class HistoryPresentationTests(unittest.TestCase):
                     source.unlink()
                     with Image.open(saved) as image:
                         self.assertEqual(image.size, (640, 480))
-                    app = SimpleNamespace(root=root, conversation=record, last_theme='dark', ui_font='Segoe UI')
+                    app = SimpleNamespace(root=root, conversation=record, last_theme='dark',
+                                          ui_font='Segoe UI', alert=Mock())
                     window = opti_ui.ImageViewer(app, saved, '圖片：photo.png')
                     root.update()
                     self.assertEqual(window.photo.width(), 640)
@@ -274,9 +302,8 @@ class HistoryPresentationTests(unittest.TestCase):
                         self.assertEqual(opti_ui.open_attachment(app,
                             {'attachment': '圖片：photo.png', 'attachment_kind': 'image'}, 0), 'break')
                     viewer.assert_called_once_with(app, saved, '圖片：photo.png')
-                    with patch.object(opti_ui.messagebox, 'showinfo') as notice:
-                        opti_ui.open_attachment(app, {'attachment': 'PDF：old.pdf'}, 0)
-                    notice.assert_called_once()
+                    opti_ui.open_attachment(app, {'attachment': 'PDF：old.pdf'}, 0)
+                    app.alert.assert_called_once()
             finally:
                 root.destroy()
 
@@ -809,7 +836,7 @@ class DesktopTests(unittest.TestCase):
                 self.assertEqual(config['speech']['provider'], 'breeze')
                 dialog.destroy()
                 app.tray_icon = Mock(visible=True)
-                with patch.object(opti_app.messagebox, 'showinfo') as tray_hint:
+                with patch.object(app, 'alert') as tray_hint:
                     app.close()
                 tray_hint.assert_called_once()
                 root.update()
@@ -818,7 +845,7 @@ class DesktopTests(unittest.TestCase):
                 root.update()
                 self.assertEqual(root.state(), 'normal')
                 app.tray_icon = None
-                with patch.object(opti_app.messagebox, 'showwarning') as tray_warning:
+                with patch.object(app, 'alert') as tray_warning:
                     app.close()
                 tray_warning.assert_called_once()
                 root.update()
@@ -1238,7 +1265,7 @@ class PdfTests(unittest.TestCase):
                 app.conversation_list.selection_set(0)
                 app.select_conversation()
                 self.assertIn('請摘要', app.transcript.get('1.0', 'end-1c'))
-                with patch.object(opti_app.simpledialog, 'askstring', return_value='我的報告'):
+                with patch.object(app, 'prompt', return_value='我的報告'):
                     app.rename_conversation()
                 self.assertEqual(opti_history.list_records(store)[0]['title'], '我的報告')
             finally:

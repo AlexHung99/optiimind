@@ -106,33 +106,47 @@ def pdf_prompt(document, question, profile):
 
 
 class PdfPicker(tk.Toplevel):
-    def __init__(self, parent, filename, on_attach, document=None):
+    def __init__(self, parent, filename, on_attach, document=None, theme=None, ui_font=None):
+        from opti_theme import (center_on_parent, configure_secondary_styles, palette,
+                                set_titlebar_theme, system_theme, ui_font_family)
         super().__init__(parent)
+        theme = theme or system_theme()
+        ui_font = ui_font or ui_font_family(self)
+        p = palette(theme)
         self.title('附加 PDF')
-        self.geometry('590x300')
+        self.configure(bg=p['bg'])
         self.transient(parent)
-        self.grab_set()
+        configure_secondary_styles(self, theme, ui_font)
         self.filename, self.on_attach = filename, on_attach
         self.document = None
         self.events = queue.Queue()
         self.alive = True
         self.timer = None
-        body = ttk.Frame(self, padding=22)
-        body.pack(fill='both', expand=True)
-        ttk.Label(body, text=Path(filename).name, wraplength=540).pack(anchor='w')
+        body = ttk.Frame(self, padding=22, style='Secondary.TFrame')
+        body.pack(fill='both', expand=True, padx=8, pady=8)
+        ttk.Label(body, text=Path(filename).name, wraplength=540,
+                  style='SecondaryTitle.TLabel').pack(anchor='w')
         self.status = tk.StringVar(value='正在本機讀取 PDF…')
-        ttk.Label(body, textvariable=self.status, wraplength=540, justify='left').pack(anchor='w', pady=18)
-        self.text_button = ttk.Button(body, text='附加擷取文字', command=self.attach_text, state='disabled')
+        ttk.Label(body, textvariable=self.status, wraplength=540, justify='left',
+                  style='SecondaryMuted.TLabel').pack(anchor='w', pady=18)
+        self.text_button = ttk.Button(body, text='附加擷取文字', command=self.attach_text,
+                                      state='disabled', style='SecondaryAccent.TButton')
         self.text_button.pack(anchor='w')
-        row = ttk.Frame(body)
+        row = ttk.Frame(body, style='Secondary.TFrame')
         row.pack(fill='x', pady=16)
-        ttk.Label(row, text='掃描／圖表：選擇頁碼').pack(side='left')
+        ttk.Label(row, text='掃描／圖表：選擇頁碼', style='Secondary.TLabel').pack(side='left')
         self.page = tk.StringVar(value='1')
-        self.page_widget = ttk.Spinbox(row, from_=1, to=1, width=7, textvariable=self.page, state='disabled')
+        self.page_widget = ttk.Spinbox(row, from_=1, to=1, width=7, textvariable=self.page,
+                                       state='disabled', style='Secondary.TSpinbox')
         self.page_widget.pack(side='left', padx=10)
-        self.image_button = ttk.Button(row, text='附加此頁圖片', command=self.attach_page, state='disabled')
+        self.image_button = ttk.Button(row, text='附加此頁圖片', command=self.attach_page,
+                                       state='disabled', style='Secondary.TButton')
         self.image_button.pack(side='left')
-        ttk.Button(body, text='取消', command=self.close).pack(anchor='e')
+        ttk.Button(body, text='取消', command=self.close,
+                   style='Secondary.TButton').pack(anchor='e')
+        center_on_parent(self, parent, 620, 340)
+        set_titlebar_theme(self, theme)
+        self.grab_set()
         self.protocol('WM_DELETE_WINDOW', self.close)
         if document is None:
             self.run(lambda: read_pdf(filename), 'document')
