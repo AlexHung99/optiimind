@@ -901,6 +901,16 @@ class ModelSetupTests(unittest.TestCase):
             self.assertEqual(core.initialize_models(job, emit, ensure_default=True), CATALOG)
         job.pull.assert_called_once_with(emit)
 
+    def test_missing_default_does_not_silently_switch_to_user_downloaded_model(self):
+        other_models = [item for item in CATALOG if item['name'] != core.DEFAULT_MODEL]
+        config = core.select_installed_defaults(core.DEFAULTS, other_models)
+        self.assertEqual(config['text']['model'], core.DEFAULT_MODEL)
+        self.assertEqual(config['vision']['model'], core.DEFAULT_MODEL)
+        chosen = deepcopy(core.DEFAULTS)
+        chosen['text']['model'] = 'gemma4:26b'
+        self.assertEqual(core.select_installed_defaults(chosen, other_models)['text']['model'],
+                         'gemma4:26b')
+
     def test_connection_failure_is_not_empty_inventory(self):
         job = Mock()
         with patch.object(core, 'installed_models', side_effect=OSError('offline')):

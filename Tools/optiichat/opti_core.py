@@ -153,7 +153,9 @@ def select_installed_defaults(settings, catalog):
     for kind in ('text', 'vision'):
         choices = model_choices(catalog, kind)
         if choices and result[kind]['model'] not in choices:
-            result[kind]['model'] = DEFAULT_MODEL if DEFAULT_MODEL in choices else choices[0]
+            # Never silently run a different, user-downloaded model when a saved
+            # selection disappears. The user can explicitly choose it in Settings.
+            result[kind]['model'] = DEFAULT_MODEL
     return result
 
 

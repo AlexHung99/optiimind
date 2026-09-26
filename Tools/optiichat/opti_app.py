@@ -677,6 +677,8 @@ class OptiiApp(ChatApp):
             self.apply_theme()
         if self.settings_window and self.settings_window.winfo_exists():
             self.settings_window.set_models(catalog)
+        if self.settings['text']['model'] not in model_choices(catalog, 'text'):
+            self.status.set('預設 llama3.2-vision 尚未安裝；請在設定下載，或自行選擇已安裝模型。')
 
     def stop(self):
         if self.model_loading:
@@ -1261,6 +1263,7 @@ class SettingsWindow(tk.Toplevel):
             self.field(self.breeze_box, 'CFG Scale（>0）', 'speech.cfg_scale')
             self.field(self.breeze_box, 'Seed', 'speech.seed')
             self.note(speech, 'design：以描述設計聲音；clone：需音檔及逐字稿，可加 Direction。\nBreeze 會將文字與參考音檔傳至所填服務；Windows 不使用這些參數。')
+            self.note(speech, '來源提示：Breeze 官方推論程式的音訊 tokenizer 以阿里巴巴 Qwen3-TTS 為基礎。\nOptiChat 不會下載或預設啟用 Breeze；只有自行架設服務並選擇後才會使用。')
             advanced = self.tab(notebook, 'Breeze 服務參數')
             self.note(advanced, '以下是官方服務啟動參數，需要在服務端重啟才生效。\n儲存設定只保存選項，不會遠端更改已執行的服務。')
             for key in ['fast_all', 'fast_text_encoder', 'fast_backbone_prefill', 'fast_backbone_decode', 'fast_depth_decoder', 'fast_codec']:

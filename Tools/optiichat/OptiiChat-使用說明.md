@@ -100,6 +100,8 @@ Breeze 回傳 24 kHz、單聲道、16-bit PCM，程式封裝為 WAV 後播放。
 
 Breeze 原始碼與模型授權不同；權重、衍生模型及自架產出限研究與非商業使用，請參閱[模型授權](https://huggingface.co/BreezeBlue/Breeze-TTS-2/blob/main/LICENSE)。
 
+來源注意事項：[Breeze 官方推論程式](https://github.com/breezeblue-ai/breeze-tts)指出其音訊 tokenizer 以阿里巴巴 Qwen3-TTS 為基礎。OptiChat 不會自動下載或預設啟用 Breeze；如需避免此模型組件，請保持 Windows 本機語音設定。
+
 ## 常駐、監控與外觀
 
 - 預設跟隨 Windows 應用程式亮暗設定，也可固定 light／dark。切換主題保留目前對話。
@@ -126,4 +128,4 @@ Breeze 原始碼與模型授權不同；權重、衍生模型及自架產出限�
 - 相容服務日誌：`%LOCALAPPDATA%\OptiiChat\server-11435.log`／`server-11436.log`；原 CPU 服務亦可能由舊啟動器啟動。
 - 結束 UI 不強制停止共用 Ollama 服務。
 
-80 項自動測試涵蓋 Agent 文書工具、編輯確認與資料夾邊界、更新驗證與失敗還原、截圖、模型清單與初始化、設定保存、語音串接、主題、系統匣及聊天介面。Agent 測試使用模擬模型回覆，並未驗證所有本機模型的 JSON 步驟遵循能力；Breeze API 音訊測試使用本機模擬服務。
+81 項自動測試涵蓋 Agent 文書工具、編輯確認與資料夾邊界、更新驗證與失敗還原、截圖、模型清單與初始化、設定保存、語音串接、主題、系統匣及聊天介面。Agent 測試使用模擬模型回覆，並未驗證所有本機模型的 JSON 步驟遵循能力；Breeze API 音訊測試使用本機模擬服務。
