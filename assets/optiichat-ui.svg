@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">OptiChat 聊天介面示意</title>
+  <desc id="desc">左側是日期對話紀錄與搜尋；右側顯示圖片附件、AI 回覆、輸入框與資源監控。</desc>
+  <defs>
+    <linearGradient id="backdrop" x2="1" y2="1">
+      <stop stop-color="#05131e"/>
+      <stop offset="1" stop-color="#0c3342"/>
+    </linearGradient>
+    <linearGradient id="preview" x2="1" y2="1">
+      <stop stop-color="#1a8a9a"/>
+      <stop offset=".5" stop-color="#6855aa"/>
+      <stop offset="1" stop-color="#e49a5f"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#000" flood-opacity=".35"/>
+    </filter>
+    <clipPath id="app-clip"><rect x="28" y="22" width="1144" height="631" rx="18"/></clipPath>
+  </defs>
+  <rect width="1200" height="675" fill="url(#backdrop)"/>
+  <g filter="url(#shadow)">
+    <rect x="28" y="22" width="1144" height="631" rx="18" fill="#0c1e2b" stroke="#2d5265" stroke-width="2"/>
+  </g>
+  <g clip-path="url(#app-clip)" font-family="Segoe UI, Microsoft JhengHei UI, Noto Sans TC, sans-serif">
+    <rect x="29" y="23" width="1142" height="35" fill="#182530"/>
+    <text x="51" y="46" fill="#d9e5eb" font-size="16">OptiChat · 本機 AI</text>
+    <text x="1066" y="46" fill="#e3edf2" font-size="24">−</text>
+    <rect x="1100" y="33" width="14" height="12" fill="none" stroke="#e3edf2" stroke-width="2"/>
+    <text x="1139" y="46" fill="#e3edf2" font-size="22">×</text>
+    <rect x="29" y="58" width="1142" height="71" fill="#0f2636"/>
+    <path d="M58 98 C68 73 80 83 90 96 S111 113 128 79 M58 99 C74 116 88 89 98 85" fill="none" stroke="#20d9df" stroke-width="5" stroke-linecap="round"/>
+    <text x="147" y="103" fill="#f2f5f5" font-family="Georgia, serif" font-size="35" font-weight="700">Optiimind</text>
+    <text x="330" y="100" fill="#abc0cf" font-size="19">OptiChat · 本機 AI</text>
+    <circle cx="1081" cy="93" r="12" fill="none" stroke="#25d7e0" stroke-width="2"/>
+    <text x="1077" y="100" fill="#25d7e0" font-size="20" font-weight="700">!</text>
+    <text x="1121" y="103" fill="#25d7e0" font-size="28">⚙</text>
+    <rect x="29" y="129" width="260" height="477" fill="#112737"/>
+    <line x1="289" y1="129" x2="289" y2="607" stroke="#2c5367" stroke-width="2"/>
+    <text x="52" y="166" fill="#f1f7fa" font-size="23" font-weight="700">對話紀錄</text>
+    <circle cx="255" cy="156" r="9" fill="none" stroke="#31d7e1" stroke-width="3"/>
+    <path d="M261 162l10 10" stroke="#31d7e1" stroke-width="3" stroke-linecap="round"/>
+    <rect x="47" y="183" width="224" height="49" rx="8" fill="#0b4655" stroke="#19d9e1" stroke-width="2"/>
+    <text x="114" y="214" fill="#edfafd" font-size="20">＋ 新對話</text>
+    <rect x="47" y="242" width="224" height="64" rx="8" fill="#0b3b4c" stroke="#2bdce5" stroke-width="2"/>
+    <text x="66" y="281" fill="#e7f7fa" font-size="19">2026-09-26 14:20</text>
+    <text x="66" y="348" fill="#afc3d0" font-size="19">2026-09-25 09:41</text>
+    <line x1="53" y1="368" x2="270" y2="368" stroke="#274657"/>
+    <text x="66" y="407" fill="#afc3d0" font-size="19">2026-09-23 20:00</text>
+    <line x1="53" y1="427" x2="270" y2="427" stroke="#274657"/>
+    <rect x="306" y="146" width="845" height="49" rx="8" fill="#0b2636" stroke="#2c5367" stroke-width="2"/>
+    <circle cx="329" cy="170" r="7" fill="#26d8e2"/>
+    <text x="348" y="177" fill="#29dce6" font-size="19">已就緒 · 已安裝 4 個模型</text>
+    <rect x="306" y="208" width="845" height="307" rx="9" fill="#0c1d2a" stroke="#2c5367" stroke-width="2"/>
+    <rect x="684" y="223" width="444" height="126" rx="12" fill="#12374a" stroke="#315b70" stroke-width="2"/>
+    <text x="703" y="253" fill="#edf7fb" font-size="18">請分析這張圖片。</text>
+    <rect x="703" y="266" width="406" height="66" rx="8" fill="#143247" stroke="#3c6376"/>
+    <rect x="713" y="275" width="48" height="48" rx="5" fill="url(#preview)"/>
+    <path d="M721 311l12-17 9 11 7-7 10 14" fill="none" stroke="#e5f8fb" stroke-width="2"/>
+    <circle cx="745" cy="286" r="3" fill="#e5f8fb"/>
+    <text x="777" y="307" fill="#dcecf5" font-size="17">圖片：畫面截圖.png</text>
+    <text x="329" y="385" fill="#e9bc64" font-size="19" font-weight="700">Llama</text>
+    <text x="398" y="385" fill="#a7bac8" font-size="17">2026-09-26 14:20</text>
+    <rect x="326" y="400" width="735" height="91" rx="9" fill="#193343" stroke="#335b6e" stroke-width="2"/>
+    <text x="346" y="437" fill="#edf6fa" font-size="20">這張圖片顯示一個工作畫面。我可以幫你整理重點，</text>
+    <text x="346" y="469" fill="#edf6fa" font-size="20">或針對其中的內容繼續提問。</text>
+    <rect x="306" y="526" width="690" height="66" rx="9" fill="#183444" stroke="#3d6d80" stroke-width="2"/>
+    <text x="326" y="553" fill="#a9c0cf" font-size="17">輸入訊息…（可貼上文字、圖片或拖曳檔案）</text>
+    <text x="327" y="582" fill="#f2f8fa" font-size="19">＋</text>
+    <text x="377" y="581" fill="#f2f8fa" font-size="17">截圖</text>
+    <rect x="1007" y="526" width="144" height="31" rx="7" fill="#0b4655" stroke="#1dd8e0" stroke-width="2"/>
+    <text x="1058" y="548" fill="#eef9fb" font-size="17">傳送</text>
+    <rect x="1007" y="562" width="144" height="30" rx="6" fill="#132f40" stroke="#315366"/>
+    <text x="1046" y="583" fill="#afc4d0" font-size="16">停止回覆</text>
+    <rect x="29" y="606" width="1142" height="46" fill="#102737"/>
+    <line x1="29" y1="606" x2="1171" y2="606" stroke="#2c5367"/>
+    <text x="51" y="635" fill="#d1e0e9" font-size="16">CPU 4% · RAM 69%　GPU 0% · VRAM 1.6/8 GB</text>
+    <text x="1007" y="635" fill="#b7c8d0" font-size="16">Ctrl+Enter 傳送</text>
+  </g>
+</svg>
