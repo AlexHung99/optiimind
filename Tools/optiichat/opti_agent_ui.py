@@ -11,7 +11,9 @@ from opti_core import ensure_model_service, model_choices, model_service_kind, r
 from opti_ui import auto_scrollbar, fit_scroll_region
 
 
-ACTION_NAMES = {'list_files': '列出檔案', 'read_file': '讀取檔案', 'search_files': '搜尋內容'}
+ACTION_NAMES = {'list_files': '列出檔案', 'read_file': '讀取檔案', 'search_files': '搜尋內容',
+                'read_pdf': '讀取 PDF', 'read_excel': '讀取 Excel', 'read_word': '讀取 Word',
+                'edit_text': '編輯文字檔', 'edit_excel': '編輯 Excel', 'edit_word': '編輯 Word'}
 
 
 class AgentWorkspace:
@@ -26,7 +28,7 @@ class AgentWorkspace:
         self.task = new_task()
         self.tasks = []
         self.mode = 'chat'
-        self.status = tk.StringVar(app.root, value='選擇資料夾、輸入任務，Agent 會逐步讀取並整理。')
+        self.status = tk.StringVar(app.root, value='選擇資料夾、輸入任務，Agent 可讀取與編輯文書檔案。')
         self.folder = tk.StringVar(app.root, value='')
         self._build_sidebar()
         self._build_center()
@@ -56,7 +58,7 @@ class AgentWorkspace:
         title = self.app.label(header, '本機 Agent', role='panel', color='accent')
         title.configure(font=(self.app.ui_font, 15, 'bold'))
         title.pack(anchor='w')
-        self.app.label(header, '選定工作資料夾後，可逐步列出、搜尋及讀取文字檔；檔案不會被修改。',
+        self.app.label(header, '內建技能：文字檔、Excel、Word 可讀取與編輯；PDF 可讀取文字。編輯前會請你確認，並另存新檔。',
                        role='panel', color='muted', anchor='w').pack(fill='x', pady=(5, 0))
 
         setup = self.app.frame(self.center, role='panel', padx=16, pady=14, highlightthickness=1)
@@ -264,6 +266,10 @@ class AgentWorkspace:
         detail = step.get('path') or '.'
         if step.get('query'):
             detail += ' · ' + step['query']
+        if step.get('sheet'):
+            detail += ' · ' + step['sheet']
+        if step.get('page'):
+            detail += ' · 第 ' + step['page'] + ' 頁'
         self._append(f'步驟 {step["number"]} · {name} · {detail}\n', 'heading')
         self._append(step['result'] + '\n\n')
 
@@ -286,7 +292,7 @@ class AgentWorkspace:
             return
         folder = self.folder.get().strip()
         try:
-            runner = AgentRunner(folder, self._model_call, self._emit)
+            runner = AgentRunner(folder, self._model_call, self._emit, self._approve)
         except ValueError as error:
             self.status.set(str(error))
             return
@@ -334,6 +340,15 @@ class AgentWorkspace:
     def _emit(self, event, value):
         self.app.extra.put(('agent_event', (self.runner, event, value)))
 
+    def _approve(self, preview, cancelled):
+        answer = {'value': False}
+        ready = threading.Event()
+        self.app.extra.put(('agent_event', (self.runner, 'approval', (preview, answer, ready))))
+        while not ready.wait(.1):
+            if cancelled.is_set():
+                return False
+        return answer['value'] and not cancelled.is_set()
+
     def _worker(self, runner, goal):
         try:
             runner.run(goal)
@@ -349,6 +364,13 @@ class AgentWorkspace:
             return
         if event == 'status':
             self.status.set(payload)
+        elif event == 'approval':
+            preview, answer, ready = payload
+            try:
+                if not runner.cancelled.is_set():
+                    answer['value'] = bool(self.app.confirm('確認 Agent 編輯文件', preview))
+            finally:
+                ready.set()
         elif event == 'step':
             self.task['steps'].append(payload)
             save_task(self.task)

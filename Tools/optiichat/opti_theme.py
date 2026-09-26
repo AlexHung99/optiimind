@@ -111,8 +111,20 @@ class ThemedDialog(tk.Toplevel):
         heading_color = ('#E49A76' if theme == 'dark' else '#A4482B') if kind == 'error' else p['accent']
         tk.Label(body, text=title, bg=p['panel'], fg=heading_color, anchor='w',
                  font=(app.ui_font, 15, 'bold')).pack(fill='x')
-        tk.Label(body, text=message, bg=p['panel'], fg=p['ink'], anchor='w', justify='left',
-                 wraplength=490, font=(app.ui_font, 11)).pack(fill='x', pady=(14, 8))
+        if kind == 'confirm' and len(message) > 400:
+            detail_frame = tk.Frame(body, bg=p['panel'])
+            detail_frame.pack(fill='both', expand=True, pady=(14, 8))
+            detail = tk.Text(detail_frame, bg=p['input'], fg=p['ink'], wrap='word', height=12,
+                             relief='flat', bd=0, padx=10, pady=8, font=(app.ui_font, 10))
+            detail_bar = ttk.Scrollbar(detail_frame, command=detail.yview)
+            detail.configure(yscrollcommand=detail_bar.set)
+            detail.insert('1.0', message)
+            detail.configure(state='disabled')
+            detail.pack(side='left', fill='both', expand=True)
+            detail_bar.pack(side='right', fill='y')
+        else:
+            tk.Label(body, text=message, bg=p['panel'], fg=p['ink'], anchor='w', justify='left',
+                     wraplength=490, font=(app.ui_font, 11)).pack(fill='x', pady=(14, 8))
         self.entry = None
         if kind == 'prompt':
             self.entry = tk.Entry(body, bg=p['input'], fg=p['ink'], insertbackground=p['ink'],
@@ -126,7 +138,7 @@ class ThemedDialog(tk.Toplevel):
         if kind in ('confirm', 'prompt'):
             ttk.Button(actions, text='取消', style='Outline.TButton',
                        command=self.cancel).pack(side='right', padx=(8, 0))
-        action_text = '刪除' if kind == 'confirm' else '儲存' if kind == 'prompt' else '確定'
+        action_text = ('刪除' if title.startswith('刪除') else '確認') if kind == 'confirm' else '儲存' if kind == 'prompt' else '確定'
         ttk.Button(actions, text=action_text, style='Primary.TButton',
                    command=self.accept).pack(side='right')
         self.protocol('WM_DELETE_WINDOW', self.cancel)
