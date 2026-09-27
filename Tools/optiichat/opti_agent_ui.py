@@ -322,6 +322,8 @@ class AgentWorkspace:
     def _model_call(self, messages, cancelled):
         kind, host, model, options, routed = route_messages(
             {'text': self.profile, 'vision': self.vision_profile}, messages, 'text', self.catalog)
+        # Agent tool results need room alongside the task and JSON instructions.
+        options['num_ctx'] = max(options['num_ctx'], 4096)
         service = model_service_kind(model, self.catalog)
         ensure_model_service(service, self.profile['device'])
         info = next((item for item in self.catalog if item['name'] == model), {})

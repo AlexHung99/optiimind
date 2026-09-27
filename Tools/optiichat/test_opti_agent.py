@@ -39,6 +39,8 @@ class AgentCoreTests(unittest.TestCase):
             book.active.title = '紀錄'
             book.active.append(['日期', '內容'])
             book.active.append(['2026-09-27', '已處理'])
+            for number in range(3, 20):
+                book.active.append([f'2026-09-{number:02d}', f'第 {number} 列'])
             book.save(path)
             modified = BytesIO()
             with ZipFile(path) as source, ZipFile(modified, 'w') as output:
@@ -62,8 +64,61 @@ class AgentCoreTests(unittest.TestCase):
                                             lambda event, value: events.append((event, value)))
             self.assertEqual(runner.run('分析 records.xlsx'), '已讀取電話紀錄。')
             step = next(value for event, value in events if event == 'step')
-            self.assertIn('已掃描 2 列', step['result'])
-            self.assertIn('B2=已處理', step['result'])
+            self.assertIn('已掃描 19 列', step['result'])
+            self.assertIn('【紀錄】', step['result'])
+            self.assertIn('B2=已處理', runner.tools.run(
+                {'action': 'read_excel', 'path': 'records.xlsx', 'sheet': '紀錄', 'page': 1}))
+            self.assertIn('B17=第 17 列', runner.tools.run(
+                {'action': 'read_excel', 'path': 'records.xlsx', 'sheet': '紀錄', 'page': 2}))
+
+    def test_excel_overview_scans_each_sheet_and_pages_change_rows(self):
+        from openpyxl import Workbook
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)/'records.xlsx'
+            book = Workbook()
+            book.active.title = '電話紀錄'
+            book.active.append(['日期', '問題'])
+            for number in range(1, 35):
+                book.active.append([f'2026-09-{number:02d}', f'第 {number} 筆問題'])
+            other = book.create_sheet('停車場廠商')
+            other.append(['廠商', '狀態'])
+            other.append(['甲公司', '正常'])
+            other.append(['乙公司', '正常'])
+            book.save(path)
+            tools = opti_agent.LocalTools(temporary)
+            overview = tools.run({'action': 'read_excel', 'path': 'records.xlsx'})
+            self.assertIn('活頁簿共有 2 個工作表', overview)
+            self.assertIn('【電話紀錄】已掃描 35 列，35 列有內容', overview)
+            self.assertIn('【停車場廠商】已掃描 3 列，3 列有內容', overview)
+            seen = []
+            replies = iter(['{"action":"read_excel","path":"records.xlsx"}',
+                            '{"action":"read_excel","path":"records.xlsx","sheet":"電話紀錄","page":1}',
+                            '{"action":"read_excel","path":"records.xlsx","sheet":"電話紀錄","page":2}',
+                            '{"action":"finish","answer":"電話紀錄有 35 列，停車場廠商有 3 列。"}'])
+            events = []
+            def model_call(messages, cancelled):
+                seen.append(messages)
+                return next(replies)
+            runner = opti_agent.AgentRunner(temporary, model_call,
+                                            lambda event, value: events.append((event, value)))
+            self.assertIn('停車場廠商有 3 列', runner.run('摘要整份活頁簿'))
+            self.assertIn('【停車場廠商】', seen[-1][-1]['content'])
+            steps = [value for event, value in events if event == 'step']
+            self.assertEqual(len(steps), 3)
+            self.assertNotEqual(steps[1]['result'], steps[2]['result'])
+            self.assertIn('B17=第 16 筆問題', steps[2]['result'])
+            first = tools.run({'action': 'read_excel', 'path': 'records.xlsx',
+                               'sheet': '電話紀錄', 'page': 1})
+            second = tools.run({'action': 'read_excel', 'path': 'records.xlsx',
+                                'sheet': '電話紀錄', 'page': 2})
+            self.assertIn('B2=第 1 筆問題', first)
+            self.assertNotIn('B17=第 16 筆問題', first)
+            self.assertIn('B17=第 16 筆問題', second)
+            self.assertNotIn('B2=第 1 筆問題', second)
+            self.assertIn('第 2/3 頁', second)
+            with self.assertRaisesRegex(ValueError, '超出範圍'):
+                tools.run({'action': 'read_excel', 'path': 'records.xlsx',
+                           'sheet': '電話紀錄', 'page': 4})
 
     def test_document_skills_keep_original_and_require_approval(self):
         from docx import Document
@@ -80,7 +135,8 @@ class AgentCoreTests(unittest.TestCase):
             word.add_paragraph('原本段落')
             word.save(root/'report.docx')
             tools = opti_agent.LocalTools(root)
-            self.assertIn('A1=舊值', tools.run({'action': 'read_excel', 'path': 'data.xlsx'}))
+            self.assertIn('A1=舊值', tools.run({'action': 'read_excel', 'path': 'data.xlsx',
+                                             'sheet': '資料', 'page': 1}))
             self.assertIn('原本段落', tools.run({'action': 'read_word', 'path': 'report.docx'}))
             cases = [
                 ({'action': 'edit_text', 'path': 'note.txt', 'find': '舊內容', 'replace': '新內容'}, note),
