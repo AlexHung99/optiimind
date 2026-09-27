@@ -19,6 +19,10 @@ BLOCK_TAGS = {'p', 'div', 'section', 'article', 'main', 'h1', 'h2', 'h3', 'h4',
               'h5', 'h6', 'li', 'br', 'blockquote', 'pre', 'tr', 'td', 'dt', 'dd'}
 
 
+class AuthenticationRequired(ValueError):
+    """The page requires the user to sign in before its content can be read."""
+
+
 def extract_urls(text, limit=2):
     """Keep only distinct links, excluding punctuation normally adjacent to prose."""
     result = []
@@ -80,6 +84,8 @@ def _download(url):
                     raise ValueError('網頁轉址缺少目標網址。')
                 url = urljoin(current, location)
                 continue
+            if response.status in (401, 403):
+                raise AuthenticationRequired(f'網頁要求登入或授權（HTTP {response.status}）。')
             if response.status != 200:
                 raise ValueError(f'網頁回應 HTTP {response.status}。')
             content_type = response.getheader('Content-Type', '').lower()
@@ -174,8 +180,8 @@ def _clean_text(parts):
     return '\n'.join(line for line in lines if line)
 
 
-def fetch_webpage(url, page=1, page_count=1):
-    """Return one page of source text with explicit provenance and truncation limits."""
+def format_webpage(final_url, source, content_type, page=1, page_count=1):
+    """Extract one bounded portion from HTML or plain text, including provenance."""
     try:
         page = int(page)
     except (TypeError, ValueError) as error:
@@ -184,10 +190,6 @@ def fetch_webpage(url, page=1, page_count=1):
         raise ValueError('網頁頁碼必須是正整數。')
     if not isinstance(page_count, int) or not 1 <= page_count <= 3:
         raise ValueError('網頁讀取頁數無效。')
-    try:
-        final_url, source, content_type = _download(url)
-    except (OSError, http.client.HTTPException) as error:
-        raise ValueError('無法連線至此網頁：' + str(error)) from error
     if content_type.startswith('text/plain'):
         title, description, body = '', '', source.strip()
     else:
@@ -196,6 +198,11 @@ def fetch_webpage(url, page=1, page_count=1):
         title, description = parser.title.strip(), parser.description
         main = _clean_text(parser.main_text)
         body = main if len(main) >= 100 else _clean_text(parser.all_text)
+        login_path = re.search(r'/(?:login|log-in|signin|sign-in|authorize)(?:/|\?|$)',
+                               urlsplit(final_url).path, re.I)
+        password_form = re.search(r'<input\b[^>]*\btype\s*=\s*["\']?password\b', source, re.I)
+        if login_path or (password_form and len(body) < 1500):
+            raise AuthenticationRequired('此網頁顯示登入畫面，請先登入再讀取。')
     if not body:
         raise ValueError('網頁沒有可讀取的文字；可能需要 JavaScript 才會顯示內容。')
     clipped = len(body) > MAX_TEXT
@@ -213,3 +220,12 @@ def fetch_webpage(url, page=1, page_count=1):
     header.append(f'網頁文字：第 {page}' + (f'–{last_page}' if last_page != page else '')
                   + f'/{pages} 頁' + ('；超過 12,000 字的部分未讀取' if clipped else ''))
     return '\n'.join(header) + '\n' + chunk
+
+
+def fetch_webpage(url, page=1, page_count=1):
+    """Read a public page without browser cookies; raise if sign-in is required."""
+    try:
+        final_url, source, content_type = _download(url)
+    except (OSError, http.client.HTTPException) as error:
+        raise ValueError('無法連線至此網頁：' + str(error)) from error
+    return format_webpage(final_url, source, content_type, page, page_count)

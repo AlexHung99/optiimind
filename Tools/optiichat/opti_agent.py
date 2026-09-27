@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from opti_core import DATA
 from opti_document import prepare_edit, read_document
-from opti_web import fetch_webpage
+from opti_web import AuthenticationRequired, fetch_webpage
 
 
 AGENT_DIR = DATA / 'agents'
@@ -224,11 +224,12 @@ FINAL_SYSTEM_PROMPT = '''你是 OptiChat 的本機 Agent。以繁體中文回答
 
 
 class AgentRunner:
-    def __init__(self, folder, model_call, emit, approve=None):
+    def __init__(self, folder, model_call, emit, approve=None, web_login=None):
         self.tools = LocalTools(folder)
         self.model_call = model_call
         self.emit = emit
         self.approve = approve
+        self.web_login = web_login
         self.cancelled = threading.Event()
 
     def cancel(self):
@@ -281,7 +282,12 @@ class AgentRunner:
                     else:
                         result = apply()
                 else:
-                    result = self.tools.run(action)
+                    try:
+                        result = self.tools.run(action)
+                    except AuthenticationRequired:
+                        if action['action'] != 'read_webpage' or self.web_login is None:
+                            raise
+                        result = self.web_login(action.get('url'), action.get('page', 1), self.cancelled)
             except (OSError, UnicodeError, ValueError, TypeError) as error:
                 result = '工具錯誤：' + str(error)
             result = result[:MAX_OBSERVATION]

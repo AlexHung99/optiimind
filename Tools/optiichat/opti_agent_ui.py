@@ -293,7 +293,7 @@ class AgentWorkspace:
             return
         folder = self.folder.get().strip()
         try:
-            runner = AgentRunner(folder, self._model_call, self._emit, self._approve)
+            runner = AgentRunner(folder, self._model_call, self._emit, self._approve, self._web_login)
         except ValueError as error:
             self.status.set(str(error))
             return
@@ -351,6 +351,12 @@ class AgentWorkspace:
             if cancelled.is_set():
                 return False
         return answer['value'] and not cancelled.is_set()
+
+    def _web_login(self, url, page, cancelled):
+        from opti_browser import read_authenticated
+        self._emit('status', '網頁需要登入 · 等待 Microsoft Edge 工作階段')
+        return read_authenticated(url, page=page, confirm=self.app.request_web_login,
+                                  cancelled=cancelled)
 
     def _worker(self, runner, goal):
         try:
