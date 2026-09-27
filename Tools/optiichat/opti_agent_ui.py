@@ -13,6 +13,7 @@ from opti_ui import auto_scrollbar, fit_scroll_region
 
 ACTION_NAMES = {'list_files': '列出檔案', 'read_file': '讀取檔案', 'search_files': '搜尋內容',
                 'read_pdf': '讀取 PDF', 'read_excel': '讀取 Excel', 'read_word': '讀取 Word',
+                'read_webpage': '讀取網頁',
                 'edit_text': '編輯文字檔', 'edit_excel': '編輯 Excel', 'edit_word': '編輯 Word'}
 
 
@@ -28,7 +29,7 @@ class AgentWorkspace:
         self.task = new_task()
         self.tasks = []
         self.mode = 'chat'
-        self.status = tk.StringVar(app.root, value='選擇資料夾、輸入任務，Agent 可讀取與編輯文書檔案。')
+        self.status = tk.StringVar(app.root, value='輸入網址可分析公開網頁；選擇資料夾可處理本機檔案。')
         self.folder = tk.StringVar(app.root, value='')
         self._build_sidebar()
         self._build_center()
@@ -58,7 +59,7 @@ class AgentWorkspace:
         title = self.app.label(header, '本機 Agent', role='panel', color='accent')
         title.configure(font=(self.app.ui_font, 15, 'bold'))
         title.pack(anchor='w')
-        self.app.label(header, '內建技能：文字檔、Excel、Word 可讀取與編輯；PDF 可讀取文字。編輯前會請你確認，並另存新檔。',
+        self.app.label(header, '可分析公開網頁；文字檔、Excel、Word 可讀取與編輯，PDF 可讀取文字。編輯前會請你確認並另存新檔。',
                        role='panel', color='muted', anchor='w').pack(fill='x', pady=(5, 0))
 
         setup = self.app.frame(self.center, role='panel', padx=16, pady=14, highlightthickness=1)
@@ -250,7 +251,7 @@ class AgentWorkspace:
         self.output.delete('1.0', 'end')
         self.output.configure(state='disabled')
         if not self.task.get('prompt'):
-            self._append('選擇資料夾並輸入任務，Agent 的每一步都會顯示在這裡。\n', 'muted')
+            self._append('貼上網頁連結，或選擇資料夾處理檔案；Agent 的每一步都會顯示在這裡。\n', 'muted')
             return
         self._append('任務：' + self.task['prompt'] + '\n\n', 'heading')
         for step in self.task.get('steps', []):
@@ -263,7 +264,7 @@ class AgentWorkspace:
 
     def _show_step(self, step):
         name = ACTION_NAMES.get(step['action'], step['action'])
-        detail = step.get('path') or '.'
+        detail = step.get('url') or step.get('path') or '.'
         if step.get('query'):
             detail += ' · ' + step['query']
         if step.get('sheet'):

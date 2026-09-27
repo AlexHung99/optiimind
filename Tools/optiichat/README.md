@@ -4,11 +4,11 @@ Windows 本機 AI 工具：Ollama 文字／圖片聊天、本機 Agent、框選�
 
 - **介紹與下載：** https://optiimind.com/Tools/optiichat/
 - **程式碼：** 本目錄
-- **目前版本：** 1.3.32
+- **目前版本：** 1.3.33
 
 ## 安裝
 
-1. 從介紹頁下載 `OptiChat-Setup-1.3.32.exe`，執行安裝精靈；不需要自行安裝 Python。安裝包已包含 1.3.32，日後啟動仍會自動更新。
+1. 從介紹頁下載 `OptiChat-Setup-1.3.33.exe`，執行安裝精靈；不需要自行安裝 Python。安裝包已包含 1.3.33，日後啟動仍會自動更新。
    若較早版本的更新器無法辨識新版檔案，請先從系統匣「結束程式」再執行安裝程式。安裝程式會備份舊版未列入清單、但與新版同名的程式檔到 `%LOCALAPPDATA%\OptiiChat\migration-backups`，並保留設定、對話及模型；已列入清單但被自行修改的檔案仍不會被覆寫。
 2. 安裝包含獨立 Python 3.14.3、介面、PDF、Excel、Word 及朗讀套件，放在 `%LOCALAPPDATA%\OptiiChat\python`；程式在同一資料夾下的 `app`。為保留舊版設定與更新相容性，內部資料夾名稱沿用 OptiiChat。
 3. 自動建立桌面與開始功能表「OptiChat」捷徑。雙擊即可開啟。
@@ -30,7 +30,8 @@ Windows 本機 AI 工具：Ollama 文字／圖片聊天、本機 Agent、框選�
 ## 使用
 
 - 主視窗採深色青藍聊天版面：左側歷史對話、中間對話卡片、上方狀態列、下方靠左輸入與 CPU／GPU 資源列。對話紀錄、聊天及設定分頁只在內容超出可視範圍時顯示捲軸。右上角齒輪開啟設定，左邊的驚嘆號開啟「關於 OptiChat」，可前往官網或下載頁；對話紀錄旁的放大鏡可搜尋標題、提問、回覆與附件名稱，命中內容時會顯示摘要；點選結果會開啟對話並捲到第一則命中訊息。左側清單顯示完整日期時間標題；舊版對話也會以問答卡片呈現。可在設定改為亮色或跟隨 Windows。
-- 左側對話紀錄上方可切換「對話／Agent」分頁。Agent 使用設定中的文字模型；選擇工作資料夾、輸入目標後，可列出／搜尋一般文字檔、讀取 PDF 文字層與 Excel／Word，並編輯文字檔、Excel 儲存格、Word 段落。編輯前會顯示內容請使用者確認，並另存新檔、保留原件。每一步的工具結果與最終答覆都顯示在獨立時間軸，任務紀錄存於本機 `%LOCALAPPDATA%\OptiiChat\agents`，可從左側重新開啟、改名或刪除；執行中可停止，切回對話分頁不會中斷。不執行命令，也不包含 MCP 或外部 Skill 整合。
+- 左側對話紀錄上方可切換「對話／Agent」分頁。Agent 使用設定中的文字模型；直接貼上公開網頁連結即可分析，不必選工作資料夾。選擇資料夾後也可列出／搜尋一般文字檔、讀取 PDF 文字層與 Excel／Word，並編輯文字檔、Excel 儲存格、Word 段落。編輯前會顯示內容請使用者確認，並另存新檔、保留原件。每一步的工具結果與最終答覆都顯示在獨立時間軸，任務紀錄存於本機 `%LOCALAPPDATA%\OptiiChat\agents`，可從左側重新開啟、改名或刪除；執行中可停止，切回對話分頁不會中斷。不執行命令，也不包含 MCP 或外部 Skill 整合。
+- 一般聊天輸入公開 HTTP／HTTPS 網址時，也會在背景擷取網頁文字供本機模型分析。每則訊息最多處理兩個網址、每個網址先讀取最多三段文字；Agent 可依頁碼繼續讀取。程式不會執行網頁 JavaScript，也無法取得需要登入的內容。每個頁面最多下載 1 MB、分析前 12,000 字；超出範圍會標示。網址會由這台電腦連往該網站，模型推論仍在本機。為避免讀取內部服務，只允許公開網路位址與標準 HTTP／HTTPS 連接埠。
 - Excel 讀取支援沒有工作表尺寸資訊的 `.xlsx`。不指定工作表時會掃描前 4 個工作表並提供整份活頁簿概覽，包括列數、欄位、日期範圍、常見值與分段樣例；指定工作表與頁碼可每頁查看 15 個有內容的列，頁碼會切換內容。每張表最多掃描 5,000 列、24 欄，超出範圍會明確標示未讀取部分。Agent 會保留概覽供最後摘要參考，樣例不代表全部原文。
 - AI 回覆標頭以金色顯示簡短模型家族名稱（例如 Llama、Gemma）；完整模型名稱仍保留在對話資料中。
 - 對話卡片中的提問、回覆及附件名稱可用滑鼠框選，按 `Ctrl+C` 或右鍵「複製」。文字區為唯讀，長篇回覆自動換行並隨內容增高。
@@ -66,7 +67,7 @@ Git clone 的開發者若修改程式，應以 Git 更新；自動更新不會�
 1. 修改程式與 `opti_version.py` 的三段式版本號，例如 `1.0.1`。
 2. 以 UI Python 環境執行：
    ```powershell
-   python -m unittest test_opti_update test_opti_chat test_llama_vision_ui test_opti_agent -v
+   python -m unittest test_opti_update test_opti_chat test_llama_vision_ui test_opti_agent test_opti_web -v
    python opti_release.py
    ```
 3. 先將 `downloads/OptiiChat-版本.zip` 上傳到 `optiichat-downloads` R2 bucket，驗證公開 URL 的 SHA-256，再將 `r2-update.json` 上傳為 R2 的 `update.json`。manifest 必須最後發佈。
@@ -93,7 +94,7 @@ python installer/build.py --makensis C:\tools\nsis-3.12\makensis.exe
 - 一般 Ollama：本機 `11434`；Llama 3.2 Vision 相容服務：CPU `11435`／Vulkan `11436`。
 - 使用 `OLLAMA_MODELS` 環境變數或 Ollama 預設模型目錄。
 - 設定／音訊：`%LOCALAPPDATA%\OptiiChat`；聊天紀錄與 Agent 任務分別儲存在 `history`、`agents`。
-- 網路用於安裝相依套件、模型下載、R2 更新，以及使用者自行指定的 Breeze 服務。
+- 網路用於安裝相依套件、模型下載、R2 更新、使用者貼上的公開網頁，以及自行指定的 Breeze 服務。
 - 官網 Logo 來源見 [opti_assets/README.md](opti_assets/README.md)。Breeze 權重與自架產出受其研究及非商業授權限制；本儲存庫不散布該模型。
 
-85 項自動測試涵蓋聊天串流、截圖、歷史對話、Agent 文書工具與分頁、模型初始化、語音串接及更新驗證／還原。測試不代表所有硬體組合皆可執行所有模型。
+91 項自動測試涵蓋聊天串流、截圖、歷史對話、Agent 文書與網頁工具、公開網址安全檢查、模型初始化、語音串接及更新驗證／還原。測試不代表所有硬體組合皆可執行所有模型。
