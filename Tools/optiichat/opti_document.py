@@ -1,5 +1,6 @@
 """Bounded local document skills for OptiChat Agent."""
 from pathlib import Path
+from itertools import islice
 from uuid import uuid4
 
 from opti_pdf import read_pdf
@@ -7,6 +8,9 @@ from opti_pdf import read_pdf
 
 MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
 TEXT_TYPES = {'.txt', '.md', '.markdown', '.csv'}
+MAX_EXCEL_SCAN_ROWS = 5000
+MAX_EXCEL_SCAN_COLUMNS = 24
+MAX_EXCEL_PREVIEW_ROWS = 12
 
 
 def _check(path, suffixes):
@@ -37,19 +41,43 @@ def read_document(path, kind, page=None):
     if kind == 'read_excel':
         _check(path, {'.xlsx'})
         from openpyxl import load_workbook
+        from openpyxl.utils import get_column_letter
         book = load_workbook(path, read_only=True, data_only=False, keep_links=False)
         try:
             sheet_name = page or book.sheetnames[0]
             if sheet_name not in book.sheetnames:
                 raise ValueError('找不到指定的工作表。')
             sheet = book[sheet_name]
-            lines = [f"工作表：{', '.join(book.sheetnames[:20])}",
-                     f'目前預覽：{sheet_name}，{sheet.max_row} 列 × {sheet.max_column} 欄']
-            for row in sheet.iter_rows(min_row=1, max_row=min(sheet.max_row, 25),
-                                       max_col=min(sheet.max_column, 12)):
-                values = [f'{cell.coordinate}={str(cell.value)[:80]}' for cell in row if cell.value is not None]
+            preview, counts = [], [0] * MAX_EXCEL_SCAN_COLUMNS
+            scanned = filled = last_column = 0
+            truncated = False
+            # Some valid workbooks omit worksheet <dimension>; read-only openpyxl
+            # then reports max_row/max_column as None. Stream bounded rows instead.
+            for row in islice(sheet.iter_rows(min_row=1, max_col=MAX_EXCEL_SCAN_COLUMNS),
+                              MAX_EXCEL_SCAN_ROWS + 1):
+                if scanned == MAX_EXCEL_SCAN_ROWS:
+                    truncated = True
+                    break
+                scanned += 1
+                values = []
+                for index, cell in enumerate(row):
+                    if cell.value is None:
+                        continue
+                    counts[index] += 1
+                    last_column = max(last_column, index + 1)
+                    if scanned <= MAX_EXCEL_PREVIEW_ROWS:
+                        values.append(f'{cell.coordinate}={str(cell.value)[:80]}')
                 if values:
-                    lines.append('  '.join(values))
+                    preview.append('  '.join(values)[:420])
+                if any(cell.value is not None for cell in row):
+                    filled += 1
+            scope = f'已掃描 {scanned} 列' + ('（達 5,000 列上限，後續未讀取）' if truncated else '')
+            columns = '、'.join(f'{get_column_letter(index)}:{count}' for index, count in enumerate(counts, 1)
+                               if count)
+            lines = [f"工作表：{', '.join(book.sheetnames[:20])}",
+                     f'目前工作表：{sheet_name}；{scope}，其中 {filled} 列有內容；'
+                     f'有內容至 {get_column_letter(last_column) if last_column else "無"} 欄',
+                     '各欄非空格數：' + (columns or '沒有內容'), '前 12 列預覽：', *preview]
             return '\n'.join(lines)[:3200]
         finally:
             book.close()

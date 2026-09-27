@@ -1,12 +1,15 @@
 """Agent loop and UI regression checks without calling an actual model."""
 from contextlib import ExitStack
 from copy import deepcopy
+from io import BytesIO
 from pathlib import Path
+import re
 import tempfile
 import time
 import tkinter as tk
 import unittest
 from unittest.mock import patch
+from zipfile import ZipFile
 
 import opti_agent
 import opti_agent_ui
@@ -16,6 +19,52 @@ from opti_document import read_document
 
 
 class AgentCoreTests(unittest.TestCase):
+    def test_tool_type_error_is_reported_as_step_instead_of_failing_task(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            replies = iter(['{"action":"read_excel","path":"records.xlsx"}',
+                            '{"action":"finish","answer":"檔案無法讀取。"}'])
+            events = []
+            runner = opti_agent.AgentRunner(temporary, lambda messages, cancel: next(replies),
+                                            lambda event, value: events.append((event, value)))
+            with patch.object(runner.tools, 'run', side_effect=TypeError('工作表沒有尺寸資訊')):
+                self.assertEqual(runner.run('分析 Excel'), '檔案無法讀取。')
+            step = next(value for event, value in events if event == 'step')
+            self.assertIn('工具錯誤', step['result'])
+
+    def test_agent_reads_excel_without_dimension_metadata(self):
+        from openpyxl import Workbook, load_workbook
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)/'records.xlsx'
+            book = Workbook()
+            book.active.title = '紀錄'
+            book.active.append(['日期', '內容'])
+            book.active.append(['2026-09-27', '已處理'])
+            book.save(path)
+            modified = BytesIO()
+            with ZipFile(path) as source, ZipFile(modified, 'w') as output:
+                for item in source.infolist():
+                    content = source.read(item.filename)
+                    if item.filename == 'xl/worksheets/sheet1.xml':
+                        content, count = re.subn(rb'<dimension\b[^>]*/>', b'', content, count=1)
+                        self.assertEqual(count, 1)
+                    output.writestr(item, content)
+            path.write_bytes(modified.getvalue())
+            reader = load_workbook(path, read_only=True)
+            try:
+                self.assertIsNone(reader.active.max_row)
+                self.assertIsNone(reader.active.max_column)
+            finally:
+                reader.close()
+            events = []
+            replies = iter(['{"action":"read_excel","path":"records.xlsx"}',
+                            '{"action":"finish","answer":"已讀取電話紀錄。"}'])
+            runner = opti_agent.AgentRunner(temporary, lambda messages, cancel: next(replies),
+                                            lambda event, value: events.append((event, value)))
+            self.assertEqual(runner.run('分析 records.xlsx'), '已讀取電話紀錄。')
+            step = next(value for event, value in events if event == 'step')
+            self.assertIn('已掃描 2 列', step['result'])
+            self.assertIn('B2=已處理', step['result'])
+
     def test_document_skills_keep_original_and_require_approval(self):
         from docx import Document
         from openpyxl import Workbook, load_workbook

@@ -266,7 +266,7 @@ class AgentRunner:
                         result = apply()
                 else:
                     result = self.tools.run(action)
-            except (OSError, UnicodeError, ValueError) as error:
+            except (OSError, UnicodeError, ValueError, TypeError) as error:
                 result = '工具錯誤：' + str(error)
             result = result[:MAX_OBSERVATION]
             self.emit('step', {'number': number, 'action': action['action'], **details, 'result': result})
