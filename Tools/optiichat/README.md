@@ -4,11 +4,12 @@ Windows 本機 AI 工具：Ollama 文字／圖片聊天、本機 Agent、框選�
 
 - **介紹與下載：** https://optiimind.com/Tools/optiichat/
 - **程式碼：** 本目錄
-- **目前版本：** 1.3.31
+- **目前版本：** 1.3.32
 
 ## 安裝
 
-1. 從介紹頁下載 `OptiChat-Setup-1.3.31.exe`，執行安裝精靈；不需要自行安裝 Python。安裝包已包含 1.3.31，日後啟動仍會自動更新。
+1. 從介紹頁下載 `OptiChat-Setup-1.3.32.exe`，執行安裝精靈；不需要自行安裝 Python。安裝包已包含 1.3.32，日後啟動仍會自動更新。
+   若較早版本的更新器無法辨識新版檔案，請先從系統匣「結束程式」再執行安裝程式。安裝程式會備份舊版未列入清單、但與新版同名的程式檔到 `%LOCALAPPDATA%\OptiiChat\migration-backups`，並保留設定、對話及模型；已列入清單但被自行修改的檔案仍不會被覆寫。
 2. 安裝包含獨立 Python 3.14.3、介面、PDF、Excel、Word 及朗讀套件，放在 `%LOCALAPPDATA%\OptiiChat\python`；程式在同一資料夾下的 `app`。為保留舊版設定與更新相容性，內部資料夾名稱沿用 OptiiChat。
 3. 自動建立桌面與開始功能表「OptiChat」捷徑。雙擊即可開啟。
 4. 初次啟動若缺少 Ollama，會自動下載官方安裝檔、驗證 Ollama Inc. 程式碼簽章並安裝；缺少 Vision 相容服務時會下載官方 0.24.0 Windows ZIP（約 2.1 GB），驗證官方 SHA-256，並安裝 CPU／Vulkan 檔案。下載失敗可在準備視窗重試。
@@ -95,4 +96,4 @@ python installer/build.py --makensis C:\tools\nsis-3.12\makensis.exe
 - 網路用於安裝相依套件、模型下載、R2 更新，以及使用者自行指定的 Breeze 服務。
 - 官網 Logo 來源見 [opti_assets/README.md](opti_assets/README.md)。Breeze 權重與自架產出受其研究及非商業授權限制；本儲存庫不散布該模型。
 
-84 項自動測試涵蓋聊天串流、截圖、歷史對話、Agent 文書工具與分頁、模型初始化、語音串接及更新驗證／還原。測試不代表所有硬體組合皆可執行所有模型。
+85 項自動測試涵蓋聊天串流、截圖、歷史對話、Agent 文書工具與分頁、模型初始化、語音串接及更新驗證／還原。測試不代表所有硬體組合皆可執行所有模型。

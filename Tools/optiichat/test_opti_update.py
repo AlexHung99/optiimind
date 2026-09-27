@@ -100,6 +100,23 @@ class UpdateTests(unittest.TestCase):
                 install_app(source, installed)
             self.assertEqual((installed/'opti_pdf.py').read_bytes(), b'# user file')
 
+    def test_bundled_installer_preserves_unmanaged_collision_before_upgrade(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source, installed = Path(temp)/'source', Path(temp)/'installed'
+            source.mkdir()
+            installed.mkdir()
+            self.old_install(installed)
+            (installed/'opti_pdf.py').write_bytes(b'# previous file')
+            _, files = archive('1.1.0', {'opti_pdf.py': b'# release file'})
+            for name, data in files.items():
+                (source/name).write_bytes(data)
+            install_app(source, installed, repair_unmanaged=True)
+            self.assertEqual((installed/'opti_pdf.py').read_bytes(), b'# release file')
+            self.assertEqual(json.loads((installed/'package-files.json').read_text())['version'], '1.1.0')
+            backups = list((Path(temp)/'migration-backups').glob('opti_pdf.py-*.bak'))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].read_bytes(), b'# previous file')
+
     def test_manual_check_replaces_an_older_pending_update(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -117,6 +134,8 @@ class UpdateTests(unittest.TestCase):
             (installed/'opti_app.py').write_text('# customized')
             with self.assertRaisesRegex(RuntimeError, 'modifications'):
                 install_app(source, installed)
+            with self.assertRaisesRegex(RuntimeError, 'modifications'):
+                install_app(source, installed, repair_unmanaged=True)
             self.assertEqual((installed/'opti_app.py').read_text(), '# customized')
 
     def test_install_rejects_corrupt_source(self):

@@ -70,7 +70,7 @@ def install_ollama(progress=print, cancelled=None):
         raise RuntimeError('Ollama 安裝程序已結束，但找不到 ollama.exe。')
 
 
-def install_app(source=ROOT, destination=None):
+def install_app(source=ROOT, destination=None, repair_unmanaged=False):
     source = Path(source)
     destination = Path(destination or LOCAL/'OptiiChat'/'app')
     manifest_data = (source/'package-files.json').read_bytes()
@@ -94,10 +94,22 @@ def install_app(source=ROOT, destination=None):
             path = target_path(destination, name)
             if not path.is_file() or digest(path.read_bytes()) != checksum:
                 raise RuntimeError('Local app modifications detected: '+name)
+    replacements = {}
     for name, data in files.items():
         path = target_path(destination, name)
         if name not in owned and path.exists() and path.read_bytes() != data:
-            raise RuntimeError('An unmanaged app file already exists: '+name)
+            if not repair_unmanaged:
+                raise RuntimeError('An unmanaged app file already exists: '+name)
+            replacements[name] = path.read_bytes()
+    if replacements:
+        backup = destination.parent/'migration-backups'
+        for name, data in replacements.items():
+            original = target_path(backup, name)
+            original = original.with_name(original.name + '-' + digest(data)[:12] + '.bak')
+            if original.exists() and original.read_bytes() != data:
+                raise RuntimeError('Cannot preserve an unmanaged app file: '+name)
+            if not original.exists():
+                atomic_write(original, data)
     for name, data in files.items():
         atomic_write(target_path(destination, name), data)
     atomic_write(existing, manifest_data)
@@ -232,7 +244,7 @@ if __name__ == '__main__':
             parser.add_argument('--destination')
             parser.add_argument('--no-shortcut', action='store_true')
             args = parser.parse_args()
-            install_app(destination=args.destination)
+            install_app(destination=args.destination, repair_unmanaged=True)
             if not args.no_shortcut:
                 create_desktop_shortcut()
         else:
